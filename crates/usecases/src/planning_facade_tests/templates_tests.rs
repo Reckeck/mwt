@@ -17,7 +17,7 @@ use crate::usecases::planning::templates::{
 use crate::usecases::sync::repair::repair_invariants;
 use mwt_model::{
     Contact, ContactKind, DistKind, DistTarget, DistributionRow, DistributionRule, OnOtherAmount,
-    PeriodRule, TemplateKind,
+    PeriodRule, ReceivedPart, TemplateKind,
 };
 
 fn draft(name: &str, kind: TemplateKind) -> TemplateDraft {
@@ -688,27 +688,20 @@ mod quick_add {
             end: "2026-09-30".into(),
         };
         tx.meta_mut().period = Some(period.clone());
+        let parts = vec![
+            ReceivedPart {
+                store_id: card.clone(),
+                amount: amount("400"),
+                timestamp: None,
+            },
+            ReceivedPart {
+                store_id: deposit.clone(),
+                amount: amount("600"),
+                timestamp: None,
+            },
+        ];
         if let Transaction::Topup(topup) = &mut tx {
-            topup.distribution = Some(vec![
-                mwt_model::DistributionPart {
-                    kind: DistKind::Sum {
-                        amount: amount("100"),
-                    },
-                    target: DistTarget::Store {
-                        id: deposit.clone(),
-                    },
-                    amount: amount("100"),
-                    status: mwt_model::PartStatus::Done,
-                    effect: None,
-                },
-                mwt_model::DistributionPart {
-                    kind: DistKind::Remainder,
-                    target: DistTarget::None,
-                    amount: amount("900"),
-                    status: mwt_model::PartStatus::Done,
-                    effect: None,
-                },
-            ]);
+            topup.parts = parts.clone();
         }
         let rules = CreationRules {
             template_rule: Some(PeriodRule::PrevHalfSecond),
@@ -718,8 +711,14 @@ mod quick_add {
         let Transaction::Topup(topup) = &saved else {
             panic!("an income");
         };
-        assert_eq!(topup.distribution.as_ref().map(Vec::len), Some(2));
+        assert_eq!(topup.parts, parts);
         assert_eq!(saved.meta().period, Some(period));
+        assert_eq!(holding_of(&vault, &card, &rub()), amount("400"));
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("600"));
+        let Transaction::Topup(stored) = &vault.doc.transactions[0] else {
+            panic!("an income");
+        };
+        assert_eq!(stored.parts, parts);
     }
 
     #[test]

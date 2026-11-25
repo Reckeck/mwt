@@ -119,7 +119,19 @@ fn settle_manual(
     spread
 }
 
-/// The spread to store (P6, P8): a single-month period drops it, `even` and `by_days` are
+/// P5, P8: on a single-month period a derived spread is dropped; a manual one is kept (so that
+/// validation refuses it) unless an edit moved the operation to that period.
+fn keep_on_one_month(
+    spread: Spread,
+    period: &OpPeriod,
+    before: Option<&SpreadBefore<'_>>,
+) -> Option<Spread> {
+    let period_unchanged = before.is_none_or(|stored| stored.period == Some(period));
+    (spread.mode == SpreadMode::Manual && period_unchanged).then_some(spread)
+}
+
+/// The spread to store (P6, P8): a single-month period drops it (a manual one only when an edit
+/// changed the period), `even` and `by_days` are
 /// derived afresh in `places` minor digits, a `manual` one is kept unless it went stale.
 /// A spread with no readable period is returned as is; validation refuses it.
 pub fn settle_spread(
@@ -138,7 +150,7 @@ pub fn settle_spread(
     };
     let months = months_touched(start, end);
     if months.len() < 2 {
-        return None;
+        return keep_on_one_month(spread, period, before);
     }
     let shares = match spread.mode {
         SpreadMode::Even => even_shares(amount, months.len(), places),
@@ -248,5 +260,27 @@ mod tests {
             None,
         );
         assert_eq!(settled, None);
+    }
+
+    #[test]
+    fn p5_manual_spread_on_a_one_month_period_is_kept_unless_an_edit_moved_the_period() {
+        let month = period(PeriodKind::Month, "2026-10-01", "2026-10-31");
+        let other = period(PeriodKind::Month, "2026-09-01", "2026-09-30");
+        let manual = spread(SpreadMode::Manual, &[("2026-10", "10")]);
+        let settle = |before: Option<&SpreadBefore<'_>>| {
+            settle_spread(Some(&month), Some(manual.clone()), amount("10"), 2, before)
+        };
+        assert_eq!(settle(None), Some(manual.clone()));
+        let unchanged = SpreadBefore {
+            amount: amount("10"),
+            period: Some(&month),
+            spread: None,
+        };
+        assert_eq!(settle(Some(&unchanged)), Some(manual.clone()));
+        let moved = SpreadBefore {
+            period: Some(&other),
+            ..unchanged
+        };
+        assert_eq!(settle(Some(&moved)), None);
     }
 }

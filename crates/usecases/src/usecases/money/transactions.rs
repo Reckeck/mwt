@@ -20,7 +20,7 @@ use crate::usecases::money::portfolio::recompute_holdings;
 use crate::usecases::planning::distribution::{
     apply_distribution, apply_distribution_unsaved, drop_distribution_of, rows_of,
 };
-use mwt_model::{AccountRef, DistributionRow, PeriodRule, SpreadMode};
+use mwt_model::{AccountRef, DistributionRow, PeriodRule};
 use mwt_planning::period_rule::{SpreadBefore, resolve_period_for_new, settle_spread};
 
 use super::stores::rebase_and_commit;
@@ -100,7 +100,7 @@ pub(crate) fn add_transaction_distributed(
     resolved_rows: Option<Vec<DistributionRow>>,
 ) -> Result<Transaction> {
     refuse_forged_income_ref(&tx)?;
-    apply_creation_rules(vault, &mut tx, rules)?;
+    apply_creation_rules(vault, &mut tx, rules);
     check_property_link(vault, property_id)?;
     let carried = take_distribution_rows(&mut tx);
     let rows = resolved_rows.or(carried);
@@ -129,33 +129,11 @@ pub(crate) fn add_transaction_distributed(
 
 /// What a new operation gets before it is prepared, on every creation path: categories settled
 /// (the category rule of D3 reads them), the period by rule, the spread derived (P6).
-fn apply_creation_rules(
-    vault: &Session,
-    tx: &mut Transaction,
-    rules: &CreationRules,
-) -> Result<()> {
+fn apply_creation_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
     Session::normalize_categories(tx);
     crate::money::validate::apply_categorization_rules(&vault.doc, tx);
     apply_period_rules(vault, tx, rules);
-    refuse_manual_spread_on_one_month(tx)?;
     settle_tx_spread(tx, None);
-    Ok(())
-}
-
-/// P5: a new operation with its own manual shares and a one-month period is refused; the
-/// derived modes are dropped quietly (P8) as the period may come from a rule.
-fn refuse_manual_spread_on_one_month(tx: &Transaction) -> Result<()> {
-    let manual = tx
-        .meta()
-        .spread
-        .as_ref()
-        .is_some_and(|spread| matches!(spread.mode, SpreadMode::Manual));
-    match spreadable(tx) {
-        Some((amount, _)) if manual => {
-            crate::money::validate::check_period_meta(tx.kind(), tx.meta(), Some(amount))
-        }
-        _ => Ok(()),
-    }
 }
 
 /// The amount a period spreads and the minor digits it is cut to; none for a kind with no period.
@@ -353,7 +331,7 @@ fn book_linked(vault: &mut Session, txs: Vec<Transaction>, flow: &str) -> Result
     let mut saved = Vec::with_capacity(txs.len());
     for mut tx in txs {
         refuse_forged_income_ref(&tx)?;
-        apply_creation_rules(vault, &mut tx, &CreationRules::default())?;
+        apply_creation_rules(vault, &mut tx, &CreationRules::default());
         let rows = take_distribution_rows(&mut tx);
         tx.meta_mut().flow_id = Some(flow.to_string());
         tx.meta_mut().id = uuid::Uuid::new_v4().to_string();
