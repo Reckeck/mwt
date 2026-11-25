@@ -3,7 +3,8 @@ import type { Theme } from '../types'
 
 /**
  * Tokyo Night Day: mode light, radius 0.5rem.
- * Upstream palette: Tokyo Night Day (https://github.com/folke/tokyonight.nvim), Apache-2.0 licence (the light variant exists only there), source https://github.com/folke/tokyonight.nvim.
+ * Upstream palette: Tokyo Night Day (https://github.com/folke/tokyonight.nvim),
+ * Apache-2.0 licence (the light variant exists only there), source https://github.com/folke/tokyonight.nvim.
  * tuned from upstream: --secondary-foreground, #3760BF
  * tuned from upstream: --muted-foreground, #6172B0
  * tuned from upstream: --accent-foreground, #3760BF
