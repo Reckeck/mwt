@@ -1081,3 +1081,82 @@ fn create_now_follows_an_ask_rule_like_an_automation_that_asks() {
     assert_eq!(reference.incomes, 1);
     assert_eq!(through(false, create_now), reference);
 }
+
+#[test]
+fn one_planned_moment_booked_again_by_run_now_still_distributes_each_time() {
+    use crate::model::store::StoreScope;
+    use crate::planning::goals::GoalDraft;
+    let (_dir, mut vault, card, vacation) = setup();
+    let goal = crate::usecases::planning::goals::create_goal(
+        &mut vault,
+        GoalDraft {
+            name: "Cushion".into(),
+            active: true,
+            target_amount: amount("500000"),
+            currency: "usd".into(),
+            starts_at: "2026-01-01T00:00:00Z".into(),
+            deadline: None,
+            priority: 3,
+            monthly_commitment: None,
+            scope: StoreScope {
+                store_ids: vec![card.clone()],
+                include_children: true,
+            },
+            scenario_id: None,
+            expected_return: None,
+        },
+    )
+    .unwrap();
+    let sum = |value: &str| DistKind::Sum {
+        amount: amount(value),
+    };
+    let template = template_with(
+        &mut vault,
+        vec![
+            row(
+                sum("1000"),
+                DistTarget::Envelope {
+                    id: vacation.clone(),
+                },
+            ),
+            row(
+                sum("2000"),
+                DistTarget::Goal {
+                    goal_id: goal.id.clone(),
+                    store_id: card.clone(),
+                },
+            ),
+        ],
+    );
+    let id = advance(&mut vault, &card, Some(&template));
+    let first = run_on_20_nov(&mut vault);
+    assert_eq!(first.created.len(), 1);
+    assert_eq!(run_now(&mut vault, &id), 1);
+    assert_eq!(run_now(&mut vault, &id), 1);
+    let allocated = |vault: &Session| {
+        let total = |envelope_id: Option<&str>| {
+            vault
+                .doc
+                .envelopes
+                .iter()
+                .filter(|envelope| match envelope_id {
+                    Some(known) => envelope.id == known,
+                    None => envelope.goal_id.as_deref() == Some(&goal.id),
+                })
+                .map(|envelope| envelope.allocated)
+                .fold(amount("0"), |sum, value| sum + value)
+        };
+        (total(Some(&vacation)), total(None))
+    };
+    assert_eq!(allocated(&vault), (amount("3000"), amount("6000")));
+    let incomes: Vec<String> = vault
+        .doc
+        .transactions
+        .iter()
+        .filter(|tx| matches!(tx, Transaction::Topup(_)))
+        .map(|tx| tx.meta().id.clone())
+        .collect();
+    assert_eq!(incomes.len(), 3);
+    crate::usecases::money::transactions::delete_transaction(&mut vault, &incomes[0]).unwrap();
+    assert_eq!(allocated(&vault), (amount("2000"), amount("4000")));
+}

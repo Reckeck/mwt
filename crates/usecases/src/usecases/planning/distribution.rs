@@ -416,6 +416,11 @@ fn fill_envelope(
         ));
     }
     plan_fund_envelope(&vault.doc, envelope_id, amount)?;
+    let taken: Vec<String> = envelope
+        .moves
+        .iter()
+        .map(|entry| entry.id.clone())
+        .collect();
     let envelope = vault
         .doc
         .envelopes
@@ -429,8 +434,12 @@ fn fill_envelope(
         .ok_or_else(|| Error::InvalidInput("the envelope kept no entry for the move".into()))?;
     entry.income_ref = Some(income.id.clone());
     // One id on every device: the same run's move merges into one instead of being added twice.
+    // A second booking of the same planned moment (Run now) keeps its own uuid instead.
     if let Some(run) = &income.run {
-        entry.id = run.effect_key(index);
+        let key = run.effect_key(index);
+        if !taken.contains(&key) {
+            entry.id = key;
+        }
     }
     Ok(EffectRef::EnvelopeMove {
         envelope_id: envelope_id.to_string(),
