@@ -1544,8 +1544,8 @@ pub fn inflation_report(books: &Books, ctx: &Ctx) -> InflationReport {
 /// Spending by day of a month (`YYYY-MM`) against the day's allowance,
 /// with what is still to come (plan F6). Days, the allowance and the pool are
 /// by the money date: the pool is `month_allowance`, which R3 keeps on the
-/// money date. The calendar has no `basis` (spec deviation from the R4 list,
-/// recorded in the op-period handoff).
+/// money date. The calendar has no `basis`: spec Q20 (owner decision
+/// 2026-11-25).
 pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Result<CalendarMonth> {
     let first = calendar::parse_month(month)
         .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;
