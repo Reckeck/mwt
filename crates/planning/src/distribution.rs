@@ -135,12 +135,14 @@ pub struct ResolvedDistribution {
 }
 
 /// Resolves `rule` for an `actual` payout against the `expected` one (spec D8-D10).
-/// `card_balance_after` is the card balance once the payout and all rows (before any cut) are booked.
+/// `card_balance_before_rows` is the card balance once the payout is booked and no row yet; the rows
+/// that take money off the card (every non-remainder row, envelope and goal rows included, as the cut
+/// of D10 treats them alike) are subtracted here, so the floor is judged on the balance after them.
 pub fn resolve_distribution(
     rule: &DistributionRule,
     actual: Amount,
     expected: Amount,
-    card_balance_after: Amount,
+    card_balance_before_rows: Amount,
     places: u32,
 ) -> Result<ResolvedDistribution> {
     let differs = actual != expected;
@@ -183,6 +185,11 @@ pub fn resolve_distribution(
         .iter()
         .find(|resolved_row| matches!(resolved_row.row.kind, DistKind::Remainder))
         .map_or(Amount::ZERO, |resolved_row| resolved_row.amount);
+    let leaving = rows
+        .iter()
+        .filter(|resolved_row| !matches!(resolved_row.row.kind, DistKind::Remainder))
+        .fold(Amount::ZERO, |sum, resolved_row| sum + resolved_row.amount);
+    let card_balance_after = card_balance_before_rows - leaving;
     let cut = rule
         .keep_on_card_min
         .map(|floor| cut_to_floor(&mut rows, floor - card_balance_after))

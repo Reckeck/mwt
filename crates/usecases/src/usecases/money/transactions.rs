@@ -100,8 +100,7 @@ pub(crate) fn add_transaction_distributed(
     resolved_rows: Option<Vec<DistributionRow>>,
 ) -> Result<Transaction> {
     refuse_forged_income_ref(&tx)?;
-    apply_period_rules(vault, &mut tx, rules);
-    settle_tx_spread(&mut tx, None);
+    apply_creation_rules(vault, &mut tx, rules);
     check_property_link(vault, property_id)?;
     let carried = take_distribution_rows(&mut tx);
     let rows = resolved_rows.or(carried);
@@ -126,6 +125,15 @@ pub(crate) fn add_transaction_distributed(
         None => rebase_and_commit(vault)?,
     }
     Ok(tx)
+}
+
+/// What a new operation gets before it is prepared, on every creation path: categories settled
+/// (the category rule of D3 reads them), the period by rule, the spread derived (P6).
+fn apply_creation_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
+    Session::normalize_categories(tx);
+    crate::money::validate::apply_categorization_rules(&vault.doc, tx);
+    apply_period_rules(vault, tx, rules);
+    settle_tx_spread(tx, None);
 }
 
 /// The amount a period spreads and the minor digits it is cut to; none for a kind with no period.
@@ -323,6 +331,7 @@ fn book_linked(vault: &mut Session, txs: Vec<Transaction>, flow: &str) -> Result
     let mut saved = Vec::with_capacity(txs.len());
     for mut tx in txs {
         refuse_forged_income_ref(&tx)?;
+        apply_creation_rules(vault, &mut tx, &CreationRules::default());
         let rows = take_distribution_rows(&mut tx);
         tx.meta_mut().flow_id = Some(flow.to_string());
         tx.meta_mut().id = uuid::Uuid::new_v4().to_string();

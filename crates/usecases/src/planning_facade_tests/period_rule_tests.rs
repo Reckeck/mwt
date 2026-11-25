@@ -10,9 +10,12 @@ use crate::planning::flows::Basis;
 use crate::service::Session;
 use crate::service::test_support::*;
 use crate::usecases::money::transactions::{
-    CreationRules, add_transaction, add_transaction_ruled, update_transaction,
+    CreationRules, add_linked_transactions, add_transaction, add_transaction_ruled,
+    update_transaction,
 };
-use mwt_model::{MonthShare, OpPeriod, PeriodKind, PeriodRule, Spread, SpreadMode};
+use mwt_model::{
+    CategorizationRule, MonthShare, OpPeriod, PeriodKind, PeriodRule, Spread, SpreadMode,
+};
 
 const SALARY_DAY: &str = "2026-11-05T10:00:00Z";
 
@@ -316,5 +319,49 @@ fn a1_salary_for_the_second_half_of_october() {
     assert_eq!(
         daily_budget(&vault.books(), day, "UTC"),
         daily_budget(&plain.books(), day, "UTC")
+    );
+}
+
+fn categorize_bonus_as_salary(vault: &mut Session) {
+    vault.doc.categorization_rules.push(CategorizationRule {
+        id: "bonus".into(),
+        pattern: "bonus".into(),
+        category: "salary".into(),
+        active: true,
+        order: 0,
+    });
+}
+
+/// An income with no category gets one from a categorization rule, and that category's period
+/// rule applies (D3): the rule is read after the categories are filled in.
+#[test]
+fn d3_an_auto_categorized_operation_gets_the_category_period_rule() {
+    let (_dir, mut vault, card) = vault_with_card();
+    rule_on_salary(&mut vault, Some(PeriodRule::PrevHalfSecond));
+    categorize_bonus_as_salary(&mut vault);
+    let mut tx = salary(&card, "100");
+    tx.meta_mut().categories.clear();
+    tx.meta_mut().comment = "Bonus".into();
+    let saved = add_transaction(&mut vault, tx).unwrap();
+    assert_eq!(saved.meta().categories, ["salary"]);
+    assert_eq!(period_of(&saved), october_second_half());
+}
+
+/// A batch save goes through the same creation step as a single one: the category rule gives the
+/// period (D3) and an even spread is derived (P6, I1).
+#[test]
+fn a_batch_save_applies_the_period_rule_and_derives_the_spread() {
+    let (_dir, mut vault, card) = vault_with_card();
+    rule_on_salary(&mut vault, Some(PeriodRule::PrevHalfSecond));
+    categorize_bonus_as_salary(&mut vault);
+    let mut by_rule = salary(&card, "100");
+    by_rule.meta_mut().categories.clear();
+    by_rule.meta_mut().comment = "Bonus".into();
+    let spread = with_spread(salary(&card, "100.00"), quarter(), SpreadMode::Even, &[]);
+    let saved = add_linked_transactions(&mut vault, vec![by_rule, spread], None).unwrap();
+    assert_eq!(period_of(&saved[0]), october_second_half());
+    assert_eq!(
+        spread_of(&saved[1]).unwrap().1,
+        ["2026-10=33.33", "2026-11=33.33", "2026-12=33.34"]
     );
 }

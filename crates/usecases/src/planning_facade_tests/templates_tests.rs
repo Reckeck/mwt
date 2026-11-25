@@ -295,7 +295,9 @@ fn t2_repair_drops_dangling_references() {
 
 mod quick_add {
     use super::*;
-    use crate::usecases::money::transactions::add_transaction;
+    use crate::usecases::money::transactions::{
+        CreationRules, add_transaction, add_transaction_ruled,
+    };
     use crate::usecases::planning::templates::{QuickAdd, create_from_template};
     use mwt_model::{AssetRef, Transaction};
 
@@ -416,5 +418,260 @@ mod quick_add {
         tx.meta_mut().period = Some(period.clone());
         let saved = add_transaction(&mut vault, tx).unwrap();
         assert_eq!(saved.meta().period, Some(period));
+    }
+
+    /// A one-row rule «20000 to the deposit, the rest stays» with a floor on the card.
+    fn floor_template(vault: &mut Session, card: &str, deposit: &str, floor: &str) -> String {
+        let mut input = draft("Floor", TemplateKind::Income);
+        input.categories = vec!["salary".into()];
+        input.store_id = Some(card.into());
+        input.asset = Some(rub());
+        input.amount = Some(amount("120000"));
+        input.distribution = Some(DistributionRule {
+            rows: vec![
+                row(
+                    DistKind::Sum {
+                        amount: amount("20000"),
+                    },
+                    DistTarget::Store { id: deposit.into() },
+                ),
+                remainder(),
+            ],
+            on_other_amount: OnOtherAmount::ShrinkRemainder,
+            keep_on_card_min: Some(amount(floor)),
+        });
+        create_operation_template(vault, input).unwrap().id
+    }
+
+    fn transfers(vault: &Session) -> usize {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| matches!(tx, Transaction::Transfer(_)))
+            .count()
+    }
+
+    /// D10: the floor is judged on the balance after the rows leave the card, so the store row is
+    /// cut by what the card lacks (120000 - 20000 = 100000 against a floor of 105000).
+    #[test]
+    fn keep_on_card_min_cuts_the_store_row() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = floor_template(&mut vault, &card, &deposit, "105000");
+        create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("15000"));
+        assert_eq!(holding_of(&vault, &card, &rub()), amount("105000"));
+    }
+
+    /// D10 with a balance already on the card: 50000 held + 120000 - 20000 = 150000 clears 140000.
+    #[test]
+    fn keep_on_card_min_counts_what_the_card_already_holds() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = floor_template(&mut vault, &card, &deposit, "140000");
+        let mut held = crate::service::test_support::income_of(&card, rub(), "50000", "0.01", "x");
+        at(&mut held, "2026-11-01T10:00:00Z");
+        add_transaction(&mut vault, held).unwrap();
+        create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("20000"));
+    }
+
+    /// D10, Q13: a row cut to nothing is left out; the money stays on the card.
+    #[test]
+    fn a_row_cut_to_zero_is_dropped_and_the_rest_applies() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        let mut template = vault.doc.operation_templates[0].clone();
+        template.distribution.as_mut().unwrap().keep_on_card_min = Some(amount("100000"));
+        vault.doc.operation_templates[0] = template;
+        // Rows leave 29000, the card keeps 91000: the floor of 100000 cuts 9000 from the bottom
+        // up, the gifts (3000) vanish and the vacation row (6000) is cut to nothing as well.
+        let added = create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        let Transaction::Topup(topup) = &added.transaction else {
+            panic!("an income")
+        };
+        let amounts: Vec<_> = topup
+            .distribution
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|part| part.amount)
+            .collect();
+        assert_eq!(amounts, ["20000", "100000"].map(amount).to_vec());
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("20000"));
+    }
+
+    /// An unreachable floor leaves only the remainder: the income is saved undistributed.
+    #[test]
+    fn an_unreachable_floor_saves_the_income_undistributed() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = floor_template(&mut vault, &card, &deposit, "1000000");
+        let added = create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        assert!(!added.ask);
+        let Transaction::Topup(topup) = &added.transaction else {
+            panic!("an income")
+        };
+        assert!(topup.distribution.is_none());
+        assert_eq!(transfers(&vault), 0);
+        assert_eq!(holding_of(&vault, &card, &rub()), amount("120000"));
+    }
+
+    /// D9: another amount under `ask` saves the income with its period and distributes nothing.
+    #[test]
+    fn ask_saves_the_income_and_reports_the_flag() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        vault.doc.operation_templates[0]
+            .distribution
+            .as_mut()
+            .unwrap()
+            .on_other_amount = OnOtherAmount::Ask;
+        let input = QuickAdd {
+            amount: Some(amount("118500")),
+            ..on_5_nov()
+        };
+        let added = create_from_template(&mut vault, &id, input).unwrap();
+        assert!(added.ask);
+        let Transaction::Topup(topup) = &added.transaction else {
+            panic!("an income")
+        };
+        assert!(topup.distribution.is_none());
+        assert_eq!(topup.meta.period.as_ref().unwrap().start, "2026-10-16");
+        assert_eq!(transfers(&vault), 0);
+        assert_eq!(holding_of(&vault, &card, &rub()), amount("118500"));
+    }
+
+    /// S15: a failure in the middle of the write puts the whole vault back.
+    #[test]
+    fn a_failed_distribution_leaves_the_vault_as_it_was() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        // The deposit goes away after the template was made: the first row cannot be applied.
+        vault.doc.stores.retain(|node| node.id != deposit);
+        let before = serde_json::to_value(&vault.doc).unwrap();
+        let revision = vault.session.revision();
+        assert!(create_from_template(&mut vault, &id, on_5_nov()).is_err());
+        assert_eq!(serde_json::to_value(&vault.doc).unwrap(), before);
+        assert_eq!(vault.session.revision(), revision);
+    }
+
+    /// A2 in full, and in one write: the income and its distribution cost the vault no more
+    /// revisions than a plain income does.
+    #[test]
+    fn a2_is_one_write_with_every_effect() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        let start = vault.session.revision();
+        create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        let quick_add_cost = vault.session.revision() - start;
+        assert_eq!(holding_of(&vault, &card, &rub()), amount("100000"));
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("20000"));
+        let start = vault.session.revision();
+        let mut plain = crate::service::test_support::income_of(&card, rub(), "5", "0.01", "x");
+        at(&mut plain, "2026-11-05T10:00:00Z");
+        add_transaction(&mut vault, plain).unwrap();
+        assert_eq!(vault.session.revision() - start, quick_add_cost);
+        let reserved: Vec<_> = vault
+            .doc
+            .envelopes
+            .iter()
+            .map(|envelope| (envelope.name.clone(), envelope.allocated))
+            .collect();
+        assert!(
+            reserved.contains(&("Vacation".to_string(), amount("6000"))),
+            "{reserved:?}"
+        );
+        assert!(
+            reserved.contains(&("Gifts".to_string(), amount("3000"))),
+            "{reserved:?}"
+        );
+    }
+
+    /// An edited form result saves through the ordinary path: its period and its own parts win
+    /// over the template's rule.
+    #[test]
+    fn explicit_period_and_parts_win_over_the_template() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let mut tx = crate::service::test_support::income_of(&card, rub(), "1000", "0.01", "x");
+        at(&mut tx, "2026-11-05T10:00:00Z");
+        let period = mwt_model::OpPeriod {
+            kind: mwt_model::PeriodKind::Month,
+            start: "2026-09-01".into(),
+            end: "2026-09-30".into(),
+        };
+        tx.meta_mut().period = Some(period.clone());
+        if let Transaction::Topup(topup) = &mut tx {
+            topup.distribution = Some(vec![
+                mwt_model::DistributionPart {
+                    kind: DistKind::Sum {
+                        amount: amount("100"),
+                    },
+                    target: DistTarget::Store {
+                        id: deposit.clone(),
+                    },
+                    amount: amount("100"),
+                    status: mwt_model::PartStatus::Done,
+                    effect: None,
+                },
+                mwt_model::DistributionPart {
+                    kind: DistKind::Remainder,
+                    target: DistTarget::None,
+                    amount: amount("900"),
+                    status: mwt_model::PartStatus::Done,
+                    effect: None,
+                },
+            ]);
+        }
+        let rules = CreationRules {
+            template_rule: Some(PeriodRule::PrevHalfSecond),
+            no_period_rule: false,
+        };
+        let saved = add_transaction_ruled(&mut vault, tx, None, &rules).unwrap();
+        assert_eq!(saved.meta().period, Some(period));
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("100"));
+    }
+
+    #[test]
+    fn explicit_fields_win_and_no_period_rule_means_none() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        vault.doc.operation_templates[0].distribution = None;
+        let input = QuickAdd {
+            store_id: Some(deposit.clone()),
+            comment: Some("advance".into()),
+            amount: Some(amount("500")),
+            no_period_rule: true,
+            ..on_5_nov()
+        };
+        let added = create_from_template(&mut vault, &id, input).unwrap();
+        let Transaction::Topup(topup) = &added.transaction else {
+            panic!("an income")
+        };
+        assert_eq!(topup.store_id, deposit);
+        assert_eq!(topup.meta.comment, "advance");
+        assert_eq!(topup.amount, amount("500"));
+        assert!(topup.meta.period.is_none());
+    }
+
+    #[test]
+    fn an_expense_template_makes_a_payment_with_its_period() {
+        let (_dir, mut vault, card) = vault_with_card();
+        let mut input = draft("Rent", TemplateKind::Expense);
+        input.store_id = Some(card.clone());
+        input.asset = Some(rub());
+        input.amount = Some(amount("30000"));
+        input.period_rule = Some(PeriodRule::PrevMonth);
+        input.categories = vec!["groceries".into()];
+        let id = create_operation_template(&mut vault, input).unwrap().id;
+        let added = create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        assert!(!added.ask);
+        let Transaction::Payment(payment) = &added.transaction else {
+            panic!("a payment")
+        };
+        assert_eq!(payment.amount, amount("30000"));
+        let period = payment.meta.period.as_ref().unwrap();
+        assert_eq!(
+            (period.start.as_str(), period.end.as_str()),
+            ("2026-10-01", "2026-10-31")
+        );
     }
 }

@@ -119,19 +119,26 @@ fn q11_over() {
     assert!(resolved.rows.is_empty());
 }
 
-/// A7: rows are cut from the bottom until the card holds the floor.
+/// A7: rows are cut from the bottom until the card holds the floor; the balance is the one before
+/// the rows (29400 - 29000 asked = 400 left).
 #[test]
 fn a7_cut_from_the_bottom() {
     let rule = rule(OnOtherAmount::ShrinkRemainder, Some("1000"));
-    let resolved =
-        resolve_distribution(&rule, amount("120000"), amount("120000"), amount("400"), 2).unwrap();
+    let resolved = resolve_distribution(
+        &rule,
+        amount("120000"),
+        amount("120000"),
+        amount("29400"),
+        2,
+    )
+    .unwrap();
     assert_eq!(resolved.cut, [(2, amount("600"))]);
     assert_eq!(resolved.rows[2].amount, amount("2400"));
     let deep = resolve_distribution(
         &rule,
         amount("120000"),
         amount("120000"),
-        amount("-3500"),
+        amount("25500"),
         2,
     )
     .unwrap();

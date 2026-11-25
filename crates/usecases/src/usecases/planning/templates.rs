@@ -196,7 +196,7 @@ fn transaction_of(template: &OperationTemplate, input: &QuickAdd) -> Result<Tran
     })
 }
 
-/// What the card holds once the payout is booked, before any row.
+/// What the card holds once the payout is booked, before any row (the rule takes the rows off).
 fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
     let held = vault
         .doc
@@ -210,15 +210,22 @@ fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
 }
 
 /// T14: the rule against the actual payout. `None` rows with `ask` — the user confirms later; a
-/// rule that asks more than the payout is refused, so nothing is written.
+/// rule that asks more than the payout is refused, so nothing is written. Rows cut to zero are
+/// dropped; with none left the income is saved undistributed.
 fn rows_of_rule(
     rule: &DistributionRule,
     topup: &TopupTx,
     expected: Amount,
-    card_balance_after: Amount,
+    card_balance_before_rows: Amount,
 ) -> Result<(Option<Vec<DistributionRow>>, bool)> {
     let places = topup.asset.minor_places();
-    let resolved = resolve_distribution(rule, topup.amount, expected, card_balance_after, places)?;
+    let resolved = resolve_distribution(
+        rule,
+        topup.amount,
+        expected,
+        card_balance_before_rows,
+        places,
+    )?;
     if resolved.ask {
         return Ok((None, true));
     }
@@ -227,10 +234,15 @@ fn rows_of_rule(
             "DISTRIBUTION_OVER_ALLOCATED: the rows ask {over} more than the income"
         )));
     }
-    let rows = resolved
+    // A row the floor cut to nothing leaves its money on the card (D10); V1 allows positive parts only.
+    let rows: Vec<DistributionRow> = resolved
         .rows
         .iter()
         .enumerate()
+        .filter(|(_, resolved_row)| {
+            matches!(resolved_row.row.kind, DistKind::Remainder)
+                || resolved_row.amount.is_positive()
+        })
         .map(|(index, resolved_row)| {
             let cut = resolved
                 .cut
@@ -247,5 +259,9 @@ fn rows_of_rule(
             }
         })
         .collect();
-    Ok((Some(rows), false))
+    // Nothing but the remainder is left: the income is saved undistributed.
+    let moves_money = rows
+        .iter()
+        .any(|row| !matches!(row.kind, DistKind::Remainder));
+    Ok((moves_money.then_some(rows), false))
 }
