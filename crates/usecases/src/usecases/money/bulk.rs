@@ -14,7 +14,9 @@ use crate::usecases::household::property_links::{check_property_link, set_proper
 
 use super::stores::rebase_and_commit;
 use super::transactions::{linked_to_income, prepare_transaction, refuse_if_linked};
-use crate::usecases::planning::distribution::drop_distribution_of;
+use crate::usecases::planning::distribution::{
+    apply_distribution_unsaved, drop_distribution_of, rows_of,
+};
 
 /// Run `change` on the document; on an error nothing of it stays, on success
 /// the holdings are rebuilt and the document is written once.
@@ -61,6 +63,12 @@ pub fn delete_transactions(vault: &mut Session, ids: &[String]) -> Result<Vec<De
                 _ => refuse_if_linked(stored)?,
             }
         }
+        // The stored incomes with their distribution, kept for the undo.
+        let mut stored_before = Vec::with_capacity(ids.len());
+        for id in ids {
+            let index = tx_index(&vault.doc, id)?;
+            stored_before.push(vault.doc.transactions[index].clone());
+        }
         for id in ids {
             drop_distribution_of(vault, id)?;
         }
@@ -70,8 +78,9 @@ pub fn delete_transactions(vault: &mut Session, ids: &[String]) -> Result<Vec<De
             let property_id = crate::household::property_links::property_of_tx(&vault.doc, id)
                 .map(str::to_string);
             crate::usecases::household::shared_events::cascade_shared_delete(vault, id);
-            let (transaction, _, _) =
-                vault.run(|run| Ok(run.doc_mut().transactions.remove(index)))?;
+            vault.run(|run| Ok(run.doc_mut().transactions.remove(index)))?;
+            let position = ids.iter().position(|other| other == id).unwrap_or_default();
+            let transaction = stored_before[position].clone();
             set_property_link(vault, id, None);
             out.push(DeletedTransaction {
                 transaction,
@@ -93,11 +102,20 @@ pub fn restore_transactions(vault: &mut Session, items: Vec<DeletedTransaction>)
                 )));
             }
             check_property_link(vault, item.property_id.as_deref())?;
+            let mut transaction = item.transaction;
+            // A distribution goes back by re-applying its rows: the effects are booked anew.
+            let distribution = match &mut transaction {
+                Transaction::Topup(topup) => topup.distribution.take(),
+                _ => None,
+            };
             vault.run(|run| {
-                run.doc_mut().transactions.push(item.transaction);
+                run.doc_mut().transactions.push(transaction);
                 Ok(())
             })?;
             set_property_link(vault, &id, item.property_id.as_deref());
+            if let Some(parts) = distribution {
+                apply_distribution_unsaved(vault, &id, &rows_of(parts))?;
+            }
         }
         crate::usecases::sync::repair::restore_removed_with_payment(vault);
         Ok(())

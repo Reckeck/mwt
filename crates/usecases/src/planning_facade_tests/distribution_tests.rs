@@ -11,7 +11,7 @@ use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault, income_of, store};
 use crate::usecases::household::envelopes::{create_envelope, delete_envelope, fund_envelope};
-use crate::usecases::money::bulk::{delete_transactions, move_transactions};
+use crate::usecases::money::bulk::{delete_transactions, move_transactions, restore_transactions};
 use crate::usecases::money::transactions::{
     LINKED_TO_INCOME, add_linked_transactions, add_transaction, delete_transaction,
     update_transaction,
@@ -579,6 +579,36 @@ fn a2b_comment_of_a_linked_transfer_stays_editable() {
     clean(&fixture);
 }
 
+/// A2b (S11 guards): categories and date of a linked transfer stay editable, the link survives.
+#[test]
+fn a2b_categories_and_date_of_a_linked_transfer_stay_editable() {
+    let (mut fixture, transfer) = distributed();
+    let mut edited = stored(&fixture, &transfer);
+    edited.meta_mut().categories = vec!["savings".into()];
+    crate::service::test_support::at(&mut edited, "2026-03-05T10:00:00Z");
+    update_transaction(&mut fixture.vault, &transfer, edited).unwrap();
+    let after = stored(&fixture, &transfer);
+    assert_eq!(after.meta().categories, vec!["savings".to_string()]);
+    assert_eq!(after.meta().timestamp, "2026-03-05T10:00:00Z");
+    assert_eq!(
+        after.meta().income_ref.as_deref(),
+        Some(fixture.income_id.as_str())
+    );
+    clean(&fixture);
+}
+
+/// A2b (S11 guards): a linked transfer cannot change its kind; vault unchanged.
+#[test]
+fn a2b_kind_change_of_a_linked_transfer_is_refused() {
+    let (mut fixture, transfer) = distributed();
+    let before = snapshot(&fixture);
+    let mut edited = crate::service::test_support::payment(&fixture.card, "10", "x");
+    edited.meta_mut().id = transfer.clone();
+    edited.meta_mut().income_ref = stored(&fixture, &transfer).meta().income_ref.clone();
+    assert!(update_transaction(&mut fixture.vault, &transfer, edited).is_err());
+    assert_eq!(snapshot(&fixture), before);
+}
+
 /// A2b (S11 guards): an envelope holding a linked move cannot be deleted.
 #[test]
 fn a2b_delete_envelope_with_a_linked_move_is_refused() {
@@ -658,4 +688,66 @@ fn a2b_income_edit_that_over_allocates_is_refused_whole() {
     let err = update_transaction(&mut fixture.vault, &income, edited).unwrap_err();
     assert!(err.to_string().contains(OVER_ALLOCATED), "{err}");
     assert_eq!(snapshot(&fixture), before);
+}
+
+/// A2b (S11): editing the income date recreates the effects with the new date, V1-V4 clean.
+#[test]
+fn a2b_editing_the_income_timestamp_re_resolves_the_effects() {
+    let (mut fixture, _) = distributed();
+    let income = fixture.income_id.clone();
+    let mut edited = stored(&fixture, &income);
+    crate::service::test_support::at(&mut edited, "2026-04-01T09:00:00Z");
+    if let Transaction::Topup(topup) = &mut edited {
+        topup.distribution = None;
+    }
+    update_transaction(&mut fixture.vault, &income, edited).unwrap();
+    assert_eq!(transfers(&fixture), 1);
+    let transfer = fixture
+        .vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| matches!(tx, Transaction::Transfer(_)))
+        .unwrap();
+    assert_eq!(transfer.meta().timestamp, "2026-04-01T09:00:00Z");
+    clean(&fixture);
+}
+
+/// A2b (S11): moving the income to a store its envelope rows cannot follow is refused whole.
+#[test]
+fn a2b_income_edit_to_a_store_the_envelopes_cannot_follow_is_refused() {
+    let (mut fixture, _) = distributed();
+    let income = fixture.income_id.clone();
+    let before = snapshot(&fixture);
+    let mut edited = stored(&fixture, &income);
+    if let Transaction::Topup(topup) = &mut edited {
+        topup.store_id = fixture.deposit.clone();
+        topup.distribution = None;
+    }
+    assert!(update_transaction(&mut fixture.vault, &income, edited).is_err());
+    assert_eq!(snapshot(&fixture), before);
+}
+
+/// A2b (S11): undoing the delete of a distributed income brings its distribution back.
+#[test]
+fn a2b_restoring_a_deleted_distributed_income_restores_its_distribution() {
+    let (mut fixture, _) = distributed();
+    let income = fixture.income_id.clone();
+    let listed = |fixture: &Fixture| match stored(fixture, &income) {
+        Transaction::Topup(topup) => topup
+            .distribution
+            .unwrap()
+            .into_iter()
+            .map(|part| (part.kind, part.target, part.amount))
+            .collect::<Vec<_>>(),
+        _ => panic!("a topup"),
+    };
+    let before = listed(&fixture);
+    let deleted = delete_transactions(&mut fixture.vault, std::slice::from_ref(&income)).unwrap();
+    assert!(fixture.vault.doc.transactions.is_empty());
+    restore_transactions(&mut fixture.vault, deleted).unwrap();
+    assert_eq!(listed(&fixture), before);
+    assert_eq!(transfers(&fixture), 1);
+    assert_eq!(allocated(&fixture, &fixture.vacation), amount("6000"));
+    clean(&fixture);
 }
