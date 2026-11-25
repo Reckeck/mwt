@@ -1160,3 +1160,73 @@ fn one_planned_moment_booked_again_by_run_now_still_distributes_each_time() {
     crate::usecases::money::transactions::delete_transaction(&mut vault, &incomes[0]).unwrap();
     assert_eq!(allocated(&vault), (amount("2000"), amount("4000")));
 }
+
+#[test]
+fn a_retried_queued_refusal_keeps_the_notice_of_an_over_rule_once() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let rows = vec![row(
+        DistKind::Sum {
+            amount: amount("40000"),
+        },
+        DistTarget::Envelope { id: vacation },
+    )];
+    let template = template_with(&mut vault, rows);
+    let id = advance(&mut vault, &card, Some(&template));
+    let mut queued = income(&card, "30000", "advance");
+    queued.meta_mut().origin = crate::model::transaction::TxOrigin::Workflow {
+        workflow_id: id.clone(),
+        run_id: "refused".into(),
+        planned_at: Some("2026-11-20T09:00:00Z".into()),
+        planned_date: None,
+        estimated: false,
+        run_key: None,
+    };
+    vault
+        .doc
+        .workflow_runs
+        .push(crate::workflow::model::WorkflowRun {
+            id: "refused".into(),
+            workflow_id: id.clone(),
+            trigger: "answered".into(),
+            started_at: "2026-11-20T00:00:00Z".into(),
+            outcome: crate::workflow::model::RunOutcome::Rejected {
+                reason: RejectReason::Invalid {
+                    message: "short".into(),
+                },
+                trigger_node: crate::workflow::automation::TRIGGER.into(),
+                planned_at: None,
+            },
+            created: Vec::new(),
+            queued: 1,
+            trace: Vec::new(),
+            dry_run: false,
+            planned_date: None,
+        });
+    vault
+        .doc
+        .workflow_queue
+        .push(crate::workflow::model::QueuedActions {
+            id: "batch".into(),
+            workflow_id: id,
+            run_id: "refused".into(),
+            created_at: "2026-11-20T00:00:00Z".into(),
+            summary: String::new(),
+            transactions: vec![queued],
+        });
+    let now = unix_secs("2026-11-20T13:00:00Z").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::retry_workflow_run(&mut vault, "refused", now, "UTC")
+            .unwrap();
+    assert_eq!(pass.notices.len(), 1, "{:?}", pass.notices);
+    assert!(pass.notices[0].key.starts_with("automation-undistributed:"));
+    assert!(vault.run_notices.is_empty());
+    assert!(
+        vault
+            .doc
+            .notification_log
+            .iter()
+            .any(|record| record.key.starts_with("automation-undistributed:"))
+    );
+    let again = run_on(&mut vault, "2026-11-20T18:00:00Z");
+    assert!(again.notices.is_empty(), "{:?}", again.notices);
+}

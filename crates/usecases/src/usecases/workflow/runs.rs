@@ -585,6 +585,10 @@ fn retry_queued_refusal(
         pass.created.clone_from(&closed.created);
         pass.runs.push(closed);
     }
+    // What the booking noticed (an income left undistributed) is kept once, like on the
+    // other run paths.
+    pass.notices = std::mem::take(&mut vault.run_notices);
+    log_pass_notices(vault, &mut pass)?;
     Ok(pass)
 }
 
