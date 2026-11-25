@@ -133,6 +133,9 @@ pub struct Session {
     pub(crate) session: crate::kernel::session::Write,
     /// What the session knows of the device secrets file (see `exchange_keys`).
     pub(crate) device_keys: exchange_keys::DeviceKeys,
+    /// The answer being given to the question of an automation run that asks; set only while
+    /// that one answer runs (see `confirm_distribution`).
+    pub(crate) confirmation: Option<crate::usecases::planning::automation_rules::Confirmation>,
 }
 
 impl Session {
@@ -188,7 +191,9 @@ impl Session {
         // A secrets file left by a vault that once had this name is not ours.
         crate::vault_io::device_secrets::remove(&path)?;
         let lock = crate::storage::VaultLock::acquire(&path)?;
-        let doc = VaultDoc::default();
+        let mut doc = VaultDoc::default();
+        // A new vault has nothing to convert: the one-time conversion is done from the start.
+        crate::usecases::planning::conversion::mark_done(&mut doc);
         let fmt = SnapshotFormat::for_profile();
         let mut vault = Self {
             path,
@@ -206,6 +211,7 @@ impl Session {
             key: Some(std::sync::Arc::new(key)),
             session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
         };
         crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
@@ -236,6 +242,7 @@ impl Session {
             key: Some(std::sync::Arc::new(SealKey::plain())),
             session: crate::kernel::session::Write::with_store(store),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
         }
     }
 
@@ -305,6 +312,7 @@ impl Session {
             key: Some(std::sync::Arc::new(key)),
             session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
         };
         if let Some(device_id) = device_id {
             crate::usecases::sync::peer_sync::set_device(&mut vault, device_id);
@@ -428,6 +436,7 @@ impl Session {
             key: None,
             session: crate::kernel::session::Write::sandboxed(),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
         }
     }
 

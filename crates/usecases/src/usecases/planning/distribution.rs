@@ -22,13 +22,13 @@ use crate::usecases::household::envelopes::goal_envelope_for;
 use crate::usecases::money::portfolio::recompute_holdings;
 use crate::usecases::money::stores::rebase_and_commit;
 use crate::usecases::money::transactions::{
-    CreationRules, apply_creation_rules, prepare_transaction,
+    CreationRules, apply_creation_rules, prepare_transaction, prepare_transaction_at,
 };
-use crate::usecases::planning::templates::{RuleRows, held_quantity, resolve_rule_rows};
+use crate::usecases::planning::automation_rules::expected_payout;
+use crate::usecases::planning::templates::held_quantity;
 use mwt_model::{
-    AccountRef, AssetRef, DistKind, DistTarget, DistributionPart, DistributionRow,
-    DistributionRule, EffectRef, OpPeriod, TopupTx, Transaction, TransferTx, TxKind, TxMeta,
-    VaultDoc,
+    AccountRef, AssetRef, DistKind, DistTarget, DistributionPart, DistributionRow, EffectRef,
+    OpPeriod, TopupTx, Transaction, TransferTx, TxKind, TxMeta, VaultDoc,
 };
 
 /// Stable code of a distribution whose rows ask for more than the income.
@@ -38,6 +38,8 @@ pub const ALREADY_DISTRIBUTED: &str = "DISTRIBUTION_ALREADY_DISTRIBUTED";
 
 /// What the income needs to know to book effects.
 struct Income {
+    /// The clock of the run that books it, in milliseconds; the wall clock when `None`.
+    now_ms: Option<i64>,
     id: String,
     store_id: String,
     asset: AssetRef,
@@ -70,7 +72,18 @@ pub(crate) fn apply_distribution_unsaved(
     income_id: &str,
     rows: &[DistributionRow],
 ) -> Result<Vec<DistributionPart>> {
-    rewrite_unsaved(vault, income_id, Some(rows))
+    rewrite_unsaved(vault, income_id, Some(rows), None)
+}
+
+/// [`apply_distribution_unsaved`] for an automation run: its transfers are checked against the
+/// run's own clock `now_ms`, not the wall one (an emulated run is days ahead).
+pub(crate) fn apply_distribution_at(
+    vault: &mut Session,
+    income_id: &str,
+    rows: &[DistributionRow],
+    now_ms: i64,
+) -> Result<Vec<DistributionPart>> {
+    rewrite_unsaved(vault, income_id, Some(rows), Some(now_ms))
 }
 
 /// The rows a stored list was asked with: a rule re-resolves them against a new amount.
@@ -90,7 +103,7 @@ pub(crate) fn drop_distribution_of(vault: &mut Session, id: &str) -> Result<()> 
         matches!(tx, Transaction::Topup(topup) if topup.meta.id == id && topup.distribution.is_some())
     });
     if distributes {
-        rewrite_unsaved(vault, id, None)?;
+        rewrite_unsaved(vault, id, None, None)?;
     }
     Ok(())
 }
@@ -102,14 +115,14 @@ pub fn replace_distribution(
     income_id: &str,
     rows: &[DistributionRow],
 ) -> Result<Vec<DistributionPart>> {
-    let parts = rewrite_unsaved(vault, income_id, Some(rows))?;
+    let parts = rewrite_unsaved(vault, income_id, Some(rows), None)?;
     rebase_and_commit(vault)?;
     Ok(parts)
 }
 
 /// Undo: every effect is removed and the income stores no distribution.
 pub fn remove_distribution(vault: &mut Session, income_id: &str) -> Result<()> {
-    rewrite_unsaved(vault, income_id, None)?;
+    rewrite_unsaved(vault, income_id, None, None)?;
     rebase_and_commit(vault)
 }
 
@@ -123,7 +136,7 @@ fn income_of<'doc>(doc: &'doc VaultDoc, id: &str) -> Result<&'doc TopupTx> {
     }
 }
 
-fn read_income(vault: &Session, income_id: &str) -> Result<Income> {
+fn read_income(vault: &Session, income_id: &str, now_ms: Option<i64>) -> Result<Income> {
     let topup = income_of(&vault.doc, income_id)?;
     if !topup.parts.is_empty() {
         return Err(Error::InvalidInput(format!(
@@ -131,6 +144,7 @@ fn read_income(vault: &Session, income_id: &str) -> Result<Income> {
         )));
     }
     Ok(Income {
+        now_ms,
         id: income_id.to_string(),
         store_id: topup.store_id.clone(),
         asset: topup.asset.clone(),
@@ -145,8 +159,9 @@ fn rewrite_unsaved(
     vault: &mut Session,
     income_id: &str,
     rows: Option<&[DistributionRow]>,
+    now_ms: Option<i64>,
 ) -> Result<Vec<DistributionPart>> {
-    let income = read_income(vault, income_id)?;
+    let income = read_income(vault, income_id, now_ms)?;
     let wanted = match rows {
         Some(rows) => resolve(vault, &income, rows)?,
         None => Vec::new(),
@@ -279,7 +294,10 @@ fn create_transfer(
         debt: None,
         price: Default::default(),
     });
-    prepare_transaction(vault, &mut transfer)?;
+    match income.now_ms {
+        Some(now_ms) => prepare_transaction_at(vault, &mut transfer, now_ms)?,
+        None => prepare_transaction(vault, &mut transfer)?,
+    }
     ensure_fresh_id(&vault.doc, &mut transfer);
     let tx_id = transfer.meta().id.clone();
     vault.doc.transactions.push(transfer);
@@ -444,7 +462,7 @@ pub fn preview_rule(
     let resolved = resolve_distribution(
         rule,
         topup.amount,
-        crate::workflow::automation::template_amount(&automation.template),
+        expected_payout(automation),
         held_quantity(vault, topup),
         topup.asset.minor_places(),
     )?;
@@ -458,59 +476,3 @@ pub fn preview_rule(
 
 /// A year and a bit: any schedule fires within it.
 const NEXT_DATE_LOOKAHEAD_SECS: i64 = 367 * 86_400;
-
-/// Settle a booked income at the confirmed `amount` under `rule` (Q12): the old effects go, the
-/// amount is set and the rows of the rule are applied against the card as it was before them, all
-/// in one commit. A rule that still asks or asks too much refuses it and nothing changes.
-pub(crate) fn redistribute_income(
-    vault: &mut Session,
-    income_id: &str,
-    amount: Amount,
-    rule: &DistributionRule,
-    expected: Amount,
-) -> Result<()> {
-    let backup = vault.doc.clone();
-    let settled = settle_income(vault, income_id, amount, rule, expected);
-    if settled.is_err() {
-        vault.doc = backup;
-        recompute_holdings(vault);
-        return settled;
-    }
-    rebase_and_commit(vault)
-}
-
-fn settle_income(
-    vault: &mut Session,
-    income_id: &str,
-    amount: Amount,
-    rule: &DistributionRule,
-    expected: Amount,
-) -> Result<()> {
-    drop_distribution_of(vault, income_id)?;
-    let topup = vault
-        .doc
-        .transactions
-        .iter_mut()
-        .find_map(|tx| match tx {
-            Transaction::Topup(topup) if topup.meta.id == income_id => Some(topup),
-            _ => None,
-        })
-        .ok_or_else(|| Error::Missing(format!("income {income_id}")))?;
-    topup.amount = amount;
-    let mut payout = topup.clone();
-    recompute_holdings(vault);
-    // The income is on the card already: what `held_quantity` adds for an unbooked one is nil.
-    payout.amount = Amount::ZERO;
-    let held = held_quantity(vault, &payout);
-    payout.amount = amount;
-    match resolve_rule_rows(rule, &payout, expected, held)? {
-        RuleRows::Ask => Err(Error::InvalidInput(
-            "the rule still asks: choose how to distribute".into(),
-        )),
-        RuleRows::Over(over) => Err(Error::InvalidInput(format!(
-            "{OVER_ALLOCATED}: the rows ask {over} more than the income"
-        ))),
-        RuleRows::Rows(None) => Ok(()),
-        RuleRows::Rows(Some(rows)) => apply_distribution_unsaved(vault, income_id, &rows).map(drop),
-    }
-}

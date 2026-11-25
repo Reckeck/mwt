@@ -130,10 +130,21 @@ pub(crate) fn add_transaction_distributed(
 /// What a new operation gets before it is prepared, on every creation path: categories settled
 /// (the category rule of D3 reads them), the period by rule, the spread derived (P6).
 pub(crate) fn apply_creation_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
+    apply_creation_rules_on(vault, tx, rules, None);
+}
+
+/// [`apply_creation_rules`] with the money date given when it is not the day of the timestamp:
+/// an automation run made late still takes the period of the day it was planned for (D5).
+pub(crate) fn apply_creation_rules_on(
+    vault: &Session,
+    tx: &mut Transaction,
+    rules: &CreationRules,
+    money_date: Option<chrono::NaiveDate>,
+) {
     Session::normalize_categories(tx);
     crate::money::validate::apply_categorization_rules(&vault.doc, tx);
     let period_given = tx.meta().period.is_some();
-    apply_period_rules(vault, tx, rules);
+    apply_period_rules(vault, tx, rules, money_date);
     settle_tx_spread(tx, period_given, None);
 }
 
@@ -147,14 +158,19 @@ fn spreadable(tx: &Transaction) -> Option<(Amount, u32)> {
 }
 
 /// D3: give a new income or expense without a period the period of its rule, cut in the zone of
-/// the group's schedule from the local date of its timestamp.
-fn apply_period_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
+/// the group's schedule from the local date of its timestamp (or the given money date).
+fn apply_period_rules(
+    vault: &Session,
+    tx: &mut Transaction,
+    rules: &CreationRules,
+    money_date: Option<chrono::NaiveDate>,
+) {
     if spreadable(tx).is_none() || tx.meta().period.is_some() {
         return;
     }
-    let Some(money_date) =
+    let Some(money_date) = money_date.or_else(|| {
         crate::money::interest::calendar_of(&vault.doc).date_of_iso(&tx.meta().timestamp)
-    else {
+    }) else {
         return;
     };
     let category_rule = tx.meta().categories.first().and_then(|key| {

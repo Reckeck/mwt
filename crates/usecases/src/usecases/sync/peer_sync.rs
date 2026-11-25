@@ -549,6 +549,7 @@ pub(crate) fn open_copy(vault: &Session, remote: &[u8], password: &str) -> Resul
         key: None,
         session: crate::kernel::session::Write::sandboxed(),
         device_keys: Default::default(),
+        confirmation: None,
     })
 }
 

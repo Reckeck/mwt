@@ -8,8 +8,8 @@
 use std::collections::HashSet;
 
 use super::automation_rules::{
-    check_draft_moment, detach, manual_run_record, new_automation_workflow, rewrite_automation,
-    simulation_report,
+    Confirmation, check_draft_moment, detach, manual_run_record, new_automation_workflow,
+    rewrite_automation, simulation_report,
 };
 use crate::error::{Error, Result};
 use crate::kernel::events::{AutomationDeleted, AutomationRetried, DomainEvent};
@@ -20,12 +20,11 @@ use crate::planning::automation_plan as plan;
 use crate::planning::automations::{self as rules, AutomationDraft, AutomationSimulation};
 use crate::service::Session;
 use crate::time::secs_or_now;
-use crate::usecases::planning::distribution::{
-    DistributionPreview, preview_rule, redistribute_income,
-};
+use crate::usecases::planning::distribution::{DistributionPreview, preview_rule};
 use crate::usecases::react::{ReactionFailure, react};
+use crate::usecases::workflow::runs::book_manual_run;
 use crate::workflow::automation as graph_of;
-use crate::workflow::model::Workflow;
+use crate::workflow::model::{RunOutcome, Workflow};
 use crate::{Amount, calendar};
 use mwt_model::{OnOtherAmount, WaitKind};
 
@@ -202,41 +201,15 @@ pub fn simulate_automations(
     ))
 }
 
-/// Funds check, then the transaction. A shortfall is an `INSUFFICIENT_FUNDS`
-/// error. Returns the prepared transaction; the caller writes it.
-fn checked_transaction(vault: &Session, mut tx: Transaction, now: i64) -> Result<Transaction> {
-    if let Some(reason) = rules::funds_shortfall(&vault.doc, &tx, now) {
-        return Err(rules::funds_error(&vault.doc, reason));
-    }
-    crate::usecases::money::transactions::prepare_transaction_at(vault, &mut tx, now * 1000)?;
-    Ok(tx)
-}
-
-/// Create the transaction of an automation now ("Create now"), with
-/// the same funds check as the schedule.
+/// Create the transaction of an automation now ("Create now"): booked as the schedule books it,
+/// with the same funds check and the template's period rule and distribution.
 pub fn run_automation(vault: &mut Session, id: &str, now: i64) -> Result<Transaction> {
     let automation = automation(vault, id)?;
     let planned_at = calendar::iso(now);
     let run_id = uuid::Uuid::new_v4().to_string();
     let made = rules::manual_run_transaction(&automation, &planned_at, &run_id);
-    let saved = checked_transaction(vault, made, now)?;
-    let record = manual_run_record(&run_id, id, &planned_at, &saved.meta().id);
-    // The holdings follow the booked transaction and rebasing rewrites the
-    // stored `before` of corrections, so the booking is applied and the
-    // holdings recomputed before the one commit. The booking emits no events,
-    // so none is dropped by `run`.
-    vault.run(|tx| {
-        let doc = tx.doc_mut();
-        doc.transactions.push(saved.clone());
-        doc.workflow_runs.push(record);
-        Ok(())
-    })?;
-    crate::usecases::money::portfolio::recompute_holdings(vault);
-    vault.transact(|tx| {
-        tx.touch();
-        Ok(())
-    })?;
-    Ok(saved)
+    let record = manual_run_record(&run_id, id, &planned_at, &made.meta().id);
+    book_manual_run(vault, made, record, now)
 }
 
 /// Retry a refused run: funds are checked at the current moment and the
@@ -318,9 +291,11 @@ pub fn preview_distribution_rule(
     preview_rule(vault, &automation(vault, automation_id)?, amount, now)
 }
 
-/// D9, Q12, I12: answer "yes" to the confirmation of an automation run that asks, then distribute
-/// the booked income by the template's rule for the confirmed `amount`, as `mode` when the user
-/// chose one. Until then nothing is booked. Returns the income as stored.
+/// D9, Q12, I12: answer "yes" to the confirmation of an automation run that asks, and book the
+/// income at the confirmed `amount`, distributed by the template's rule as `mode` when the user
+/// chose one. Until then nothing is booked. The answer is tried on a copy of the vault first:
+/// a refusal (the rule still asks or asks too much, the money is short) leaves the question and
+/// the document as they were. Returns the income as stored.
 pub fn confirm_distribution(
     vault: &mut Session,
     run_id: &str,
@@ -334,6 +309,9 @@ pub fn confirm_distribution(
             "a confirmation chooses how to distribute, it cannot ask again".into(),
         ));
     }
+    if !amount.is_positive() {
+        return Err(Error::InvalidInput("the amount must be above zero".into()));
+    }
     let wait = vault
         .doc
         .workflow_waits
@@ -342,7 +320,7 @@ pub fn confirm_distribution(
         .cloned()
         .ok_or_else(|| Error::Missing(format!("question of run {run_id}")))?;
     let automation = automation(vault, &wait.workflow_id)?;
-    let mut rule = automation
+    let has_rule = automation
         .operation_template_id
         .as_deref()
         .and_then(|id| {
@@ -352,27 +330,17 @@ pub fn confirm_distribution(
                 .iter()
                 .find(|known| known.id == id)
         })
-        .and_then(|template| template.distribution.clone())
-        .ok_or_else(|| Error::Missing("the template's distribution rule".into()))?;
-    if let Some(mode) = mode {
-        rule.on_other_amount = mode;
+        .is_some_and(|template| template.distribution.is_some());
+    if !has_rule {
+        return Err(Error::Missing("the template's distribution rule".into()));
     }
-    let known: HashSet<String> = vault
-        .doc
-        .transactions
-        .iter()
-        .map(|tx| tx.meta().id.clone())
-        .collect();
-    crate::usecases::workflow::runs::answer_workflow_wait(vault, &wait.id, true, now, zone)?;
-    let income_id = vault
-        .doc
-        .transactions
-        .iter()
-        .find(|tx| !known.contains(&tx.meta().id))
-        .map(|tx| tx.meta().id.clone())
-        .ok_or_else(|| Error::InvalidInput("the run made no operation".into()))?;
-    let expected = graph_of::template_amount(&automation.template);
-    redistribute_income(vault, &income_id, amount, &rule, expected)?;
+    let confirmation = Confirmation {
+        workflow_id: wait.workflow_id.clone(),
+        amount,
+        mode,
+    };
+    answer_confirmed(&mut vault.sandbox(), &wait.id, &confirmation, now, zone)?;
+    let income_id = answer_confirmed(vault, &wait.id, &confirmation, now, zone)?;
     vault
         .doc
         .transactions
@@ -380,4 +348,26 @@ pub fn confirm_distribution(
         .find(|tx| tx.meta().id == income_id)
         .cloned()
         .ok_or_else(|| Error::Missing(format!("income {income_id}")))
+}
+
+/// Answer "yes" with the confirmation riding the run; the id of the income the run booked.
+fn answer_confirmed(
+    vault: &mut Session,
+    wait_id: &str,
+    confirmation: &Confirmation,
+    now: i64,
+    zone: &str,
+) -> Result<String> {
+    vault.confirmation = Some(confirmation.clone());
+    let answered =
+        crate::usecases::workflow::runs::answer_workflow_wait(vault, wait_id, true, now, zone);
+    vault.confirmation = None;
+    let run = answered?.run;
+    if let RunOutcome::Rejected { reason, .. } = run.outcome {
+        return Err(rules::funds_error(&vault.doc, reason));
+    }
+    run.created
+        .into_iter()
+        .next()
+        .ok_or_else(|| Error::InvalidInput("the run made no operation".into()))
 }

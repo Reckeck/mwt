@@ -1,7 +1,9 @@
 //! op-period T22: an automation run that refers to an operation template takes the template's
 //! period rule and distribution rule, all in the one write of the run (T5, D5, D12, Q11, A4).
 
-use crate::model::planning::{AutomationOutcome, RejectReason, Schedule, TransactionDraft};
+use crate::model::planning::{
+    AmountMode, AutomationOutcome, RejectReason, Schedule, TransactionDraft,
+};
 use crate::model::store::StoreKind;
 use crate::model::transaction::Transaction;
 use crate::planning::automations::AutomationDraft;
@@ -10,7 +12,8 @@ use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
 use crate::usecases::planning::automations::{
-    confirm_distribution, create_automation, preview_distribution_rule,
+    confirm_distribution, create_automation, preview_distribution_rule, run_automation,
+    simulate_automations, update_automation,
 };
 use crate::usecases::planning::templates::create_operation_template;
 use crate::usecases::workflow::runs::run_due_workflows;
@@ -83,6 +86,16 @@ fn advance_asking(
     template_id: Option<&str>,
     asks: bool,
 ) -> String {
+    advance_with(vault, card, template_id, asks, Default::default())
+}
+
+fn advance_with(
+    vault: &mut Session,
+    card: &str,
+    template_id: Option<&str>,
+    asks: bool,
+    amount_mode: AmountMode,
+) -> String {
     let Transaction::Topup(inner) = income(card, "30000", "advance") else {
         unreachable!()
     };
@@ -95,7 +108,7 @@ fn advance_asking(
             schedule: Schedule::Monthly { day: 20 },
             starts_at: "2026-11-01T00:00:00Z".into(),
             template: TransactionDraft::Topup(inner),
-            amount_mode: Default::default(),
+            amount_mode,
             workday_shift: Default::default(),
             property_id: None,
             time: None,
@@ -386,4 +399,407 @@ fn a3_ask_books_nothing_until_confirmed_and_confirmation_distributes() {
     assert_eq!(parts, vec![amount("1550"), amount("29450")]);
     assert_eq!(holding_of(&vault, &card, &usd()), amount("31000"));
     assert!(vault.doc.workflow_waits.is_empty());
+}
+
+/// An advance whose rule asks; the 20 Nov run is done and waits on the question. Its run id.
+fn waiting(vault: &mut Session, card: &str, rows: Vec<DistributionRow>) -> String {
+    let template = template_on_other(vault, rows, OnOtherAmount::Ask);
+    advance_asking(vault, card, Some(&template), true);
+    run_on_20_nov(vault);
+    assert_eq!(vault.doc.workflow_waits.len(), 1);
+    vault.doc.workflow_waits[0].run_id.clone()
+}
+
+fn confirm_at_13(
+    vault: &mut Session,
+    run_id: &str,
+    raw: &str,
+    mode: Option<OnOtherAmount>,
+) -> crate::error::Result<Transaction> {
+    let now = unix_secs("2026-11-20T13:00:00Z").unwrap();
+    confirm_distribution(vault, run_id, amount(raw), mode, now, "UTC")
+}
+
+/// A refused confirmation changes nothing: the question stays, the document is as it was.
+fn assert_refused(vault: &mut Session, run_id: &str, raw: &str, mode: Option<OnOtherAmount>) {
+    let before = vault.doc.clone();
+    let revision = vault.session.revision();
+    assert!(confirm_at_13(vault, run_id, raw, mode).is_err());
+    assert!(vault.doc == before);
+    assert_eq!(vault.doc.workflow_waits.len(), 1);
+    assert_eq!(vault.session.revision(), revision);
+}
+
+#[test]
+fn a_confirmation_that_still_asks_changes_nothing() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let run_id = waiting(&mut vault, &card, vec![five_percent(&vacation)]);
+    assert_refused(&mut vault, &run_id, "31000", None);
+    assert_refused(&mut vault, &run_id, "31000", Some(OnOtherAmount::Ask));
+    assert_refused(
+        &mut vault,
+        &run_id,
+        "0",
+        Some(OnOtherAmount::ShrinkRemainder),
+    );
+    // The same amount as expected resolves without a mode.
+    let income = confirm_at_13(&mut vault, &run_id, "30000", None).unwrap();
+    assert!(matches!(income, Transaction::Topup(ref topup) if topup.distribution.is_some()));
+    assert!(vault.doc.workflow_waits.is_empty());
+}
+
+#[test]
+fn a_confirmation_that_asks_too_much_changes_nothing() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let rows = vec![row(
+        DistKind::Sum {
+            amount: amount("40000"),
+        },
+        DistTarget::Envelope { id: vacation },
+    )];
+    let run_id = waiting(&mut vault, &card, rows);
+    assert_refused(
+        &mut vault,
+        &run_id,
+        "31000",
+        Some(OnOtherAmount::ShrinkRemainder),
+    );
+    assert!(
+        vault
+            .doc
+            .envelopes
+            .iter()
+            .all(|envelope| envelope.allocated == amount("0"))
+    );
+}
+
+#[test]
+fn a_confirmation_without_free_balance_changes_nothing() {
+    let (_dir, mut vault, card, vacation) = setup();
+    add_transaction_plain(&mut vault, &card, "8000");
+    let reserve = envelope_on(&mut vault, &card, "Reserve");
+    vault
+        .doc
+        .envelopes
+        .iter_mut()
+        .find(|envelope| envelope.id == reserve)
+        .unwrap()
+        .record_move(amount("28000"), "2026-11-02T00:00:00Z");
+    let rows = vec![row(
+        DistKind::Sum {
+            amount: amount("25000"),
+        },
+        DistTarget::Envelope { id: vacation },
+    )];
+    let run_id = waiting(&mut vault, &card, rows);
+    assert_refused(
+        &mut vault,
+        &run_id,
+        "31000",
+        Some(OnOtherAmount::ShrinkRemainder),
+    );
+    assert_eq!(holding_of(&vault, &card, &usd()), amount("8000"));
+}
+
+#[test]
+fn the_confirmation_is_one_answer_with_no_write_after_it() {
+    let (_dir, mut plain, card, vacation) = setup();
+    let plain_run = waiting(&mut plain, &card, vec![five_percent(&vacation)]);
+    let (_other, mut confirmed, card, vacation) = setup();
+    let confirmed_run = waiting(&mut confirmed, &card, vec![five_percent(&vacation)]);
+    let (before_plain, before_confirmed) = (plain.session.revision(), confirmed.session.revision());
+    let now = unix_secs("2026-11-20T13:00:00Z").unwrap();
+    let wait = plain.doc.workflow_waits[0].id.clone();
+    assert_eq!(plain.doc.workflow_waits[0].run_id, plain_run);
+    crate::usecases::workflow::runs::answer_workflow_wait(&mut plain, &wait, true, now, "UTC")
+        .unwrap();
+    confirm_at_13(
+        &mut confirmed,
+        &confirmed_run,
+        "31000",
+        Some(OnOtherAmount::ShrinkRemainder),
+    )
+    .unwrap();
+    // Booking the answer takes the writes of an answer, not one more.
+    assert_eq!(
+        confirmed.session.revision() - before_confirmed,
+        plain.session.revision() - before_plain
+    );
+}
+
+#[test]
+fn an_ask_rule_makes_the_run_wait_though_the_form_did_not_ask() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_on_other(
+        &mut vault,
+        vec![five_percent(&vacation)],
+        OnOtherAmount::Ask,
+    );
+    advance_asking(&mut vault, &card, Some(&template), false);
+    let pass = run_on_20_nov(&mut vault);
+    assert!(pass.created.is_empty());
+    assert!(vault.doc.transactions.is_empty());
+    assert_eq!(vault.doc.workflow_waits.len(), 1);
+}
+
+#[test]
+fn editing_the_automation_keeps_its_template_link() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_with(&mut vault, vec![five_percent(&vacation)]);
+    let id = advance(&mut vault, &card, Some(&template));
+    let stored = crate::usecases::planning::automations::automation(&vault, &id).unwrap();
+    let edited = AutomationDraft {
+        name: "Advance, renamed".into(),
+        active: true,
+        preset: stored.preset,
+        schedule: stored.schedule,
+        starts_at: stored.starts_at.clone(),
+        template: stored.template.clone(),
+        amount_mode: stored.amount_mode,
+        workday_shift: stored.workday_shift,
+        property_id: None,
+        time: None,
+        asks: false,
+        for_month_offset: stored.for_month_offset,
+    };
+    let updated = update_automation(&mut vault, &id, edited).unwrap();
+    assert_eq!(updated.name, "Advance, renamed");
+    assert_eq!(
+        updated.operation_template_id.as_deref(),
+        Some(template.as_str())
+    );
+}
+
+#[test]
+fn create_now_books_a_linked_automation_by_the_template() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_with(&mut vault, vec![five_percent(&vacation)]);
+    let id = advance(&mut vault, &card, Some(&template));
+    let now = unix_secs("2026-11-20T12:00:00Z").unwrap();
+    let income = run_automation(&mut vault, &id, now).unwrap();
+    let Transaction::Topup(topup) = income else {
+        panic!("an income")
+    };
+    let period = topup.meta.period.as_ref().expect("a period");
+    assert_eq!(
+        (period.start.as_str(), period.end.as_str()),
+        ("2026-11-01", "2026-11-15")
+    );
+    let parts: Vec<_> = topup
+        .distribution
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|part| part.amount)
+        .collect();
+    assert_eq!(parts, vec![amount("1500"), amount("28500")]);
+    assert_eq!(vault.doc.workflow_runs.len(), 1);
+    assert_eq!(holding_of(&vault, &card, &usd()), amount("30000"));
+}
+
+#[test]
+fn a_retry_across_the_month_takes_the_period_of_the_planned_day() {
+    let (_dir, mut vault, card, _vacation) = setup();
+    add_transaction_plain(&mut vault, &card, "2000");
+    let template = create_operation_template(
+        &mut vault,
+        TemplateDraft {
+            name: "Rent".into(),
+            kind: TemplateKind::Expense,
+            store_id: None,
+            asset: Some(usd()),
+            amount: None,
+            categories: Vec::new(),
+            comment: String::new(),
+            contact_id: None,
+            period_rule: Some(PeriodRule::ThisHalfFirst),
+            distribution: None,
+        },
+    )
+    .unwrap()
+    .id;
+    let Transaction::Payment(inner) = payment(&card, "5000", "rent") else {
+        unreachable!()
+    };
+    let made = create_automation(
+        &mut vault,
+        AutomationDraft {
+            name: "Rent".into(),
+            active: true,
+            preset: None,
+            schedule: Schedule::Monthly { day: 20 },
+            starts_at: "2026-11-01T00:00:00Z".into(),
+            template: TransactionDraft::Payment(inner),
+            amount_mode: Default::default(),
+            workday_shift: Default::default(),
+            property_id: None,
+            time: None,
+            asks: false,
+            for_month_offset: None,
+        },
+    )
+    .unwrap();
+    vault
+        .doc
+        .workflows
+        .iter_mut()
+        .find(|workflow| workflow.id == made.id)
+        .unwrap()
+        .automation
+        .as_mut()
+        .unwrap()
+        .operation_template_id = Some(template);
+    run_on_20_nov(&mut vault);
+    let refused = vault
+        .doc
+        .workflow_runs
+        .iter()
+        .find(|run| {
+            matches!(
+                run.outcome,
+                crate::workflow::model::RunOutcome::Rejected { .. }
+            )
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "a refused run in {:?}",
+                vault
+                    .doc
+                    .workflow_runs
+                    .iter()
+                    .map(|run| &run.outcome)
+                    .collect::<Vec<_>>()
+            )
+        })
+        .id
+        .clone();
+    // Money arrives; the retry is made in December.
+    let mut topup = income(&card, "20000", "more");
+    at(&mut topup, "2026-11-25T00:00:00Z");
+    crate::usecases::money::transactions::add_transaction(&mut vault, topup).unwrap();
+    let december = unix_secs("2026-12-02T12:00:00Z").unwrap();
+    let pass =
+        crate::usecases::workflow::runs::retry_workflow_run(&mut vault, &refused, december, "UTC")
+            .unwrap();
+    let booked = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+        .unwrap();
+    assert!(booked.meta().timestamp.starts_with("2026-12-02"));
+    let period = booked.meta().period.as_ref().expect("a period");
+    assert_eq!(
+        (period.start.as_str(), period.end.as_str()),
+        ("2026-11-01", "2026-11-15")
+    );
+}
+
+#[test]
+fn a_late_yes_takes_the_period_of_the_planned_day() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let run_id = waiting(&mut vault, &card, vec![five_percent(&vacation)]);
+    let december = unix_secs("2026-12-02T12:00:00Z").unwrap();
+    let income =
+        confirm_distribution(&mut vault, &run_id, amount("30000"), None, december, "UTC").unwrap();
+    let period = income.meta().period.as_ref().expect("a period");
+    assert_eq!(
+        (period.start.as_str(), period.end.as_str()),
+        ("2026-11-01", "2026-11-15")
+    );
+}
+
+#[test]
+fn the_expected_payout_of_a_varying_automation_is_its_estimate() {
+    let (_dir, mut vault, card, _vacation) = setup();
+    let goal = envelope_on(&mut vault, &card, "Goal");
+    let sum = DistKind::Sum {
+        amount: amount("5000"),
+    };
+    let template = template_on_other(
+        &mut vault,
+        vec![row(sum, DistTarget::Envelope { id: goal })],
+        OnOtherAmount::ShrinkAll,
+    );
+    let id = advance_with(
+        &mut vault,
+        &card,
+        Some(&template),
+        false,
+        AmountMode::Varies,
+    );
+    // Past corrected advances of 20 000: the estimate the next one is booked at.
+    let mut past = income(&card, "20000", "past");
+    at(&mut past, "2026-10-20T12:00:00Z");
+    past.meta_mut().origin = mwt_model::TxOrigin::Workflow {
+        workflow_id: id.clone(),
+        run_id: "old".into(),
+        planned_at: None,
+        planned_date: None,
+        estimated: false,
+        run_key: None,
+    };
+    vault.doc.transactions.push(past);
+    crate::usecases::money::portfolio::recompute_holdings(&mut vault);
+    let preview = preview_distribution_rule(&vault, &id, None, day_before()).unwrap();
+    assert_eq!(preview.amount, amount("20000"));
+    let rows: Vec<_> = preview.resolved.rows.iter().map(|row| row.amount).collect();
+    assert_eq!(rows, vec![amount("5000"), amount("15000")]);
+    let pass = run_on_20_nov(&mut vault);
+    let Some(Transaction::Topup(topup)) = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+    else {
+        panic!("an income")
+    };
+    assert_eq!(topup.amount, amount("20000"));
+    let booked: Vec<_> = topup
+        .distribution
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|part| part.amount)
+        .collect();
+    assert_eq!(booked, vec![amount("5000"), amount("15000")]);
+}
+
+#[test]
+fn a_store_row_is_emulated_and_booked_by_a_run() {
+    let (_dir, mut vault, card, _vacation) = setup();
+    let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
+    let template = template_with(
+        &mut vault,
+        vec![row(
+            DistKind::Percent { pct: amount("10") },
+            DistTarget::Store {
+                id: savings.clone(),
+            },
+        )],
+    );
+    let id = advance(&mut vault, &card, Some(&template));
+    let before = unix_secs("2026-11-19T12:00:00Z").unwrap();
+    let emulated = simulate_automations(&vault, Some(&id), 3, before, "UTC").unwrap();
+    assert_eq!(
+        (emulated.created, emulated.rejected),
+        (1, 0),
+        "{emulated:?}"
+    );
+    assert!(vault.doc.transactions.is_empty());
+    let pass = run_on_20_nov(&mut vault);
+    assert_eq!(pass.created.len(), 1);
+    let transfers: Vec<_> = vault
+        .doc
+        .transactions
+        .iter()
+        .filter(|tx| matches!(tx, Transaction::Transfer(_)))
+        .collect();
+    assert_eq!(transfers.len(), 1);
+    assert_eq!(
+        transfers[0].meta().income_ref.as_deref(),
+        Some(pass.created[0].as_str())
+    );
+    assert_eq!(holding_of(&vault, &savings, &usd()), amount("3000"));
+    assert_eq!(holding_of(&vault, &card, &usd()), amount("27000"));
 }

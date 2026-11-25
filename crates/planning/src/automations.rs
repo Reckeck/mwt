@@ -125,7 +125,7 @@ pub fn main_amount(tx: &Transaction) -> Option<Amount> {
     }
 }
 
-fn set_main_amount(tx: &mut Transaction, amount: Amount) -> Result<()> {
+pub fn set_main_amount(tx: &mut Transaction, amount: Amount) -> Result<()> {
     match tx {
         Transaction::Topup(inner) => inner.amount = amount,
         Transaction::Payment(inner) => inner.amount = amount,

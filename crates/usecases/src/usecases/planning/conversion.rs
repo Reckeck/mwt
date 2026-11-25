@@ -1,6 +1,6 @@
 //! op-period T24 (M5, M6, Q14): the one-time conversion on open of the old «salary -> deposit»
 //! automation into row 1 of an income template's distribution rule. Strict: exactly one fitting
-//! pair converts, anything else changes nothing and says nothing. Old income + manual transfer
+//! pair converts, anything else changes nothing and says nothing (only the marker is written). Old income + manual transfer
 //! pairs are never linked (M5).
 
 use crate::Amount;
@@ -21,6 +21,8 @@ pub const SALARY_RULE_MARKER: &str = "op-period-salary-rule";
 
 /// The workflow node that moves money by shares or sums.
 const DISTRIBUTE_NODE: &str = "action.distribute";
+/// Every node that does something to the vault is of a kind that starts so.
+const ACTION_PREFIX: &str = "action.";
 
 /// A salary automation and the transfer automation that moves its money on to a deposit.
 struct Pair {
@@ -29,8 +31,16 @@ struct Pair {
     template: OperationTemplate,
 }
 
-/// Convert the vault's salary -> deposit pair if there is exactly one that fits.
-/// Returns whether the vault changed.
+/// Record that the conversion has had its one pass over `doc`.
+pub(crate) fn mark_done(doc: &mut VaultDoc) {
+    doc.settings
+        .migrations_done
+        .push(SALARY_RULE_MARKER.to_string());
+}
+
+/// Convert the vault's salary -> deposit pair if there is exactly one that fits. The marker is
+/// written on the first pass whatever the outcome, so the conversion runs once per vault (M6): a
+/// pair made later is never converted. Returns whether the vault changed.
 pub fn convert_salary_to_rule(vault: &mut Session) -> Result<bool> {
     if vault
         .doc
@@ -41,24 +51,21 @@ pub fn convert_salary_to_rule(vault: &mut Session) -> Result<bool> {
     {
         return Ok(false);
     }
-    let Some(pair) = find_pair(&vault.doc) else {
-        return Ok(false);
-    };
+    let pair = find_pair(&vault.doc);
     vault.transact(|tx| {
-        tx.collection::<OperationTemplate>()
-            .insert(pair.template.clone())?;
-        tx.collection::<Workflow>()
-            .update(&pair.income_id, |workflow| {
-                if let Some(spec) = workflow.automation.as_mut() {
-                    spec.operation_template_id = Some(pair.template.id.clone());
-                }
-            })?;
-        tx.collection::<Workflow>()
-            .update(&pair.transfer_id, |workflow| workflow.active = false)?;
-        tx.doc_mut()
-            .settings
-            .migrations_done
-            .push(SALARY_RULE_MARKER.to_string());
+        if let Some(pair) = &pair {
+            tx.collection::<OperationTemplate>()
+                .insert(pair.template.clone())?;
+            tx.collection::<Workflow>()
+                .update(&pair.income_id, |workflow| {
+                    if let Some(spec) = workflow.automation.as_mut() {
+                        spec.operation_template_id = Some(pair.template.id.clone());
+                    }
+                })?;
+            tx.collection::<Workflow>()
+                .update(&pair.transfer_id, |workflow| workflow.active = false)?;
+        }
+        mark_done(tx.doc_mut());
         Ok(())
     })?;
     Ok(true)
@@ -113,20 +120,24 @@ fn moves_to_deposit(doc: &VaultDoc, workflow: &Workflow, from_store: &str) -> bo
     distribute_node(doc, workflow, from_store).is_some()
 }
 
-/// The enabled `action.distribute` node of a graph that pays out of `from_store` to a deposit.
+/// The one enabled action of a graph, when it is an `action.distribute` that pays out of
+/// `from_store` to a deposit: a graph with any other enabled action does more than the rule moves.
 fn distribute_node(doc: &VaultDoc, workflow: &Workflow, from_store: &str) -> Option<Node> {
     let graph = Graph::parse(&workflow.graph).ok()?;
-    graph
+    let mut actions = graph
         .nodes
         .into_iter()
-        .filter(|node| node.kind == DISTRIBUTE_NODE && !node.disabled)
+        .filter(|node| node.kind.starts_with(ACTION_PREFIX) && !node.disabled);
+    let only = actions.next().filter(|_| actions.next().is_none())?;
+    Some(only)
+        .filter(|node| node.kind == DISTRIBUTE_NODE)
         .filter(|node| {
             node.params
                 .get("from")
                 .and_then(account_param)
                 .is_some_and(|from| is_store(&from, from_store))
         })
-        .find(|node| {
+        .filter(|node| {
             targets_of(node).iter().any(|item| {
                 target_account(item).is_some_and(|account| deposit_of(doc, &account).is_some())
             })
@@ -226,7 +237,6 @@ fn fitting_template(doc: &VaultDoc, income: &Workflow, transfer: &Workflow) -> O
     };
     let moved = movement_of(doc, transfer, &topup.store_id)?;
     let fits = income_spec.operation_template_id.is_none()
-        && income_spec.amount_mode == AmountMode::Fixed
         && moved.asset_key == topup.asset.key()
         && moved.categories == topup.meta.categories
         && moved.amount.is_positive();

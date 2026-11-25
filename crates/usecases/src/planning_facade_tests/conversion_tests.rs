@@ -39,8 +39,10 @@ fn deposit_in(vault: &mut Session, name: &str, asset: mwt_model::AssetRef) -> St
     .id
 }
 
+/// A vault from before the conversion: a new one is marked done from the start.
 fn fixture() -> Fixture {
     let (dir, mut vault) = empty_vault();
+    vault.doc.settings.migrations_done.clear();
     let card = store(&mut vault, "Card", StoreKind::Bank, None);
     let deposit = deposit_in(&mut vault, "Deposit", usd());
     Fixture {
@@ -191,12 +193,19 @@ fn a_second_open_changes_nothing() {
     );
 }
 
+/// Nothing converts: the document is as it was, but for the marker of the first pass and the
+/// sync stamp that marker carries.
 fn assert_untouched(fix: &mut Fixture) {
     let before = fix.vault.doc.clone();
+    assert!(crate::usecases::planning::conversion::convert_salary_to_rule(&mut fix.vault).unwrap());
+    assert!(converted(&fix.vault));
+    let mut after = fix.vault.doc.clone();
+    after.settings.migrations_done = before.settings.migrations_done.clone();
+    after.sync = before.sync.clone();
+    assert!(after == before);
     assert!(
         !crate::usecases::planning::conversion::convert_salary_to_rule(&mut fix.vault).unwrap()
     );
-    assert!(fix.vault.doc == before);
 }
 
 #[test]
@@ -421,6 +430,136 @@ fn an_old_income_and_manual_transfer_stay_unlinked_in_both_formats() {
         }
         assert!(opened.doc.operation_templates == before.operation_templates);
         assert!(opened.doc.transactions == before.transactions, "{fmt:?}");
-        assert!(!converted(&opened), "{fmt:?}");
+        assert!(opened.doc.workflows == before.workflows, "{fmt:?}");
     }
+}
+
+#[test]
+fn a_pair_made_after_the_first_open_is_never_converted() {
+    let mut fix = fixture();
+    assert!(
+        super::super::usecases::planning::conversion::convert_salary_to_rule(&mut fix.vault)
+            .unwrap()
+    );
+    assert!(converted(&fix.vault));
+    fix.vault.persist().unwrap();
+    let path = fix.vault.path.clone();
+    let card = fix.card.clone();
+    let deposit = fix.deposit.clone();
+    let mut later = {
+        let Fixture { vault, .. } = fix;
+        vault
+    };
+    salary(&mut later, &card);
+    move_to_deposit(&mut later, transfer_tx(&card, &deposit, "5000"));
+    later.persist().unwrap();
+    drop(later);
+    let reopened = Session::open(path, "pw").unwrap();
+    assert!(reopened.doc.operation_templates.is_empty());
+    assert!(reopened.doc.workflows.iter().all(|item| item.active));
+    assert!(
+        reopened
+            .doc
+            .workflows
+            .iter()
+            .filter_map(|item| item.automation.as_ref())
+            .all(|spec| spec.operation_template_id.is_none())
+    );
+}
+
+#[test]
+fn a_varying_salary_converts() {
+    let mut fix = fixture();
+    let template = income_of(&fix.card, usd(), "30000", "1", "salary");
+    let mut spec = draft("Salary", Some(AutomationPreset::Salary), template);
+    spec.amount_mode = AmountMode::Varies;
+    let income = create_automation(&mut fix.vault, spec).unwrap().id;
+    move_to_deposit(&mut fix.vault, transfer_tx(&fix.card, &fix.deposit, "5000"));
+    assert!(
+        super::super::usecases::planning::conversion::convert_salary_to_rule(&mut fix.vault)
+            .unwrap()
+    );
+    assert!(
+        workflow(&fix.vault, &income)
+            .automation
+            .as_ref()
+            .unwrap()
+            .operation_template_id
+            .is_some()
+    );
+}
+
+/// The graph of a split workflow: the trigger and `nodes`, each fed by it.
+fn split_graph(nodes: Vec<Value>) -> String {
+    let mut all = vec![
+        json!({ "id": "t", "kind": "trigger.transaction", "params": { "tx_kind": "topup", "category": "salary" } }),
+    ];
+    let mut edges = Vec::new();
+    for node in &nodes {
+        let id = node["id"].as_str().unwrap();
+        edges.push(json!({ "id": format!("t.out>{id}.in"), "from": "t", "from_port": "out", "to": id, "to_port": "in" }));
+        if node["kind"] == "action.distribute" {
+            edges.push(json!({ "id": format!("t.amount>{id}.amount"), "from": "t", "from_port": "amount", "to": id, "to_port": "amount" }));
+        }
+    }
+    all.extend(nodes);
+    json!({ "version": 1, "nodes": all, "edges": edges }).to_string()
+}
+
+fn split_node(id: &str, card: &str, deposit: &str) -> Value {
+    json!({
+        "id": id,
+        "kind": "action.distribute",
+        "params": distribute_params(
+            card,
+            "fixed",
+            json!([{ "account": { "store": deposit }, "share": "5000" }]),
+        ),
+    })
+}
+
+fn save_graph(vault: &mut Session, graph: String) {
+    crate::usecases::workflow::records::save_workflow(
+        vault,
+        None,
+        crate::workflow::service::records::WorkflowDraft {
+            name: "Split".into(),
+            description: String::new(),
+            active: true,
+            graph,
+            react_to_workflows: false,
+            max_amount: None,
+            max_amount_currency: None,
+        },
+        crate::calendar::now_secs(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_workflow_with_two_distribute_nodes_does_not_fit() {
+    let mut fix = fixture();
+    salary(&mut fix.vault, &fix.card);
+    save_graph(
+        &mut fix.vault,
+        split_graph(vec![
+            split_node("d1", &fix.card, &fix.deposit),
+            split_node("d2", &fix.card, &fix.deposit),
+        ]),
+    );
+    assert_untouched(&mut fix);
+}
+
+#[test]
+fn a_workflow_with_another_action_beside_the_distribute_does_not_fit() {
+    let mut fix = fixture();
+    salary(&mut fix.vault, &fix.card);
+    save_graph(
+        &mut fix.vault,
+        split_graph(vec![
+            split_node("d1", &fix.card, &fix.deposit),
+            json!({ "id": "n", "kind": "action.notify", "params": { "text": "split" } }),
+        ]),
+    );
+    assert_untouched(&mut fix);
 }

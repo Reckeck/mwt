@@ -25,9 +25,9 @@ use crate::planning::schedule::{fresh_moments, processed_dates};
 use crate::service::Session;
 use crate::time::{Clock, FixedClock, secs_or_now, unix_secs};
 use crate::usecases::money::portfolio::recompute_holdings;
-use crate::usecases::money::transactions::{apply_creation_rules, prepare_transaction_at};
-use crate::usecases::planning::automation_rules::run_template;
-use crate::usecases::planning::distribution::apply_distribution_unsaved;
+use crate::usecases::money::transactions::prepare_transaction_at;
+use crate::usecases::planning::automation_rules::{firing_graph, run_template};
+use crate::usecases::planning::distribution::apply_distribution_at;
 use crate::usecases::planning::notifications::notice;
 use crate::usecases::sync::peer_sync;
 use crate::workflow::catalog::node_def;
@@ -127,9 +127,14 @@ fn book_one(
     mut tx: Transaction,
     now: i64,
 ) -> std::result::Result<Transaction, InsertRefusal> {
-    let template = run_template(&vault.doc, &tx);
+    let invalid = |err: Error| InsertRefusal::Invalid(err.to_string());
+    // The user's answer to a question comes first: the rules below read the confirmed amount.
+    if let Some(confirmation) = &vault.confirmation {
+        confirmation.settle(&mut tx).map_err(invalid)?;
+    }
+    let template = run_template(vault, &tx);
     if let Some(template) = &template {
-        apply_creation_rules(vault, &mut tx, &template.creation_rules());
+        template.apply_creation_rules(vault, &mut tx);
     }
     let secs = secs_or_now(&tx.meta().timestamp);
     if let Some(reason) = crate::planning::automations::funds_shortfall(&vault.doc, &tx, secs) {
@@ -137,12 +142,10 @@ fn book_one(
     }
     // The run's clock, not the wall one: an emulated run days ahead dates its
     // operations days ahead too.
-    prepare_transaction_at(vault, &mut tx, now.max(secs) * 1000)
-        .map_err(|err| InsertRefusal::Invalid(err.to_string()))?;
+    let now_ms = now.max(secs) * 1000;
+    prepare_transaction_at(vault, &mut tx, now_ms).map_err(invalid)?;
     let rows = match &template {
-        Some(template) => template
-            .rows(vault, &tx)
-            .map_err(|err| InsertRefusal::Invalid(err.to_string()))?,
+        Some(template) => template.rows(vault, &tx).map_err(invalid)?,
         None => None,
     };
     vault.doc.transactions.push(tx.clone());
@@ -150,8 +153,7 @@ fn book_one(
     let Some(rows) = rows else {
         return Ok(tx);
     };
-    apply_distribution_unsaved(vault, &tx.meta().id, &rows)
-        .map_err(|err| InsertRefusal::Invalid(err.to_string()))?;
+    apply_distribution_at(vault, &tx.meta().id, &rows, now_ms).map_err(invalid)?;
     Ok(vault
         .doc
         .transactions
@@ -159,6 +161,34 @@ fn book_one(
         .find(|stored| stored.meta().id == tx.meta().id)
         .cloned()
         .unwrap_or(tx))
+}
+
+/// "Create now": one operation booked as the schedule books it, with the template's period rule
+/// and distribution, then written with its run record in one commit. A refusal puts the
+/// document back.
+pub(crate) fn book_manual_run(
+    vault: &mut Session,
+    tx: Transaction,
+    record: WorkflowRun,
+    now: i64,
+) -> Result<Transaction> {
+    let backup = vault.doc.clone();
+    let booked = match book_one(vault, tx, now) {
+        Ok(booked) => booked,
+        Err(refusal) => {
+            let error = match refusal {
+                InsertRefusal::Short(reason) => {
+                    crate::planning::automations::funds_error(&vault.doc, *reason)
+                }
+                InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+            };
+            vault.doc = backup;
+            return Err(error);
+        }
+    };
+    vault.doc.workflow_runs.push(record);
+    commit_applied(vault)?;
+    Ok(booked)
 }
 
 // -- lookups that cross areas ----------------------------------------------------
@@ -888,6 +918,7 @@ fn fire_due_automations(
         let Ok(graph) = Graph::parse(&workflow.graph) else {
             continue;
         };
+        let graph = firing_graph(&vault.doc, &spec, graph);
         let Some(trigger) = graph.node(automation::TRIGGER).cloned() else {
             continue;
         };
