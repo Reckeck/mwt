@@ -596,3 +596,114 @@ fn a_workflow_with_another_action_beside_the_distribute_does_not_fit() {
     );
     assert_untouched(&mut fix);
 }
+
+/// The same unconverted vault on two devices: a copy of one file, each opened (so converted) alone.
+fn two_converted_devices(fix: Fixture) -> (tempfile::TempDir, Session, Session) {
+    use crate::usecases::sync::peer_sync::set_device;
+    let Fixture {
+        _dir, mut vault, ..
+    } = fix;
+    vault.persist().unwrap();
+    let path = vault.path.clone();
+    let copy = _dir.path().join("copy.wallet");
+    std::fs::copy(&path, &copy).unwrap();
+    drop(vault);
+    let mut left = Session::open(path, "pw").unwrap();
+    let mut right = Session::open(copy, "pw").unwrap();
+    set_device(&mut left, "aaaaaaaa-left");
+    set_device(&mut right, "bbbbbbbb-right");
+    (_dir, left, right)
+}
+
+fn peer(name: &str) -> crate::service::PeerRef {
+    crate::service::PeerRef {
+        device_id: format!("{name}-id"),
+        name: name.into(),
+    }
+}
+
+/// Exchange both ways until nothing moves.
+fn settle(left: &mut Session, right: &mut Session) {
+    use crate::usecases::sync::{peer_sync::sync_apply, read};
+    for _ in 0..4 {
+        let left_manifest = read::sync_manifest(left, None).unwrap();
+        let right_manifest = read::sync_manifest(right, None).unwrap();
+        let (left_wants, _) = read::sync_diff(left, &left_manifest, &right_manifest);
+        let (right_wants, _) = read::sync_diff(right, &right_manifest, &left_manifest);
+        let to_left = read::sync_records(right, &left_wants).unwrap();
+        let to_right = read::sync_records(left, &right_wants).unwrap();
+        let applied_left = sync_apply(left, &to_left, &peer("right")).unwrap();
+        let applied_right = sync_apply(right, &to_right, &peer("left")).unwrap();
+        if applied_left.is_none() && applied_right.is_none() {
+            break;
+        }
+    }
+    assert_eq!(
+        read::sync_manifest(left, None).unwrap(),
+        read::sync_manifest(right, None).unwrap(),
+        "devices did not converge"
+    );
+}
+
+#[test]
+fn two_devices_converting_offline_end_with_one_template_after_sync() {
+    let mut fix = fixture();
+    let income = salary(&mut fix.vault, &fix.card);
+    let old = move_to_deposit(&mut fix.vault, transfer_tx(&fix.card, &fix.deposit, "5000"));
+    let (_dir, mut left, mut right) = two_converted_devices(fix);
+    assert!(converted(&left) && converted(&right));
+    settle(&mut left, &mut right);
+    for vault in [&left, &right] {
+        assert_eq!(vault.doc.operation_templates.len(), 1);
+        let template = &vault.doc.operation_templates[0];
+        assert!(!template.archived);
+        assert_eq!(
+            workflow(vault, &income)
+                .automation
+                .as_ref()
+                .unwrap()
+                .operation_template_id
+                .as_ref(),
+            Some(&template.id)
+        );
+        assert!(!workflow(vault, &old).active);
+    }
+    // The merged template is a live record: an edit on one device reaches the other.
+    let template = left.doc.operation_templates[0].clone();
+    let renamed = crate::planning::templates::TemplateDraft {
+        name: "Renamed".into(),
+        kind: template.kind,
+        store_id: template.store_id.clone(),
+        asset: template.asset.clone(),
+        amount: template.amount,
+        categories: template.categories.clone(),
+        comment: template.comment.clone(),
+        contact_id: template.contact_id.clone(),
+        period_rule: template.period_rule,
+        distribution: template.distribution.clone(),
+    };
+    crate::usecases::planning::templates::update_operation_template(
+        &mut left,
+        &template.id,
+        renamed,
+    )
+    .unwrap();
+    settle(&mut left, &mut right);
+    assert_eq!(right.doc.operation_templates.len(), 1);
+    assert_eq!(right.doc.operation_templates[0].name, "Renamed");
+}
+
+#[test]
+fn the_template_id_follows_the_marker_and_the_income_automation() {
+    use crate::usecases::planning::conversion::template_id_for;
+    assert_eq!(template_id_for("income-1"), template_id_for("income-1"));
+    assert_ne!(template_id_for("income-1"), template_id_for("income-2"));
+    let mut fix = fixture();
+    let income = salary(&mut fix.vault, &fix.card);
+    move_to_deposit(&mut fix.vault, transfer_tx(&fix.card, &fix.deposit, "5000"));
+    crate::usecases::planning::conversion::convert_salary_to_rule(&mut fix.vault).unwrap();
+    assert_eq!(
+        fix.vault.doc.operation_templates[0].id,
+        template_id_for(&income)
+    );
+}

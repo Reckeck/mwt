@@ -31,6 +31,19 @@ struct Pair {
     template: OperationTemplate,
 }
 
+/// The id of the template converted from the income automation `income_id`: derived from the
+/// conversion marker and that id, so two devices that convert one vault before they sync write
+/// the same record and the two merge into one (M6, T2).
+pub(crate) fn template_id_for(income_id: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("{SALARY_RULE_MARKER}:{income_id}"));
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    uuid::Builder::from_custom_bytes(bytes)
+        .into_uuid()
+        .to_string()
+}
+
 /// Record that the conversion has had its one pass over `doc`.
 pub(crate) fn mark_done(doc: &mut VaultDoc) {
     doc.settings
@@ -271,7 +284,7 @@ fn fitting_template(doc: &VaultDoc, income: &Workflow, transfer: &Workflow) -> O
         }),
     };
     let template =
-        plan_create_template(doc, draft, uuid::Uuid::new_v4().to_string(), &now_iso()).ok()?;
+        plan_create_template(doc, draft, template_id_for(&income.id), &now_iso()).ok()?;
     Some(Pair {
         income_id: income.id.clone(),
         transfer_id: transfer.id.clone(),
