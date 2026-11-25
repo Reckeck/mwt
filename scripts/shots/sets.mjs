@@ -17,6 +17,7 @@ import { pack2c } from './sets-pack2c.mjs'
 import { pack2b } from './sets-pack2b.mjs'
 import { together } from './sets-together.mjs'
 import { defi } from './sets-defi.mjs'
+import { themes } from './sets-themes.mjs'
 
 
 /** The device goes offline: `navigator.onLine` false and the event `useOnline` listens to. */
@@ -744,4 +745,4 @@ const redesignComponents = [
   { name: 'rc-empty-state', route: '/transactions', scenarios: ['empty'], steps: [{ wait: 900 }] },
 ]
 
-export const SETS = { 'redesign-components': redesignComponents, defi, together, pack2b, pack2c, fixx3, fixx2, salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }
+export const SETS = { 'redesign-components': redesignComponents, themes, defi, together, pack2b, pack2c, fixx3, fixx2, salary, before, stage1, stage2, stage2b, paths, stage3, stage4, stage5, stage6, links, money, moneyScreens, encrypt, samecur, subaccounts, 'home-changes': homeChanges, batch3, report }
