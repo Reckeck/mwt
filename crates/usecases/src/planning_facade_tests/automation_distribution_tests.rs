@@ -114,6 +114,7 @@ fn advance_with(
             time: None,
             asks,
             for_month_offset: Some(0),
+            operation_template_id: None,
         },
     )
     .unwrap();
@@ -594,6 +595,7 @@ fn editing_the_automation_keeps_its_template_link() {
         time: None,
         asks: false,
         for_month_offset: stored.for_month_offset,
+        operation_template_id: stored.operation_template_id.clone(),
     };
     let updated = update_automation(&mut vault, &id, edited).unwrap();
     assert_eq!(updated.name, "Advance, renamed");
@@ -669,6 +671,7 @@ fn a_retry_across_the_month_takes_the_period_of_the_planned_day() {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
         },
     )
     .unwrap();

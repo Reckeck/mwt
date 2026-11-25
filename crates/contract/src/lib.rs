@@ -1511,6 +1511,10 @@ pub struct CreateCategoryInput {
     pub key: Option<String>,
     pub name: String,
     pub group: CategoryGroup,
+    /// The period an operation of the category gets when it has none (spec D3).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<mwt_model::PeriodRule>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1526,6 +1530,10 @@ pub struct UpdateCategoryInput {
     /// Passive income flag for `Income`; `None` keeps it.
     #[serde(default)]
     pub passive: Option<bool>,
+    /// The period rule of the category; `None` clears it.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<mwt_model::PeriodRule>,
     /// The version the form loaded. When set, only the fields the user changed against it are
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
@@ -1791,6 +1799,10 @@ pub struct AutomationInput {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
+    /// The operation template whose period and distribution rules a run uses.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub operation_template_id: Option<String>,
 }
 
 impl AutomationInput {
@@ -1819,6 +1831,7 @@ impl AutomationInput {
             time: self.time.clone(),
             asks: self.asks,
             for_month_offset: self.for_month_offset,
+            operation_template_id: self.operation_template_id.clone(),
         })
     }
 }

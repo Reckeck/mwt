@@ -94,6 +94,7 @@ pub fn rebase_category_input(
     input.passive = input
         .passive
         .and_then(|flag| pick(&base.passive, &Some(flag), &current.passive));
+    input.period_rule = pick(&base.period_rule, &input.period_rule, &current.period_rule);
     Ok(input)
 }
 

@@ -305,7 +305,7 @@ fn comes_back_as_sent<Input>(
 fn a_category_edit_without_a_base_is_returned_as_sent() {
     comes_back_as_sent(
         serde_json::json!({"key": "food", "name": "Food", "group": "daily",
-            "essential": null, "passive": null, "base": null}),
+            "essential": null, "passive": null, "period_rule": null, "base": null}),
         rebase_category_input,
     );
 }
@@ -333,6 +333,7 @@ fn a_category_edit_keeps_the_remote_change_of_an_untouched_field() {
         group: CategoryGroup::Daily,
         essential: None,
         passive: None,
+        period_rule: None,
         base: Some(base),
     };
     let merged = rebase_category_input(&doc, edited).unwrap();

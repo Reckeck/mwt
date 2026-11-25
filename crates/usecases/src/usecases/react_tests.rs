@@ -235,6 +235,7 @@ fn a_retry_with_the_event_zone_books_the_refused_run_without_a_vault_zone() {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
             name: "Rent".into(),
             active: true,
             preset: None,

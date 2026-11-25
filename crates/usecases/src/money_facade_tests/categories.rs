@@ -301,3 +301,38 @@ fn the_category_delegates_equal_the_scenarios() {
         crate::usecases::household::categories::delete_category(&mut delegated, "coffee").is_err()
     );
 }
+
+#[test]
+fn a_category_takes_and_clears_a_period_rule() {
+    use mwt_model::PeriodRule;
+    let (_dir, mut vault) = setup();
+    let made = scenarios::create_category_ruled(
+        &mut vault,
+        None,
+        "Bonus",
+        CategoryGroup::Income,
+        Some(PeriodRule::PrevMonth),
+    )
+    .unwrap();
+    assert_eq!(made.period_rule, Some(PeriodRule::PrevMonth));
+    let kept = scenarios::update_category_ruled(
+        &mut vault,
+        "bonus",
+        Some("Bonus"),
+        CategoryGroup::Income,
+        (None, None),
+        Some(PeriodRule::ThisMonth),
+    )
+    .unwrap();
+    assert_eq!(kept.period_rule, Some(PeriodRule::ThisMonth));
+    let cleared = scenarios::update_category_ruled(
+        &mut vault,
+        "bonus",
+        Some("Bonus"),
+        CategoryGroup::Income,
+        (None, None),
+        None,
+    )
+    .unwrap();
+    assert_eq!(cleared.period_rule, None);
+}

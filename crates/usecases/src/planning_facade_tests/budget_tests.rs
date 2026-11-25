@@ -242,6 +242,7 @@ fn planned_income_counts_until_the_salary_arrives_and_savings_rate_applies() {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
             name: "Salary".into(),
             active: true,
             preset: None,

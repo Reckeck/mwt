@@ -40,6 +40,8 @@ pub struct AutomationDraft {
     pub time: Option<String>,
     pub asks: bool,
     pub for_month_offset: Option<i8>,
+    /// The operation template whose rules a run uses; `None` keeps the stored link.
+    pub operation_template_id: Option<String>,
 }
 
 impl AutomationDraft {
@@ -55,7 +57,7 @@ impl AutomationDraft {
             time: self.time.clone(),
             asks: self.asks,
             for_month_offset: self.for_month_offset,
-            operation_template_id: None,
+            operation_template_id: self.operation_template_id.clone(),
         }
     }
 }

@@ -579,7 +579,11 @@ asks: boolean,
  * An income only: the month it is for, in months from the one it is
  * planned in (-1 — the previous, 0 — this one); `None` — not set.
  */
-for_month_offset?: number, };
+for_month_offset?: number, 
+/**
+ * The operation template whose period and distribution rules a run uses.
+ */
+operation_template_id?: string, };
 
 type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
 
@@ -1507,7 +1511,11 @@ type CreateCategoryInput = {
 /**
  * Wanted key; derived from the name when empty.
  */
-key: string | null, name: string, group: CategoryGroup, };
+key: string | null, name: string, group: CategoryGroup, 
+/**
+ * The period an operation of the category gets when it has none (spec D3).
+ */
+period_rule?: PeriodRule, };
 
 /**
  * Quick-add from a template; every field left out comes from the template.
@@ -8623,6 +8631,10 @@ essential: boolean | null,
  * Passive income flag for `Income`; `None` keeps it.
  */
 passive: boolean | null, 
+/**
+ * The period rule of the category; `None` clears it.
+ */
+period_rule?: PeriodRule, 
 /**
  * The version the form loaded. When set, only the fields the user changed against it are
  * applied onto the current document (an edit never overwrites a remote change to another

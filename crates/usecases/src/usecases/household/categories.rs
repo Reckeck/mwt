@@ -11,6 +11,7 @@ use crate::money::categories::{
     plan_rule_order, plan_update_category,
 };
 use crate::service::Session;
+use mwt_model::PeriodRule;
 
 /// Put `category` in place of the one with its key.
 fn replace_category(tx: &mut Tx<'_>, category: Category) -> Result<()> {
@@ -32,7 +33,19 @@ pub fn create_category(
     name: &str,
     group: CategoryGroup,
 ) -> Result<Category> {
-    let category = plan_create_category(&vault.doc, key, name, group)?;
+    create_category_ruled(vault, key, name, group, None)
+}
+
+/// [`create_category`] with the period rule its operations get when they have none (spec D3).
+pub fn create_category_ruled(
+    vault: &mut Session,
+    key: Option<&str>,
+    name: &str,
+    group: CategoryGroup,
+    period_rule: Option<PeriodRule>,
+) -> Result<Category> {
+    let mut category = plan_create_category(&vault.doc, key, name, group)?;
+    category.period_rule = period_rule;
     vault.transact(|tx| {
         tx.doc_mut().categories.push(category.clone());
         Ok(category)
@@ -51,6 +64,23 @@ pub fn update_category(
     passive: Option<bool>,
 ) -> Result<Category> {
     let category = plan_update_category(&vault.doc, key, name, group, essential, passive)?;
+    vault.transact(|tx| {
+        replace_category(tx, category.clone())?;
+        Ok(category)
+    })
+}
+
+/// [`update_category`] that also sets the period rule as given; `None` clears it.
+pub fn update_category_ruled(
+    vault: &mut Session,
+    key: &str,
+    name: Option<&str>,
+    group: CategoryGroup,
+    flags: (Option<bool>, Option<bool>),
+    period_rule: Option<PeriodRule>,
+) -> Result<Category> {
+    let mut category = plan_update_category(&vault.doc, key, name, group, flags.0, flags.1)?;
+    category.period_rule = period_rule;
     vault.transact(|tx| {
         replace_category(tx, category.clone())?;
         Ok(category)

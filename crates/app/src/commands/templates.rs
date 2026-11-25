@@ -261,6 +261,7 @@ mod tests {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
         };
         let made = create_automation(&mut world.vault, automation.to_draft().unwrap()).unwrap();
         let workflow = world

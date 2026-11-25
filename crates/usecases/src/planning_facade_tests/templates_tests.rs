@@ -98,6 +98,7 @@ fn automation_using(vault: &mut Session, card: &str, template_id: &str) {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
         },
     )
     .unwrap();

@@ -72,6 +72,7 @@ fn draft(name: &str, preset: Option<AutomationPreset>, template: Transaction) ->
         time: None,
         asks: false,
         for_month_offset: None,
+        operation_template_id: None,
     }
 }
 

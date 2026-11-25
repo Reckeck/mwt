@@ -148,6 +148,34 @@ pub(crate) fn apply_creation_rules_on(
     settle_tx_spread(tx, period_given, None);
 }
 
+/// What a draft gets before a preview, the settling the save does: a new one takes the creation
+/// rules (period by rule, spread derived); an edit of `replaced` settles against the stored
+/// record, as [`update_transaction_for`] does. Writes nothing.
+pub fn settle_for_preview(
+    vault: &Session,
+    tx: &mut Transaction,
+    replaced: Option<&str>,
+    no_period_rule: bool,
+) {
+    let stored = replaced.and_then(|id| {
+        vault
+            .doc
+            .transactions
+            .iter()
+            .find(|stored| stored.meta().id == id)
+    });
+    match stored {
+        Some(stored) => settle_tx_spread(tx, true, Some(stored)),
+        None => {
+            let rules = CreationRules {
+                no_period_rule,
+                ..CreationRules::default()
+            };
+            apply_creation_rules(vault, tx, &rules);
+        }
+    }
+}
+
 /// The amount a period spreads and the minor digits it is cut to; none for a kind with no period.
 pub(crate) fn spreadable(tx: &Transaction) -> Option<(Amount, u32)> {
     match tx {

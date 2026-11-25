@@ -82,11 +82,13 @@ pub(crate) fn rewrite_automation(
     now: &str,
 ) -> Result<()> {
     let mut spec = draft.spec();
-    // The form has no field for the template link: an edit keeps the stored one.
-    spec.operation_template_id = workflow
-        .automation
-        .as_ref()
-        .and_then(|stored| stored.operation_template_id.clone());
+    // A draft without the template link keeps the stored one.
+    if spec.operation_template_id.is_none() {
+        spec.operation_template_id = workflow
+            .automation
+            .as_ref()
+            .and_then(|stored| stored.operation_template_id.clone());
+    }
     let graph = graph_json(&spec)?;
     if workflow.graph != graph {
         workflow.versions.push(GraphVersion {

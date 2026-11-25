@@ -134,9 +134,16 @@ pub async fn preview_transaction(
         if rates::resolve_input_price(vault, &mut draft).is_err() {
             draft.common_mut().price = None;
         }
+        let mut tx = draft.to_transaction();
+        transactions::settle_for_preview(
+            vault,
+            &mut tx,
+            input.replaces.as_deref(),
+            draft.common().no_period_rule,
+        );
         Ok(preview::preview_transaction(
             &vault.books(),
-            draft.to_transaction(),
+            tx,
             input.replaces.as_deref(),
         ))
     })

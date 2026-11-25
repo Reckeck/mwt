@@ -161,6 +161,7 @@ fn an_automation_links_what_it_books() {
         time: None,
         asks: false,
         for_month_offset: None,
+        operation_template_id: None,
         name: "Rent".into(),
         active: true,
         preset: None,

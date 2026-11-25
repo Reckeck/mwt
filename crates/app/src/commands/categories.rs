@@ -25,7 +25,13 @@ pub async fn create_category(
     state: State<'_, AppState>,
 ) -> Result<Category, IpcError> {
     with_vault_mut(&state, |vault| {
-        categories::create_category(vault, input.key.as_deref(), &input.name, input.group)
+        categories::create_category_ruled(
+            vault,
+            input.key.as_deref(),
+            &input.name,
+            input.group,
+            input.period_rule,
+        )
     })
 }
 
@@ -36,13 +42,13 @@ pub async fn update_category(
 ) -> Result<Category, IpcError> {
     with_vault_mut(&state, |vault| {
         let input = rebase_category_input(&vault.doc, input)?;
-        categories::update_category(
+        categories::update_category_ruled(
             vault,
             &input.key,
             input.name.as_deref(),
             input.group,
-            input.essential,
-            input.passive,
+            (input.essential, input.passive),
+            input.period_rule,
         )
     })
 }

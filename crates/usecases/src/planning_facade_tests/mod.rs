@@ -25,6 +25,7 @@ mod notifications_tests;
 mod passive_tests;
 mod period_basis_tests;
 mod period_rule_tests;
+mod preview_settle_tests;
 mod recurring_tests;
 mod scenarios_tests;
 mod templates_tests;

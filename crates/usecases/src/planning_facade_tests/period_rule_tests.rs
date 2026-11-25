@@ -19,7 +19,7 @@ use mwt_model::{
 
 const SALARY_DAY: &str = "2026-11-05T10:00:00Z";
 
-fn vault_with_card() -> (tempfile::TempDir, Session, String) {
+pub(super) fn vault_with_card() -> (tempfile::TempDir, Session, String) {
     let (dir, mut vault) = empty_vault();
     vault.set_base_currency("usd");
     quote_usd(&mut vault);
@@ -37,7 +37,7 @@ fn rule_on_salary(vault: &mut Session, rule: Option<PeriodRule>) {
     vault.doc.categories.push(category);
 }
 
-fn salary(card: &str, raw: &str) -> Transaction {
+pub(super) fn salary(card: &str, raw: &str) -> Transaction {
     let mut tx = income(card, raw, "salary");
     at(&mut tx, SALARY_DAY);
     tx
@@ -54,7 +54,7 @@ fn october_second_half() -> Option<(PeriodKind, String, String)> {
     Some((PeriodKind::Half, "2026-10-16".into(), "2026-10-31".into()))
 }
 
-fn quarter() -> OpPeriod {
+pub(super) fn quarter() -> OpPeriod {
     OpPeriod {
         kind: PeriodKind::Quarter,
         start: "2026-10-01".into(),
@@ -73,7 +73,7 @@ fn spread_of(tx: &Transaction) -> Option<(SpreadMode, Vec<String>)> {
     })
 }
 
-fn with_spread(
+pub(super) fn with_spread(
     mut tx: Transaction,
     period: OpPeriod,
     mode: SpreadMode,

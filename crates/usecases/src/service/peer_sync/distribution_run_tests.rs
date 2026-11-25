@@ -88,6 +88,7 @@ fn advance_with_rows() -> (tempfile::TempDir, Session, Session, String) {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
         },
     )
     .unwrap();

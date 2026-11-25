@@ -15,6 +15,7 @@ fn salary_automation(store: &str) -> AutomationDraft {
         time: None,
         asks: false,
         for_month_offset: None,
+        operation_template_id: None,
         name: "Pay".into(),
         active: true,
         preset: None,
