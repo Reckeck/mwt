@@ -245,7 +245,7 @@ fn book_linked(vault: &mut Session, txs: Vec<Transaction>, flow: &str) -> Result
         crate::usecases::money::portfolio::recompute_holdings(vault);
         match rows {
             Some(rows) => {
-                apply_distribution(vault, &tx.meta().id, &rows)?;
+                apply_distribution_unsaved(vault, &tx.meta().id, &rows)?;
                 saved.push(stored_income(vault, &tx)?);
             }
             None => saved.push(tx),

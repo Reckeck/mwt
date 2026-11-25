@@ -448,6 +448,19 @@ fn s11_batch_topup_with_distribution_applies_it() {
     assert!(verify_distribution(&fixture.vault.books(), &id).is_empty());
 }
 
+/// S8 "all or none": a distributed topup followed by a failing item leaves the vault unchanged.
+#[test]
+fn s8_batch_with_a_failing_item_after_a_distributed_topup_changes_nothing() {
+    let mut fixture = fixture();
+    let before = snapshot(&fixture);
+    let salary = salary_with(&fixture, "20000");
+    let mut forged = income_of(&fixture.card, rub(), "10", "0.01", "x");
+    forged.meta_mut().income_ref = Some(fixture.income_id.clone());
+    let err = add_linked_transactions(&mut fixture.vault, vec![salary, forged], None).unwrap_err();
+    assert!(err.to_string().contains("INCOME_REF_RESERVED"), "{err}");
+    assert_eq!(snapshot(&fixture), before);
+}
+
 /// The whole document; derived holdings are rebuilt with fresh ids in any order, so they are
 /// compared without ids and sorted.
 fn snapshot(fixture: &Fixture) -> String {
