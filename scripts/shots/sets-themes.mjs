@@ -15,7 +15,7 @@ export const themes = [
   // The operations list carries income, expense and transfer rows in the year scenario. The app has no in-transit
   // amount UI (spec: no new in-transit UI), so the in-transit colour is covered by the contrast pairs, not by a shot.
   { name: 'money', route: '/transactions', steps: SETTLE },
-  { name: 'chart', route: '/money/where', steps: [{ wait: 1500 }] },
+  { name: 'chart', route: '/money/month', steps: [{ wait: 1500 }] },
   { name: 'settings', route: 'settings:general', steps: [...SETTLE, { phone: [{ click: { text: 'Приложение' } }, { wait: 800 }] }, { eval: PICKER }] },
   { name: 'dialog', route: '/transactions', steps: [...SETTLE, { eval: OPEN_DIALOG }] },
 ]
