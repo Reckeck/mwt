@@ -1,37 +1,46 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { CircleHelp, WifiOff } from 'lucide-vue-next'
+import { ArrowLeft, WifiOff } from 'lucide-vue-next'
 
-import { SyncIndicator } from '@/features/vault-sync'
-import { Money } from '@/entities/currency'
-import { NotificationBell } from '@/widgets/notification-bell'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
-import { DropdownMenu } from '@/shared/ui/dropdown-menu'
-import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
-import { pluralForm } from '@/shared/lib/format'
+import { useIsPhone } from '@/shared/lib/phone'
 
+import { NAV_SECTIONS } from '../../lib/nav-sections'
 import { ProfileMenu } from '../profile-menu'
 
 /**
- * The top bar: the page title, whether the app is online, the net worth, search (a field with the
- * `Ctrl K` hint on a desktop, an icon on a phone) and the profile menu that took over from «More».
+ * The top bar: on a phone Back (off a section root), the title, search and the profile icon; on a
+ * desktop the title, the search field with the `Ctrl K` hint and the profile button. Sync,
+ * notifications, tours and the net worth live in the profile menu; only the offline state stays
+ * here, as a small badge.
  */
 const props = defineProps<{
   title: string
-  summary: PortfolioSummary | undefined
   online: boolean
-  /** The screen has a tour to start with «?». */
+  /** The screen has a tour, started from the profile menu. */
   hasTour: boolean
-  /** Steps of that tour, said in the «?» menu. */
+  /** Steps of that tour, said in the profile menu. */
   tourSteps?: number
   /** Something above (the sandbox bar) already clears the status bar. */
   covered?: boolean
 }>()
 const emit = defineEmits<{ startTour: []; allTours: [] }>()
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
+const phone = useIsPhone()
+
+const atSectionRoot = computed(() => NAV_SECTIONS.some((section) => section.root === route.name))
+const showBack = computed(() => phone.value && !atSectionRoot.value)
+
+function goBack() {
+  if (window.history.length > 1) router.back()
+  else void router.push({ name: 'dashboard' })
+}
 </script>
 
 <template>
@@ -40,6 +49,9 @@ const { t, locale } = useI18n()
     :class="!props.covered && 'pt-safe'"
   >
     <!-- The sidebar folds from its own logo (AppSidebar); a phone has no sidebar. -->
+    <Button v-if="showBack" variant="ghost" size="icon" class="shrink-0" :aria-label="t('actions.back')" data-header-back @click="goBack">
+      <ArrowLeft class="size-5" />
+    </Button>
     <h1 class="heading-page min-w-0 flex-1 truncate">{{ props.title }}</h1>
 
     <Badge v-if="!props.online" variant="destructive" class="gap-1">
@@ -47,48 +59,12 @@ const { t, locale } = useI18n()
       {{ t('app.offline') }}
     </Badge>
 
-    <!-- Net worth, the same figure as the dashboard and the «What I have» report it opens. -->
-    <RouterLink
-      v-if="props.summary"
-      :to="{ name: 'money-wealth' }"
-      class="hidden rounded-md px-1 text-sm font-medium hover:bg-accent sm:inline"
-      :aria-label="t('header.netWorthHint')"
-    >
-      <Money :amount="props.summary.net_worth_base" :currency="props.summary.base_currency" :decimals="2" />
-    </RouterLink>
-
     <slot name="search" />
-    <SyncIndicator />
-    <NotificationBell />
-
-    <!-- «?»: this screen's tour, or all of them in Settings › Help. -->
-    <DropdownMenu v-if="props.hasTour" align="end">
-      <template #trigger>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="shrink-0"
-          :aria-label="t('tour.start')"
-          :title="t('tour.start')"
-          data-tour="tour-help"
-        >
-          <CircleHelp class="size-4" />
-        </Button>
-      </template>
-      <DropdownMenuItem value="tour" class="min-h-10" @select="emit('startTour')">
-        <span class="grid">
-          <b class="font-medium">{{ t('tour.menuShow') }}</b>
-          <span class="text-xs text-muted-foreground">{{ t(`tour.menuShowHint.${pluralForm(props.tourSteps ?? 0, locale)}`, { count: props.tourSteps ?? 0 }) }}</span>
-        </span>
-      </DropdownMenuItem>
-      <DropdownMenuItem value="all" class="min-h-10" @select="emit('allTours')">
-        <span class="grid">
-          <b class="font-medium">{{ t('tour.menuAll') }}</b>
-          <span class="text-xs text-muted-foreground">{{ t('tour.menuAllHint') }}</span>
-        </span>
-      </DropdownMenuItem>
-    </DropdownMenu>
-
-    <ProfileMenu />
+    <ProfileMenu
+      :has-tour="props.hasTour"
+      :tour-steps="props.tourSteps"
+      @start-tour="emit('startTour')"
+      @all-tours="emit('allTours')"
+    />
   </header>
 </template>

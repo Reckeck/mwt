@@ -1,11 +1,26 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Bell, Copy, EyeOff, Lock, Repeat, Settings, Workflow } from 'lucide-vue-next'
+import {
+  Bell,
+  BellRing,
+  Copy,
+  EyeOff,
+  GraduationCap,
+  Lock,
+  RefreshCw,
+  Repeat,
+  Settings,
+  TriangleAlert,
+  Workflow,
+} from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 import { useVaultDelete } from '@/features/vault-delete'
 import { useVaultForget } from '@/features/vault-forget'
+import { useSyncIndicator } from '@/features/vault-sync'
+import { useUnreadNotices } from '@/widgets/notification-bell'
+import { pluralForm } from '@/shared/lib/format'
 import { notify } from '@/shared/lib/notify'
 import { settingsQuery } from '@/shared/lib/settings-link'
 import { useVaultStore } from '@/shared/store/vault'
@@ -18,22 +33,38 @@ export interface ProfileEntry {
   label: string
   hint?: string
   destructive?: boolean
+  /** A small number beside the label (unread notifications). */
+  count?: number
+  /** Colour of the icon, for a state (sync trouble). */
+  iconClass?: string
   run: () => void
 }
 
+export interface ProfileMenuOptions {
+  /** This screen has a tour, and how many steps it has. */
+  tour: () => { available: boolean; steps: number }
+  startTour: () => void
+  allTours: () => void
+}
+
 /**
- * The profile menu's model: the vault actions of the open vault, then Automations, Reminders and
- * Settings. Every entry goes where it went before (spec D10): the same routes, the settings
- * window, the lock.
+ * The profile menu's model: the vault actions of the open vault, then the status rows that left the
+ * top bar (sync, notifications, tours), Automations, Reminders and Settings. Every entry goes where
+ * it went before (spec D10): the same routes, the settings window, the lock.
  */
-export function useProfileMenu() {
-  const { t } = useI18n()
+export function useProfileMenu(options: ProfileMenuOptions) {
+  const { t, locale } = useI18n()
   const router = useRouter()
   const vault = useVaultStore()
   const { forget } = useVaultForget()
   const { saveCopy } = useVaultDelete()
 
   const open = ref(false)
+  const noticesOpen = ref(false)
+  const { unread } = useUnreadNotices()
+  const sync = useSyncIndicator()
+  /** The profile button's dot: something unread, or sync in trouble. */
+  const attention = computed(() => unread.value > 0 || (sync.enabled.value && sync.unreliable.value))
 
   // The history is read when the menu opens: the row of the open vault gives forget and copy; the open vault is never deleted from here (the backend refuses it).
   watch(open, (isOpen) => {
@@ -83,6 +114,45 @@ export function useProfileMenu() {
   const vaultEntries = computed<ProfileEntry[]>(() =>
     vault.sandbox ? [] : vaultActionIds(vault.encrypted, current.value).map((id) => vaultActions.value[id]),
   )
+  const statusEntries = computed<ProfileEntry[]>(() => {
+    const entries: ProfileEntry[] = []
+    if (sync.enabled.value) {
+      entries.push({
+        id: 'sync',
+        icon: sync.unreliable.value ? TriangleAlert : RefreshCw,
+        iconClass: sync.unreliable.value ? 'text-warning' : undefined,
+        label: t('sync.title'),
+        hint: sync.label.value,
+        run: () => close(() => void router.push({ query: settingsQuery(router.currentRoute.value.query, 'sync') })),
+      })
+    }
+    entries.push({
+      id: 'notifications',
+      icon: BellRing,
+      label: t('notices.title'),
+      count: unread.value || undefined,
+      run: () => close(() => (noticesOpen.value = true)),
+    })
+    const tour = options.tour()
+    if (tour.available) {
+      const count = tour.steps
+      entries.push({
+        id: 'tour',
+        icon: GraduationCap,
+        label: t('tour.menuShow'),
+        hint: t(`tour.menuShowHint.${pluralForm(count, locale.value)}`, { count }),
+        run: () => close(options.startTour),
+      })
+    }
+    entries.push({
+      id: 'tours',
+      icon: GraduationCap,
+      label: t('tour.menuAll'),
+      hint: t('tour.menuAllHint'),
+      run: () => close(options.allTours),
+    })
+    return entries
+  })
   const appEntries = computed<ProfileEntry[]>(() => [
     {
       id: 'automations',
@@ -106,5 +176,5 @@ export function useProfileMenu() {
     },
   ])
 
-  return { open, current, vaultName, vaultEntries, appEntries }
+  return { open, noticesOpen, attention, current, vaultName, vaultEntries, statusEntries, appEntries }
 }

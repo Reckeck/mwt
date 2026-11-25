@@ -15,7 +15,7 @@ function setup() {
   mount(
     defineComponent({
       setup() {
-        api = useProfileMenu()
+        api = useProfileMenu({ tour: () => ({ available: true, steps: 3 }), startTour: vi.fn(), allTours: vi.fn() })
         return () => null
       },
     }),
@@ -38,5 +38,26 @@ describe('useProfileMenu', () => {
     i18n.global.locale.value = 'en'
     expect(labelsOf()).not.toEqual(russian)
     i18n.global.locale.value = 'ru'
+  })
+
+  it('holds the notifications and tour rows that left the top bar', () => {
+    const menu = setup()
+    const ids = menu.statusEntries.value.map((entry) => entry.id)
+    expect(ids).toEqual(expect.arrayContaining(['notifications', 'tour', 'tours']))
+    expect(menu.attention.value).toBe(false)
+  })
+
+  it('drops the screen tour row when the screen has none', () => {
+    let api!: ReturnType<typeof useProfileMenu>
+    mount(
+      defineComponent({
+        setup() {
+          api = useProfileMenu({ tour: () => ({ available: false, steps: 0 }), startTour: vi.fn(), allTours: vi.fn() })
+          return () => null
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]] } },
+    )
+    expect(api.statusEntries.value.map((entry) => entry.id)).not.toContain('tour')
   })
 })
