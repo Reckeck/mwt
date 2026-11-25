@@ -44,6 +44,8 @@ pub struct RepairReport {
     /// S11: ids of the transfers and envelope moves whose `income_ref` pointed at nothing; the
     /// record stays, only the back-reference is cleared.
     pub cleared_income_refs: Vec<String>,
+    /// T2: references of operation templates to a category, store or contact that is gone, dropped.
+    pub dropped_template_refs: usize,
     /// Keys of every record the pass changed (R8 included).
     pub records: Vec<String>,
 }
@@ -178,6 +180,14 @@ impl RepairReport {
                 format!("cleared links to an income that is gone or does not distribute: {count}")
             });
         }
+        if self.dropped_template_refs > 0 {
+            let count = self.dropped_template_refs;
+            parts.push(if ru {
+                format!("сброшены ссылки шаблонов операций на удалённые записи: {count}")
+            } else {
+                format!("cleared operation template links to deleted records: {count}")
+            });
+        }
         if !self.unrestored.is_empty() {
             parts.push(
                 (if ru {
@@ -225,7 +235,7 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}:distribution:{}:{}",
+            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}:distribution:{}:{}:templates:{}",
             ids(&self.restored),
             ids(&self.detached_accounts),
             ids(&self.dropped_envelopes),
@@ -239,7 +249,8 @@ impl RepairReport {
             ids(&self.restored_organizer),
             self.unrestored.join(","),
             self.dropped_parts.join(","),
-            self.cleared_income_refs.join(",")
+            self.cleared_income_refs.join(","),
+            self.dropped_template_refs
         )
     }
 }

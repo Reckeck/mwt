@@ -25,3 +25,4 @@ mod period_basis_tests;
 mod period_rule_tests;
 mod recurring_tests;
 mod scenarios_tests;
+mod templates_tests;

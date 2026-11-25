@@ -33,4 +33,5 @@ pub mod period_rule;
 pub mod recurring;
 pub mod scenarios;
 pub mod schedule;
+pub mod templates;
 pub mod upcoming;

@@ -136,6 +136,9 @@ fn run_rules(vault: &mut Session) -> RepairReport {
     // S11. After the money and the records it points to are settled: a distribution part whose
     // effect is gone, a back-reference to an income that is gone.
     repair_distributions(&mut vault.doc, &mut report);
+    // T2. Last: a template names a category, store or contact that is gone.
+    report.dropped_template_refs =
+        crate::planning::templates::drop_dangling_references(&mut vault.doc);
     // R8. Things another device deleted may still be named by a record
     // that arrived (an emergency account, an inflation source). Shared
     // events keep their references: a settlement or item that names a

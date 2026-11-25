@@ -17,3 +17,4 @@ pub mod notifications;
 pub mod passive;
 pub mod recurring;
 pub mod scenarios;
+pub mod templates;
