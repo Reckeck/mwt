@@ -20,6 +20,14 @@ import { rosePineMoon } from './themes/rose-pine-moon'
 import { tokyoNight } from './themes/tokyo-night'
 import { tokyoNightDay } from './themes/tokyo-night-day'
 import { tokyoNightStorm } from './themes/tokyo-night-storm'
+import { everforestDark } from './themes/everforest-dark'
+import { everforestLight } from './themes/everforest-light'
+import { kanagawaWave } from './themes/kanagawa-wave'
+import { kanagawaLotus } from './themes/kanagawa-lotus'
+import { githubDark } from './themes/github-dark'
+import { githubLight } from './themes/github-light'
+import { ayuMirage } from './themes/ayu-mirage'
+import { ayuLight } from './themes/ayu-light'
 import type { Theme } from './types'
 
 export const builtinThemes: readonly Theme[] = [
@@ -45,6 +53,14 @@ export const builtinThemes: readonly Theme[] = [
   rosePine,
   rosePineMoon,
   rosePineDawn,
+  everforestDark,
+  everforestLight,
+  kanagawaWave,
+  kanagawaLotus,
+  githubDark,
+  githubLight,
+  ayuMirage,
+  ayuLight,
 ]
 
 export function getTheme(id: string): Theme | undefined {
