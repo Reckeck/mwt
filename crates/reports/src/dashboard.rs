@@ -12,7 +12,7 @@ use mwt_model::DashPeriod;
 use mwt_money::books::Books;
 use mwt_money::worth::FlowClass;
 use mwt_planning::budget::budget_currency;
-use mwt_planning::flows::flows_between;
+use mwt_planning::flows::{Basis, flows_for_basis};
 use mwt_planning::period::{PeriodWindow, period_window};
 
 /// One day of the "Spending" week strip.
@@ -59,13 +59,15 @@ fn spending_totals(
     currency: &str,
     from: NaiveDate,
     to: NaiveDate,
+    basis: Basis,
 ) -> (Totals, Vec<(NaiveDate, Amount)>) {
-    let flows = flows_between(
+    let flows = flows_for_basis(
         books,
         cal,
         currency,
         cal.start_of(from),
         cal.start_of(to + Duration::days(1)),
+        basis,
     );
     let mut totals = Totals {
         spent: Amount::ZERO,
@@ -80,15 +82,30 @@ fn spending_totals(
         if flow.class == FlowClass::Daily {
             totals.daily += flow.value;
         }
-        days.push((flow.date, flow.value));
+        // The series is by day; a period flow paid outside the window has no slot in it.
+        if flow.date >= from && flow.date <= to {
+            days.push((flow.date, flow.value));
+        }
     }
     (totals, days)
 }
 
-/// Spending for the dashboard's "Spending" (plan H2).
+/// Spending for the dashboard's "Spending" (plan H2), by the `period` basis.
 pub fn spending_overview(
     books: &Books,
     period: DashPeriod,
+    now: i64,
+    zone: &str,
+) -> SpendingOverview {
+    spending_overview_by(books, period, Basis::Period, now, zone)
+}
+
+/// [`spending_overview`] with the basis of the period figures chosen. The
+/// last-seven-days strip and its total always read the money date (R3).
+pub fn spending_overview_by(
+    books: &Books,
+    period: DashPeriod,
+    basis: Basis,
     now: i64,
     zone: &str,
 ) -> SpendingOverview {
@@ -101,8 +118,8 @@ pub fn spending_overview(
         prev_start,
         prev_end,
     } = period_window(period, today);
-    let (current, days) = spending_totals(books, &cal, &currency, start, end);
-    let (previous, _) = spending_totals(books, &cal, &currency, prev_start, prev_end);
+    let (current, days) = spending_totals(books, &cal, &currency, start, end, basis);
+    let (previous, _) = spending_totals(books, &cal, &currency, prev_start, prev_end, basis);
     let has_history = books.doc().transactions.iter().any(|tx| {
         mwt_base::time::unix_secs(&tx.meta().timestamp)
             .is_some_and(|secs| cal.date_of(secs) <= prev_end)
@@ -124,13 +141,15 @@ pub fn spending_overview(
     }
 
     let week_start = today - Duration::days(6);
-    let (week_now, _) = spending_totals(books, &cal, &currency, week_start, today);
+    let (week_now, _) =
+        spending_totals(books, &cal, &currency, week_start, today, Basis::MoneyDate);
     let (week_before, _) = spending_totals(
         books,
         &cal,
         &currency,
         week_start - Duration::days(7),
         week_start - Duration::days(1),
+        Basis::MoneyDate,
     );
     let months = [
         calendar::first_of_month(week_start),

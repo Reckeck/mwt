@@ -16,6 +16,7 @@ export function cashflow(ctx: AnalyticsMockContext, months: string[], filter: Re
     return {
       month,
       income: money(income),
+      income_by_money_date: money(income),
       fixed: money(fixed),
       daily: money(daily),
       savings_moved: '0',
@@ -31,6 +32,7 @@ export function cashflow(ctx: AnalyticsMockContext, months: string[], filter: Re
     total: {
       month: '',
       income: sum('income'),
+      income_by_money_date: sum('income'),
       fixed: sum('fixed'),
       daily: sum('daily'),
       savings_moved: '0',

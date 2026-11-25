@@ -14,7 +14,7 @@ use mwt_money::books::Books;
 use mwt_money::portfolio::history_series;
 use mwt_money::worth::FlowClass;
 use mwt_planning::budget::budget_currency;
-use mwt_planning::flows::flows_between;
+use mwt_planning::flows::{Basis, flows_for_basis};
 use mwt_planning::period::{PeriodWindow, months_back, period_window};
 
 /// How many growing categories "This month" names.
@@ -82,14 +82,16 @@ fn pace_totals(
     currency: &str,
     from: NaiveDate,
     to: NaiveDate,
+    basis: Basis,
 ) -> PaceTotals {
     let mut totals = PaceTotals::default();
-    for flow in flows_between(
+    for flow in flows_for_basis(
         books,
         cal,
         currency,
         cal.start_of(from),
         cal.start_of(to + Duration::days(1)),
+        basis,
     ) {
         match flow.class {
             FlowClass::Income => totals.income += flow.value,
@@ -105,16 +107,21 @@ fn pace_totals(
     totals
 }
 
-/// The current month's pace (plan H3: "Daily budget" and "This month").
+/// The current month's pace (plan H3: "Daily budget" and "This month"), by the `period` basis.
 pub fn month_pace(books: &Books, now: i64, zone: &str) -> MonthPace {
+    month_pace_by(books, Basis::Period, now, zone)
+}
+
+/// [`month_pace`] with the basis of the month figures chosen.
+pub fn month_pace_by(books: &Books, basis: Basis, now: i64, zone: &str) -> MonthPace {
     let cal = Calendar::new(zone);
     let today = cal.date_of(now);
     let currency = budget_currency(books);
     let first = calendar::first_of_month(today);
     let prev_first = months_back(first, 1);
     let prev_today = months_back(today, 1);
-    let current = pace_totals(books, &cal, &currency, first, today);
-    let previous = pace_totals(books, &cal, &currency, prev_first, prev_today);
+    let current = pace_totals(books, &cal, &currency, first, today, basis);
+    let previous = pace_totals(books, &cal, &currency, prev_first, prev_today, basis);
     let has_history = books.doc().transactions.iter().any(|tx| {
         mwt_base::time::unix_secs(&tx.meta().timestamp)
             .is_some_and(|secs| cal.date_of(secs) <= prev_today)

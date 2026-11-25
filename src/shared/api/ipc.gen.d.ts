@@ -1099,7 +1099,12 @@ type CashflowRow = { month: string, income: Amount, fixed: Amount, daily: Amount
 /**
  * `income − fixed − daily`.
  */
-net: Amount, };
+net: Amount, 
+/**
+ * The month's income by the money date, next to `income` (which follows
+ * the report's basis); equal to it under the `money_date` basis.
+ */
+income_by_money_date: Amount, };
 
 type CategoriesReport = { meta: ReportMeta, groups: Array<CategoryGroupBlock>, 
 /**
@@ -6132,7 +6137,13 @@ currency: string | null,
 /**
  * Restate each month in today's money by the reference inflation.
  */
-real_terms: boolean, };
+real_terms: boolean, 
+/**
+ * Which date the cashflow, year, categories and where-it-went reports
+ * count by; default `period`. Stores, PnL, portfolio, net-worth,
+ * inflation and loss reports have no basis (R3): they read money moments.
+ */
+basis?: "period" | "money_date" | null, };
 
 type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation" | "losses" | "where";
 

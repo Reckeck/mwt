@@ -25,3 +25,6 @@ serde_json.workspace = true
 rust_decimal.workspace = true
 chrono.workspace = true
 ts-rs = { workspace = true, optional = true }
+
+[dev-dependencies]
+mwt-testkit = { path = "../testkit" }
