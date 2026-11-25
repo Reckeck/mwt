@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { Bell, CheckCheck } from 'lucide-vue-next'
 
 import { Button } from '@/shared/ui/button'
@@ -15,14 +15,15 @@ import { settingsQuery } from '@/shared/lib/settings-link'
 import { localDate } from '@/shared/lib/planning'
 import { cn } from '@/shared/lib/utils'
 
-/** The bell: what was told, by day, newest first; unread ones stand out. */
+import { useUnreadNotices } from './use-unread-notices'
+
+/** The notification list: what was told, by day, newest first; unread ones stand out. The profile menu opens it (`v-model:open`). */
 const { t } = useI18n()
 const router = useRouter()
 const queryClient = useQueryClient()
-const open = ref(false)
+const open = defineModel<boolean>('open', { default: false })
 
-const notices = useQuery({ queryKey: ['notifications'], queryFn: () => call<NoticeRecord[]>('list_notifications') })
-const unread = computed(() => (notices.data.value ?? []).filter((record) => !record.read).length)
+const { notices, unread } = useUnreadNotices()
 
 /** Grouped by the local day it was shown (the stamp is UTC: its date can be the day before). */
 const days = computed(() => {
@@ -59,25 +60,6 @@ function openNotice(record: NoticeRecord) {
 </script>
 
 <template>
-  <Button
-    variant="ghost"
-    size="icon"
-    class="relative shrink-0"
-    :aria-label="t('notices.title')"
-    :title="t('notices.title')"
-    data-tour="notification-bell"
-    @click="open = true"
-  >
-    <Bell class="size-4" />
-    <span
-      v-if="unread"
-      class="absolute right-2 top-2 size-2 rounded-full bg-destructive ring-2 ring-background"
-      data-bell-dot
-    >
-      <span class="sr-only">{{ unread }}</span>
-    </span>
-  </Button>
-
   <Sheet v-model:open="open">
     <SheetContent overlay="notifications" side="right" class="w-full gap-0 sm:max-w-lg">
       <SheetHeader class="border-b border-border">

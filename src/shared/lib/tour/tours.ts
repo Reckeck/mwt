@@ -95,10 +95,8 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'dash-shared-events', key: 'sharedEvents.dashboard', side: 'top' },
     { target: 'sidebar-toggle', key: 'dashboard.sidebarToggle', side: 'right' },
     { target: 'command-palette', key: 'dashboard.palette', side: 'bottom' },
-    { target: 'notification-bell', key: 'dashboard.bell', side: 'bottom' },
-    { target: 'sync-indicator', key: 'dashboard.sync', side: 'bottom' },
     { target: 'open-settings', key: 'dashboard.settings', side: 'right' },
-    { target: 'tour-help', key: 'dashboard.contextMenu', side: 'bottom' },
+    { target: 'profile-trigger', key: 'dashboard.contextMenu', side: 'bottom' },
   ],
   // The settings window opens over any screen; a step of a tab that is not open is skipped.
   settings: [

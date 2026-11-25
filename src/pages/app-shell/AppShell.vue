@@ -70,7 +70,7 @@ useSyncEvents()
 useUpdateEvents()
 useBackButton()
 
-const { summary, isOnline } = useConnectivity()
+const { isOnline } = useConnectivity()
 const { tour, routeTour, offer } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
 
@@ -132,7 +132,6 @@ const pageClass = computed(() => {
       <AppHeader
         v-if="!fullscreen"
         :title="pageTitle"
-        :summary="summary.data.value"
         :online="headerOnline"
         :has-tour="tour.hasTour(routeTour)"
         :tour-steps="tour.stepCount(routeTour)"

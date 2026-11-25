@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { type LocationQuery, RouterLink, RouterView, useRoute } from 'vue-router'
+import { type LocationQuery, RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-
-import { ChevronLeft } from 'lucide-vue-next'
 
 import { useIsPhone } from '@/shared/lib/phone'
 import { RouteTabs } from '@/shared/ui/route-tabs'
@@ -52,16 +50,8 @@ const { filter, range, fallback, effective, realTerms } = useReportFilter(group)
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <RouterLink
-      v-if="page"
-      :to="{ name: GROUP_ROUTE.spending, query: keepFilter(route.query) }"
-      class="flex min-h-11 items-center gap-1 text-xl font-bold"
-      :aria-label="t('balance.phone.back')"
-      data-money-page-back
-    >
-      <ChevronLeft class="size-6 text-muted-foreground" aria-hidden="true" />{{ t(`money.tab.${group}`) }}
-    </RouterLink>
-    <div v-else class="flex flex-wrap items-center justify-between gap-3">
+    <!-- A page on a phone: the top bar carries Back and the title; no tabs, no period bar. -->
+    <div v-if="!page" class="flex flex-wrap items-center justify-between gap-3">
       <div class="w-fit max-w-full" data-tour="section-tabs">
         <RouteTabs :tabs="tabs" :more="more" :more-label="t('nav.more')" :more-title="t('money.moreTitle')" :keep-query="keepFilter" />
       </div>
