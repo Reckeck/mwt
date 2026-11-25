@@ -4,6 +4,7 @@
 //! document is changed through one `run`, and the holdings are rebuilt and
 //! committed once at the end (`rebase_and_commit`).
 
+use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
@@ -15,8 +16,10 @@ use crate::service::Session;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 use crate::usecases::household::shared_events::cascade_shared_delete;
 use crate::usecases::money::portfolio::recompute_holdings;
-use crate::usecases::planning::distribution::apply_distribution;
-use mwt_model::DistributionRow;
+use crate::usecases::planning::distribution::{
+    apply_distribution, apply_distribution_unsaved, drop_distribution_of, rows_of,
+};
+use mwt_model::{AccountRef, DistributionRow};
 
 use super::stores::rebase_and_commit;
 
@@ -91,6 +94,79 @@ pub fn add_transaction_for(
 /// Stable code of an operation that arrives already linked to an income.
 pub const INCOME_REF_RESERVED: &str = "INCOME_REF_RESERVED";
 
+/// Stable code of an edit that would break an income's distribution (spec S11 guards).
+pub const LINKED_TO_INCOME: &str = "LINKED_TO_INCOME";
+
+/// The refusal of a change to a record an income's distribution owns.
+pub(crate) fn linked_to_income(what: &str) -> Error {
+    Error::InvalidInput(format!(
+        "{LINKED_TO_INCOME}: {what} belongs to an income distribution; change it with replace_distribution"
+    ))
+}
+
+/// A record with an `income_ref` cannot be deleted on its own.
+pub(crate) fn refuse_if_linked(tx: &Transaction) -> Result<()> {
+    if tx.meta().income_ref.is_some() {
+        return Err(linked_to_income("this operation"));
+    }
+    Ok(())
+}
+
+/// What V2 reads of an effect transfer: where it goes, what and how much.
+fn effect_shape(tx: &Transaction) -> Option<(&AccountRef, &AccountRef, String, Amount)> {
+    match tx {
+        Transaction::Transfer(transfer) => Some((
+            &transfer.from,
+            &transfer.to,
+            transfer.asset.key(),
+            transfer.amount,
+        )),
+        _ => None,
+    }
+}
+
+/// The edit of a record as it is stored: the links the form has no field for stay (the income
+/// link, the distribution); an effect keeps what V2 reads, comment, categories and date stay open.
+fn keep_income_links(stored: &Transaction, tx: &mut Transaction) -> Result<()> {
+    if stored.meta().income_ref.is_some() && effect_shape(stored) != effect_shape(tx) {
+        return Err(linked_to_income(
+            "the amount, accounts and asset of this operation",
+        ));
+    }
+    tx.meta_mut().income_ref = stored.meta().income_ref.clone();
+    match (stored, tx) {
+        (Transaction::Topup(old), Transaction::Topup(new)) => {
+            new.distribution = old.distribution.clone()
+        }
+        (Transaction::Topup(old), _) if old.distribution.is_some() => {
+            return Err(linked_to_income("an income with a distribution"));
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// The rows to re-resolve when the edit moves what the effects hang on (amount, store, asset,
+/// timestamp); the distribution is taken off the edited income, the usecase writes it again.
+fn rows_for_edited_income(
+    stored: &Transaction,
+    tx: &mut Transaction,
+) -> Option<Vec<DistributionRow>> {
+    let (Transaction::Topup(old), Transaction::Topup(new)) = (stored, tx) else {
+        return None;
+    };
+    let parts = old.distribution.as_ref()?;
+    let same = old.amount == new.amount
+        && old.store_id == new.store_id
+        && old.asset.key() == new.asset.key()
+        && old.meta.timestamp == new.meta.timestamp;
+    if same {
+        return None;
+    }
+    new.distribution = None;
+    Some(rows_of(parts.clone()))
+}
+
 /// The rows of a topup that arrives with a distribution; the list itself is taken off, as the
 /// distribution usecase writes it (spec S11).
 fn take_distribution_rows(tx: &mut Transaction) -> Option<Vec<DistributionRow>> {
@@ -98,15 +174,7 @@ fn take_distribution_rows(tx: &mut Transaction) -> Option<Vec<DistributionRow>> 
         return None;
     };
     let parts = topup.distribution.take()?;
-    Some(
-        parts
-            .into_iter()
-            .map(|part| DistributionRow {
-                kind: part.kind,
-                target: part.target,
-            })
-            .collect(),
-    )
+    Some(rows_of(parts))
 }
 
 /// The income as stored once its distribution is applied.
@@ -242,17 +310,36 @@ fn edit(
 ) -> Result<Transaction> {
     check_property_link(vault, property_id)?;
     let index = position_of(&vault.doc.transactions, id)?;
-    let mut tx = patched(&vault.doc.transactions[index], id, patch);
+    let stored = vault.doc.transactions[index].clone();
+    let mut tx = patched(&stored, id, patch);
+    keep_income_links(&stored, &mut tx)?;
+    let redistribute = rows_for_edited_income(&stored, &mut tx);
     prepare_transaction(vault, &mut tx)?;
     let event_edit = if follow_events {
         crate::household::shared_events::ledger::plan_tx_edit(&vault.doc, id, &tx)?
     } else {
         None
     };
+    let backup = vault.doc.clone();
+    if redistribute.is_some() {
+        drop_distribution_of(vault, id)?;
+    }
+    let index = position_of(&vault.doc.transactions, id)?;
     vault.run(|run| {
         run.doc_mut().transactions[index] = tx.clone();
         Ok(())
     })?;
+    if let Some(rows) = redistribute {
+        // A failure refuses the whole edit: the effects and the income are put back.
+        match apply_distribution_unsaved(vault, id, &rows) {
+            Ok(_) => tx = stored_income(vault, &tx)?,
+            Err(err) => {
+                vault.doc = backup;
+                recompute_holdings(vault);
+                return Err(err);
+            }
+        }
+    }
     crate::usecases::household::shared_events::apply_shared_edit(vault, event_edit);
     set_property_link(vault, id, property_id);
     rebase_and_commit(vault)?;
@@ -267,6 +354,9 @@ fn position_of(transactions: &[Transaction], id: &str) -> Result<usize> {
 }
 
 pub fn delete_transaction(vault: &mut Session, id: &str) -> Result<()> {
+    let index = position_of(&vault.doc.transactions, id)?;
+    refuse_if_linked(&vault.doc.transactions[index])?;
+    drop_distribution_of(vault, id)?;
     let index = position_of(&vault.doc.transactions, id)?;
     vault.run(|run| {
         run.doc_mut().transactions.remove(index);

@@ -13,7 +13,8 @@ use crate::service::Session;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 
 use super::stores::rebase_and_commit;
-use super::transactions::prepare_transaction;
+use super::transactions::{linked_to_income, prepare_transaction, refuse_if_linked};
+use crate::usecases::planning::distribution::drop_distribution_of;
 
 /// Run `change` on the document; on an error nothing of it stays, on success
 /// the holdings are rebuilt and the document is written once.
@@ -50,8 +51,21 @@ pub fn delete_transactions(vault: &mut Session, ids: &[String]) -> Result<Vec<De
         return Err(Error::InvalidInput("nothing to delete".into()));
     }
     all_or_nothing(vault, |vault| {
-        let mut out = Vec::with_capacity(ids.len());
+        // A linked effect goes with its income; on its own it is refused.
+        let mut with_income = Vec::new();
         for id in ids {
+            let index = tx_index(&vault.doc, id)?;
+            let stored = &vault.doc.transactions[index];
+            match &stored.meta().income_ref {
+                Some(income) if ids.contains(income) => with_income.push(id),
+                _ => refuse_if_linked(stored)?,
+            }
+        }
+        for id in ids {
+            drop_distribution_of(vault, id)?;
+        }
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids.iter().filter(|id| !with_income.contains(id)) {
             let index = tx_index(&vault.doc, id)?;
             let property_id = crate::household::property_links::property_of_tx(&vault.doc, id)
                 .map(str::to_string);
@@ -115,6 +129,10 @@ pub fn move_transactions(vault: &mut Session, changes: Vec<TxStore>) -> Result<V
         let mut before = Vec::with_capacity(changes.len());
         for change in changes {
             let index = tx_index(&vault.doc, &change.id)?;
+            if matches!(&vault.doc.transactions[index], Transaction::Topup(topup) if topup.distribution.is_some())
+            {
+                return Err(linked_to_income("an income with a distribution"));
+            }
             let (mut tx, had) = with_store(&vault.doc.transactions[index], change)?;
             before.push(had);
             prepare_transaction(vault, &mut tx)?;

@@ -92,6 +92,18 @@ pub fn move_between_envelopes(
 
 /// Delete an envelope; whatever it held simply becomes free again.
 pub fn delete_envelope(vault: &mut Session, id: &str) -> Result<()> {
+    let linked = vault.doc.envelopes.iter().any(|envelope| {
+        envelope.id == id
+            && envelope
+                .moves
+                .iter()
+                .any(|entry| entry.income_ref.is_some())
+    });
+    if linked {
+        return Err(crate::usecases::money::transactions::linked_to_income(
+            "a move of this envelope",
+        ));
+    }
     vault.transact(|tx| {
         tx.collection::<Envelope>()
             .remove(id)

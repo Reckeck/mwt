@@ -51,7 +51,41 @@ pub fn apply_distribution(
             "{ALREADY_DISTRIBUTED}: replace the distribution instead"
         )));
     }
-    rewrite(vault, income_id, Some(rows))
+    let parts = apply_distribution_unsaved(vault, income_id, rows)?;
+    rebase_and_commit(vault)?;
+    Ok(parts)
+}
+
+/// [`apply_distribution`] without the commit: the caller's write owns it and puts the document
+/// back on its own error. The income must not distribute yet.
+pub(crate) fn apply_distribution_unsaved(
+    vault: &mut Session,
+    income_id: &str,
+    rows: &[DistributionRow],
+) -> Result<Vec<DistributionPart>> {
+    rewrite_unsaved(vault, income_id, Some(rows))
+}
+
+/// The rows a stored list was asked with: a rule re-resolves them against a new amount.
+pub(crate) fn rows_of(parts: Vec<DistributionPart>) -> Vec<DistributionRow> {
+    parts
+        .into_iter()
+        .map(|part| DistributionRow {
+            kind: part.kind,
+            target: part.target,
+        })
+        .collect()
+}
+
+/// Before an income is deleted: its distribution goes first, with every effect, uncommitted.
+pub(crate) fn drop_distribution_of(vault: &mut Session, id: &str) -> Result<()> {
+    let distributes = vault.doc.transactions.iter().any(|tx| {
+        matches!(tx, Transaction::Topup(topup) if topup.meta.id == id && topup.distribution.is_some())
+    });
+    if distributes {
+        rewrite_unsaved(vault, id, None)?;
+    }
+    Ok(())
 }
 
 /// Edit the distribution (spec S11, A2b): the effects of dropped or changed parts are removed, the
@@ -61,12 +95,15 @@ pub fn replace_distribution(
     income_id: &str,
     rows: &[DistributionRow],
 ) -> Result<Vec<DistributionPart>> {
-    rewrite(vault, income_id, Some(rows))
+    let parts = rewrite_unsaved(vault, income_id, Some(rows))?;
+    rebase_and_commit(vault)?;
+    Ok(parts)
 }
 
 /// Undo: every effect is removed and the income stores no distribution.
 pub fn remove_distribution(vault: &mut Session, income_id: &str) -> Result<()> {
-    rewrite(vault, income_id, None).map(|_| ())
+    rewrite_unsaved(vault, income_id, None)?;
+    rebase_and_commit(vault)
 }
 
 fn income_of<'doc>(doc: &'doc VaultDoc, id: &str) -> Result<&'doc TopupTx> {
@@ -96,8 +133,8 @@ fn read_income(vault: &Session, income_id: &str) -> Result<Income> {
     })
 }
 
-/// `rows` of `None` removes the distribution.
-fn rewrite(
+/// `rows` of `None` removes the distribution. Not committed; on an error the document is put back.
+fn rewrite_unsaved(
     vault: &mut Session,
     income_id: &str,
     rows: Option<&[DistributionRow]>,
@@ -110,16 +147,10 @@ fn rewrite(
     let plan = plan_distribution(&income.old_parts, &wanted);
     let backup = vault.doc.clone();
     let stored = book(vault, &income, plan.remove, plan.parts, rows.is_some());
-    match stored {
-        Ok(parts) => {
-            rebase_and_commit(vault)?;
-            Ok(parts)
-        }
-        Err(err) => {
-            vault.doc = backup;
-            Err(err)
-        }
+    if stored.is_err() {
+        vault.doc = backup;
     }
+    stored
 }
 
 /// The rows against the income, refused when they ask too much or name a bad target.

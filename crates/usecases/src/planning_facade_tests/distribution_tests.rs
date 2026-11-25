@@ -4,13 +4,18 @@ use crate::Amount;
 use crate::calendar::Calendar;
 use crate::error::Error;
 use crate::model::store::StoreKind;
+use crate::money::bulk::TxStore;
 use crate::money::distribution::{WITH_PARTS, verify_distribution};
 use crate::money::worth::FlowClass;
 use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::Session;
 use crate::service::test_support::{amount, empty_vault, income_of, store};
-use crate::usecases::household::envelopes::{create_envelope, fund_envelope};
-use crate::usecases::money::transactions::{add_linked_transactions, add_transaction};
+use crate::usecases::household::envelopes::{create_envelope, delete_envelope, fund_envelope};
+use crate::usecases::money::bulk::{delete_transactions, move_transactions};
+use crate::usecases::money::transactions::{
+    LINKED_TO_INCOME, add_linked_transactions, add_transaction, delete_transaction,
+    update_transaction,
+};
 use crate::usecases::planning::distribution::{
     OVER_ALLOCATED, apply_distribution, remove_distribution, replace_distribution,
 };
@@ -441,4 +446,203 @@ fn s11_batch_topup_with_distribution_applies_it() {
     };
     assert_eq!(topup.distribution.as_ref().map(Vec::len), Some(4));
     assert!(verify_distribution(&fixture.vault.books(), &id).is_empty());
+}
+
+/// The whole document; derived holdings are rebuilt with fresh ids in any order, so they are
+/// compared without ids and sorted.
+fn snapshot(fixture: &Fixture) -> String {
+    let mut doc = serde_json::to_value(&fixture.vault.doc).unwrap();
+    if let Some(holdings) = doc["holdings"].as_array_mut() {
+        for holding in holdings.iter_mut() {
+            holding["id"] = serde_json::Value::Null;
+        }
+        holdings.sort_by_key(ToString::to_string);
+    }
+    doc.to_string()
+}
+
+/// The 120 000 income distributed 20 000 / 5 % / 3 000 / rest; returns the transfer's id.
+fn distributed() -> (Fixture, String) {
+    let mut fixture = fixture();
+    let asked = rows(&fixture, "20000");
+    let income = fixture.income_id.clone();
+    apply_distribution(&mut fixture.vault, &income, &asked).unwrap();
+    let transfer = fixture
+        .vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| matches!(tx, Transaction::Transfer(_)))
+        .map(|tx| tx.meta().id.clone())
+        .unwrap();
+    (fixture, transfer)
+}
+
+fn refused_as_linked<T: std::fmt::Debug>(result: crate::error::Result<T>) {
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains(LINKED_TO_INCOME), "{err}");
+    assert!(err.to_string().contains("replace_distribution"), "{err}");
+}
+
+fn stored(fixture: &Fixture, id: &str) -> Transaction {
+    let all = &fixture.vault.doc.transactions;
+    all.iter().find(|tx| tx.meta().id == id).cloned().unwrap()
+}
+
+/// A2b (S11 guards): deleting a linked transfer is refused and changes nothing.
+#[test]
+fn a2b_delete_transaction_of_a_linked_transfer_is_refused() {
+    let (mut fixture, transfer) = distributed();
+    let before = snapshot(&fixture);
+    refused_as_linked(delete_transaction(&mut fixture.vault, &transfer));
+    assert_eq!(snapshot(&fixture), before);
+}
+
+/// A2b (S11 guards): the bulk delete refuses a linked transfer and deletes none of the batch.
+#[test]
+fn a2b_bulk_delete_of_a_linked_transfer_is_refused() {
+    let (mut fixture, transfer) = distributed();
+    let before = snapshot(&fixture);
+    let ids = vec![transfer, fixture.income_id.clone()];
+    // The income is in the batch but the transfer is covered only when its own income goes too.
+    delete_transactions(&mut fixture.vault, &ids).unwrap();
+    assert!(fixture.vault.doc.transactions.is_empty());
+    let (mut fixture, transfer) = distributed();
+    let plain = add_transaction(
+        &mut fixture.vault,
+        income_of(&fixture.card.clone(), rub(), "10", "0.01", "plain"),
+    )
+    .unwrap();
+    let before_second = snapshot(&fixture);
+    refused_as_linked(delete_transactions(
+        &mut fixture.vault,
+        &[plain.meta().id.clone(), transfer],
+    ));
+    assert_eq!(snapshot(&fixture), before_second);
+    assert_ne!(before, before_second);
+}
+
+/// A2b (S11 guards): amount, accounts and asset of a linked transfer are refused, vault unchanged.
+#[test]
+fn a2b_update_of_a_linked_transfer_amount_accounts_and_asset_is_refused() {
+    let (mut fixture, transfer) = distributed();
+    let before = snapshot(&fixture);
+    let original = stored(&fixture, &transfer);
+    let other = store(&mut fixture.vault, "Other", StoreKind::Bank, None);
+    let before_other = snapshot(&fixture);
+    let mut edits = Vec::new();
+    for change in 0..3 {
+        let mut edited = original.clone();
+        if let Transaction::Transfer(inner) = &mut edited {
+            match change {
+                0 => inner.amount = amount("1"),
+                1 => inner.to = mwt_model::AccountRef::Store(other.clone()),
+                _ => inner.asset = AssetRef::fiat("USD", "US Dollar"),
+            }
+        }
+        edits.push(edited);
+    }
+    for edited in edits {
+        refused_as_linked(update_transaction(&mut fixture.vault, &transfer, edited));
+        assert_eq!(snapshot(&fixture), before_other);
+    }
+    assert_ne!(before, before_other);
+}
+
+/// A2b (S11 guards): the comment of a linked transfer stays editable and the link survives.
+#[test]
+fn a2b_comment_of_a_linked_transfer_stays_editable() {
+    let (mut fixture, transfer) = distributed();
+    let mut edited = stored(&fixture, &transfer);
+    edited.meta_mut().comment = "to the cushion".into();
+    edited.meta_mut().income_ref = None;
+    update_transaction(&mut fixture.vault, &transfer, edited).unwrap();
+    let after = stored(&fixture, &transfer);
+    assert_eq!(after.meta().comment, "to the cushion");
+    assert_eq!(
+        after.meta().income_ref.as_deref(),
+        Some(fixture.income_id.as_str())
+    );
+    clean(&fixture);
+}
+
+/// A2b (S11 guards): an envelope holding a linked move cannot be deleted.
+#[test]
+fn a2b_delete_envelope_with_a_linked_move_is_refused() {
+    let (mut fixture, _) = distributed();
+    let before = snapshot(&fixture);
+    refused_as_linked(delete_envelope(
+        &mut fixture.vault,
+        &fixture.vacation.clone(),
+    ));
+    assert_eq!(snapshot(&fixture), before);
+}
+
+/// A2b (S11 guards): a distributed income cannot be moved to another store on its own.
+#[test]
+fn a2b_move_of_a_distributed_income_is_refused() {
+    let (mut fixture, _) = distributed();
+    let before = snapshot(&fixture);
+    let change = TxStore {
+        id: fixture.income_id.clone(),
+        store_id: fixture.deposit.clone(),
+    };
+    refused_as_linked(move_transactions(&mut fixture.vault, vec![change]));
+    assert_eq!(snapshot(&fixture), before);
+}
+
+/// A2b (S11): deleting the income removes its effects in the same write; the envelope stays.
+#[test]
+fn a2b_deleting_the_income_removes_its_effects() {
+    let (mut fixture, _) = distributed();
+    let income = fixture.income_id.clone();
+    delete_transaction(&mut fixture.vault, &income).unwrap();
+    assert!(fixture.vault.doc.transactions.is_empty());
+    assert_eq!(allocated(&fixture, &fixture.vacation), Amount::ZERO);
+    assert_eq!(allocated(&fixture, &fixture.gifts), Amount::ZERO);
+    assert!(verify_distribution(&fixture.vault.books(), &income).is_empty());
+}
+
+/// A2b (S11, D9): editing the income amount re-resolves by shrink_remainder, sum rows keep.
+#[test]
+fn a2b_editing_the_income_amount_re_resolves_the_rows() {
+    let (mut fixture, _) = distributed();
+    let income = fixture.income_id.clone();
+    let mut edited = stored(&fixture, &income);
+    if let Transaction::Topup(topup) = &mut edited {
+        topup.amount = amount("118500");
+        topup.distribution = None;
+    }
+    let saved = update_transaction(&mut fixture.vault, &income, edited).unwrap();
+    let Transaction::Topup(topup) = saved else {
+        panic!("a topup")
+    };
+    let amounts: Vec<Amount> = topup
+        .distribution
+        .unwrap()
+        .iter()
+        .map(|part| part.amount)
+        .collect();
+    assert_eq!(
+        amounts,
+        ["20000", "5925", "3000", "89575"].map(amount).to_vec()
+    );
+    assert_eq!(transfers(&fixture), 1);
+    assert_eq!(allocated(&fixture, &fixture.vacation), amount("5925"));
+    clean(&fixture);
+}
+
+/// A2b (S11): an income edit the rows cannot follow is refused as a whole, vault unchanged.
+#[test]
+fn a2b_income_edit_that_over_allocates_is_refused_whole() {
+    let (mut fixture, _) = distributed();
+    let income = fixture.income_id.clone();
+    let before = snapshot(&fixture);
+    let mut edited = stored(&fixture, &income);
+    if let Transaction::Topup(topup) = &mut edited {
+        topup.amount = amount("20000");
+    }
+    let err = update_transaction(&mut fixture.vault, &income, edited).unwrap_err();
+    assert!(err.to_string().contains(OVER_ALLOCATED), "{err}");
+    assert_eq!(snapshot(&fixture), before);
 }
