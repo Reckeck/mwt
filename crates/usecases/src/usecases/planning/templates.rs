@@ -205,7 +205,7 @@ fn transaction_of(template: &OperationTemplate, input: &QuickAdd) -> Result<Tran
 }
 
 /// What the card holds once the payout is booked, before any row (the rule takes the rows off).
-pub(crate) fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
+pub fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
     let held = vault
         .doc
         .holdings

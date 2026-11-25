@@ -13,6 +13,7 @@ pub mod distribution;
 pub mod emergency;
 pub mod goals;
 pub mod health;
+pub mod income_distribution;
 pub mod my_automations;
 pub mod notifications;
 pub mod passive;

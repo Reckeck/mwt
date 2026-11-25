@@ -149,7 +149,7 @@ pub(crate) fn apply_creation_rules_on(
 }
 
 /// The amount a period spreads and the minor digits it is cut to; none for a kind with no period.
-fn spreadable(tx: &Transaction) -> Option<(Amount, u32)> {
+pub(crate) fn spreadable(tx: &Transaction) -> Option<(Amount, u32)> {
     match tx {
         Transaction::Topup(inner) => Some((inner.amount, inner.asset.minor_places())),
         Transaction::Payment(inner) => Some((inner.amount, inner.asset.minor_places())),
@@ -192,7 +192,11 @@ fn apply_period_rules(
 
 /// P6, P8: keep the stored shares in step with the amount and the period; `before` is the
 /// record as stored when this is an edit; `period_given` is false when a rule gave the period.
-fn settle_tx_spread(tx: &mut Transaction, period_given: bool, before: Option<&Transaction>) {
+pub(crate) fn settle_tx_spread(
+    tx: &mut Transaction,
+    period_given: bool,
+    before: Option<&Transaction>,
+) {
     let Some((amount, places)) = spreadable(tx) else {
         return;
     };

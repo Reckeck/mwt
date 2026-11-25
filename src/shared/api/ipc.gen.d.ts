@@ -1271,6 +1271,15 @@ gain: Amount, };
 type Comparison = { value: Amount, base: Amount | null, base_kind: BaseKind, };
 
 /**
+ * `confirm_distribution`: the answer to an automation run that asks (spec I12).
+ */
+type ConfirmDistributionInput = { run_id: string, amount: Amount, 
+/**
+ * How to distribute the confirmed amount; the rule's own way when omitted.
+ */
+mode?: OnOtherAmount, };
+
+/**
  * The real amount of an operation booked approximately.
  */
 type ConfirmEstimatedInput = { tx_id: string, 
@@ -1499,6 +1508,19 @@ type CreateCategoryInput = {
  * Wanted key; derived from the name when empty.
  */
 key: string | null, name: string, group: CategoryGroup, };
+
+/**
+ * Quick-add from a template; every field left out comes from the template.
+ */
+type CreateFromTemplateInput = { template_id: string, 
+/**
+ * RFC3339; now by default.
+ */
+timestamp?: string, amount?: Amount, store_id?: string, comment?: string, 
+/**
+ * «Really none»: the operation takes no period rule.
+ */
+no_period_rule: boolean, };
 
 /**
  * Create a bonus programme with its points in one action.
@@ -3008,6 +3030,21 @@ type DistKind = { "sum": { amount: Amount, } } | { "percent": { pct: Amount, } }
 type DistTarget = { "store": { id: string, } } | { "envelope": { id: string, } } | { "goal": { goal_id: string, store_id: string, } } | "none";
 
 /**
+ * `distribute_income`: save the income (a draft) or take a stored one, and distribute it (spec I9).
+ */
+type DistributeIncomeInput = { income: IncomeSource, rows: Array<DistributionRow>, };
+
+/**
+ * An income distributed with the records it made (spec I9).
+ */
+type DistributedIncome = { income: Transaction, transfers: Array<Transaction>, envelope_moves: Array<EnvelopeMoveRef>, };
+
+/**
+ * A row cut by the floor on the card (spec D10).
+ */
+type DistributionCut = { row_index: number, by: Amount, };
+
+/**
  * One stored part of a distributed income (spec S6).
  */
 type DistributionPart = { kind: DistKind, target: DistTarget, 
@@ -3015,6 +3052,39 @@ type DistributionPart = { kind: DistKind, target: DistTarget,
  * Resolved amount in the income's asset, a stored snapshot.
  */
 amount: Amount, status: PartStatus, effect?: EffectRef, };
+
+/**
+ * What a distribution would book (spec I8, I11): the rows resolved, nothing written.
+ */
+type DistributionPreview = { 
+/**
+ * The payout the rows were resolved against.
+ */
+amount: Amount, 
+/**
+ * The next planned moment of a rule's payout (RFC3339); a rule preview only.
+ */
+planned_at?: string, 
+/**
+ * The period the template's rule gives the payout; a rule preview only.
+ */
+period?: OpPeriod, 
+/**
+ * Every row in order, the remainder included; empty on `over` and `ask`.
+ */
+rows: Array<ResolvedDistributionRow>, 
+/**
+ * What the remainder row took.
+ */
+remainder: Amount, 
+/**
+ * By how much the fixed and percent rows exceed the payout: nothing would be booked.
+ */
+over?: Amount, 
+/**
+ * The rule asks for a confirmation instead of distributing (spec D9).
+ */
+ask: boolean, cut: Array<DistributionCut>, };
 
 /**
  * One row of a distribution rule: what is asked and where it goes (spec S6, D7).
@@ -3292,6 +3362,11 @@ at: string,
  * integrity checks only (spec S9).
  */
 income_ref?: string, };
+
+/**
+ * An envelope move a distribution made (spec I9).
+ */
+type EnvelopeMoveRef = { envelope_id: string, move_id: string, amount: Amount, };
 
 /**
  * An envelope with what its store can still give it.
@@ -3993,6 +4068,33 @@ type ImportedTransactions = { total: number, items: Array<Transaction>, };
  * Monthly income bracket of the ПДС co-financing ratio.
  */
 type IncomeBracket = "low" | "mid" | "high";
+
+/**
+ * One stored part with the record it produced (spec I10).
+ */
+type IncomePart = { part: DistributionPart, 
+/**
+ * The transfer of a store part; `None` when the part has none or the record is gone.
+ */
+transfer?: Transaction, 
+/**
+ * The entry of an envelope or goal part.
+ */
+envelope_move?: EnvelopeMove, };
+
+/**
+ * The income a distribution call is about: a draft not saved yet, or a stored one.
+ */
+type IncomeSource = { "source": "draft", transaction: TransactionInput, } | { "source": "stored", id: string, };
+
+/**
+ * The stored distribution of an income, top to bottom (spec I10, S10).
+ */
+type IncomeTree = { income: Transaction, 
+/**
+ * Empty when the income does not distribute.
+ */
+parts: Array<IncomePart>, };
 
 /**
  * One indicator on the terminal chart.
@@ -4758,6 +4860,16 @@ change_pct?: Amount,
 since: string, };
 
 /**
+ * One month of a period change: what the operation counts for in it before and after, in the
+ * budget currency (spec I7).
+ */
+type MonthEffect = { 
+/**
+ * Month key `YYYY-MM`.
+ */
+month: string, before: Amount, after: Amount, };
+
+/**
  * The month so far against the previous month to the same date.
  */
 type MonthPace = { currency: string, 
@@ -5132,6 +5244,16 @@ type OperationTemplate = { id: string, name: string, archived: boolean, created_
 distribution?: DistributionRule, };
 
 /**
+ * An operation template as the form edits it; the id, the archive mark and the creation time
+ * are the vault's.
+ */
+type OperationTemplateInput = { name: string, kind: TemplateKind, store_id?: string, asset?: AssetRef, amount?: Amount, categories: Array<string>, comment: string, contact_id?: string, period_rule?: PeriodRule, 
+/**
+ * Income only.
+ */
+distribution?: DistributionRule, };
+
+/**
  * A field of a correction.
  */
 type OverrideField = "kind" | "comment" | "categories" | "contact" | "flow";
@@ -5415,6 +5537,15 @@ closed_pnl: Amount | null, kind: ImportKind,
 from_account: string | null, to_account: string | null, };
 
 /**
+ * What a new period or spread would do to the months an operation counts in (spec I7).
+ */
+type PeriodEffect = { 
+/**
+ * Oldest first; months the change leaves at zero on both sides are left out.
+ */
+months: Array<MonthEffect>, };
+
+/**
  * A span of days the list is for, both ends `YYYY-MM-DD`, inclusive: the
  * period an operation is «for», not the day the money moved (spec I3).
  */
@@ -5605,6 +5736,15 @@ type PositionChange = { store_id: string, store_name: string, asset: AssetRef, b
 delta_base: Amount, };
 
 type PresetInfo = { preset: AutomationPreset, tx_kind: TxKind, category: string | null, };
+
+/**
+ * `preview_distribution`: the rows against the income (spec I8).
+ */
+type PreviewDistributionInput = { income: IncomeSource, rows: Array<DistributionRow>, 
+/**
+ * Least balance left on the card after the rows (spec D10).
+ */
+keep_on_card_min?: Amount, };
 
 /**
  * What the address returned, as the picker shows it.
@@ -6193,6 +6333,11 @@ type ResolveVaultConflictInput = { path: string, keep: ConflictSide,
  * The vault's password: keeping the remote copy trial-opens it first.
  */
 password: string, };
+
+/**
+ * One row with the amount it resolved to.
+ */
+type ResolvedDistributionRow = { row: DistributionRow, amount: Amount, };
 
 /**
  * Input to put a forgotten vault back into recents.
@@ -7655,6 +7800,13 @@ type TemplateFieldKind = "store" | "category" | "number" | "currency" | "budget"
 type TemplateKind = "income" | "expense";
 
 /**
+ * The operation a template made. `ask` means the distribution rule asks for a confirmation:
+ * the income is saved whole and nothing is distributed; the tree of an income that distributed
+ * is `get_income_distribution`.
+ */
+type TemplateOperation = { transaction: Transaction, ask: boolean, };
+
+/**
  * Terminal panels' layout, as the UI left it.
  */
 type TerminalLayout = { show_watchlist: boolean, 
@@ -8486,6 +8638,11 @@ type UpdateContactInput = { id: string, contact: ContactDraft,
  */
 base?: ContactDraft, };
 
+/**
+ * `update_distribution`: «Изменить раскладку» of a stored income (spec I10).
+ */
+type UpdateDistributionInput = { income_id: string, rows: Array<DistributionRow>, };
+
 type UpdateEnvelopeInput = { id: string, draft: EnvelopeDraft, 
 /**
  * The version the form loaded. When set, only the fields the user changed against it are
@@ -8519,6 +8676,8 @@ day: number | null, };
  * What the UI shows when a newer version exists.
  */
 type UpdateOffer = { version: string, notes: string | null, release_url: string | null, download_url: string | null, can_self_update: boolean, hint: ManualHint, };
+
+type UpdateOperationTemplateInput = { id: string, template: OperationTemplateInput, };
 
 /**
  * Where the update check stands (event `update-state` carries the whole

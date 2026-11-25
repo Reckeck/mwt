@@ -18,8 +18,9 @@ use crate::money::validate::check_period_meta;
 use crate::money::valuation::ValuationCurve;
 use crate::planning::budget::budget_currency;
 use crate::planning::flows::{Basis, flows_for_basis};
-use crate::planning::period_rule::{SpreadBefore, period_of_rule, settle_spread};
+use crate::planning::period_rule::{period_of_rule, settle_spread};
 use crate::service::Session;
+use crate::usecases::money::transactions::{settle_tx_spread, spreadable};
 use mwt_model::{
     AssetRef, CryptoHistory, MonthShare, OpPeriod, PeriodRule, Spread, SpreadMode, TxKind, TxMeta,
 };
@@ -61,17 +62,6 @@ pub fn preview_spread(
     Ok(settled.map(|spread| spread.shares).unwrap_or_default())
 }
 
-/// The amount a period or a spread concerns; only an income or an expense has either.
-fn spreadable(tx: &Transaction) -> Result<(Amount, u32)> {
-    match tx {
-        Transaction::Topup(inner) => Ok((inner.amount, inner.asset.minor_places())),
-        Transaction::Payment(inner) => Ok((inner.amount, inner.asset.minor_places())),
-        _ => Err(Error::InvalidInput(
-            "only an income or an expense has a period".into(),
-        )),
-    }
-}
-
 /// The stored operation `id` as an edit would leave it: `period` and `spread` replace the stored
 /// ones when given, and the shares are settled against the stored record (P8).
 fn edited(
@@ -79,7 +69,11 @@ fn edited(
     period: Option<OpPeriod>,
     spread: Option<Spread>,
 ) -> Result<Transaction> {
-    let (amount, places) = spreadable(stored)?;
+    let Some((amount, _)) = spreadable(stored) else {
+        return Err(Error::InvalidInput(
+            "only an income or an expense has a period".into(),
+        ));
+    };
     let mut tx = stored.clone();
     let meta = tx.meta_mut();
     if period.is_some() {
@@ -88,20 +82,7 @@ fn edited(
     if spread.is_some() {
         meta.spread = spread;
     }
-    let before = SpreadBefore {
-        amount,
-        period: stored.meta().period.as_ref(),
-        spread: stored.meta().spread.as_ref(),
-    };
-    let meta = tx.meta_mut();
-    meta.spread = settle_spread(
-        meta.period.as_ref(),
-        meta.spread.take(),
-        amount,
-        places,
-        true,
-        Some(&before),
-    );
+    settle_tx_spread(&mut tx, true, Some(stored));
     check_period_meta(tx.kind(), tx.meta(), Some(amount))?;
     Ok(tx)
 }
