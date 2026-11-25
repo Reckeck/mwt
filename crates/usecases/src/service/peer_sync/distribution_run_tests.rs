@@ -11,6 +11,7 @@ use crate::planning::templates::TemplateDraft;
 use crate::service::test_support::{amount, income, store, usd};
 use crate::time::unix_secs;
 use crate::usecases::planning::automations::create_automation;
+use crate::usecases::planning::distribution::replace_distribution;
 use crate::usecases::planning::templates::create_operation_template;
 use crate::usecases::workflow::runs::run_due_workflows;
 use mwt_model::{
@@ -151,4 +152,26 @@ fn a_distributing_run_on_both_devices_books_its_effects_once() {
     };
     assert_eq!(sorted(&left), sorted(&right));
     assert_eq!(left.doc.envelopes, right.doc.envelopes);
+    for vault in [&mut left, &mut right] {
+        let (income_id, rows) = vault
+            .doc
+            .transactions
+            .iter()
+            .find_map(|tx| match tx {
+                Transaction::Topup(topup) => Some((
+                    topup.meta.id.clone(),
+                    topup
+                        .distribution
+                        .iter()
+                        .flatten()
+                        .map(|part| row(part.kind.clone(), part.target.clone()))
+                        .collect::<Vec<_>>(),
+                )),
+                _ => None,
+            })
+            .unwrap();
+        let found = crate::money::distribution::verify_distribution(&vault.books(), &income_id);
+        assert!(found.is_empty(), "{found:?}");
+        replace_distribution(vault, &income_id, &rows).unwrap();
+    }
 }

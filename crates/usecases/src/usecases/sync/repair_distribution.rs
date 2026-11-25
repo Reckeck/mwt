@@ -18,6 +18,7 @@ use mwt_model::{
 /// Fix every income whose distribution `check_distribution` finds broken in the two ways above.
 pub(super) fn repair_distributions(doc: &mut VaultDoc, report: &mut RepairReport) {
     for income_id in income_ids(doc) {
+        adopt_named_effects(doc, &income_id);
         let found = check_distribution(doc, &income_id);
         if found.iter().any(|item| item.code == EFFECT_MISSING) {
             drop_gone_parts(doc, &income_id, report);
@@ -132,6 +133,55 @@ fn distribution_of<'doc>(doc: &'doc VaultDoc, income_id: &str) -> Option<&'doc [
         Transaction::Topup(topup) if topup.meta.id == income_id => topup.distribution.as_deref(),
         _ => None,
     })
+}
+
+/// A part names an effect whose `income_ref` is empty or points to an income that is gone (two
+/// devices booked the same planned moment under different income ids and the other income was
+/// dropped): the naming income adopts the effect, so its distribution agrees again.
+fn adopt_named_effects(doc: &mut VaultDoc, income_id: &str) {
+    let named: Vec<EffectRef> = distribution_of(doc, income_id)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|part| part.effect.clone())
+        .collect();
+    let known: HashSet<String> = doc
+        .transactions
+        .iter()
+        .map(|tx| tx.meta().id.clone())
+        .collect();
+    let orphaned = |current: &Option<String>| {
+        current
+            .as_deref()
+            .is_none_or(|income| income != income_id && !known.contains(income))
+    };
+    for effect in &named {
+        match effect {
+            EffectRef::Transfer { tx_id } => {
+                for tx in &mut doc.transactions {
+                    let meta = tx.meta_mut();
+                    if &meta.id == tx_id && orphaned(&meta.income_ref) {
+                        meta.income_ref = Some(income_id.to_string());
+                    }
+                }
+            }
+            EffectRef::EnvelopeMove {
+                envelope_id,
+                move_id,
+            } => {
+                for envelope in doc
+                    .envelopes
+                    .iter_mut()
+                    .filter(|each| &each.id == envelope_id)
+                {
+                    for entry in envelope.moves.iter_mut().filter(|each| &each.id == move_id) {
+                        if orphaned(&entry.income_ref) {
+                            entry.income_ref = Some(income_id.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Clear `income_ref` on the records that point to `income_id` but that no part of it names.
