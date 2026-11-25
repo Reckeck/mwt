@@ -8,7 +8,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { useIsPhone } from '@/shared/lib/phone'
 
-import { NAV_SECTIONS } from '../../lib/nav-sections'
+import { showBack as showsBack } from '../../lib/show-back'
 import { ProfileMenu } from '../profile-menu'
 
 /**
@@ -34,8 +34,7 @@ const route = useRoute()
 const router = useRouter()
 const phone = useIsPhone()
 
-const atSectionRoot = computed(() => NAV_SECTIONS.some((section) => section.root === route.name))
-const showBack = computed(() => phone.value && !atSectionRoot.value)
+const showBack = computed(() => showsBack(phone.value, route.name))
 
 function goBack() {
   if (window.history.length > 1) router.back()

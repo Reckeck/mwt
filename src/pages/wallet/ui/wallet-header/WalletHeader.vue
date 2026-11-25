@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { ChevronLeft } from 'lucide-vue-next'
 
 import { CryptoAddressCard } from '@/entities/crypto-account'
 import { Money, PnlText } from '@/entities/currency'
@@ -88,18 +87,7 @@ const unvalued = computed(() => property.value && !Number(props.figure.amount))
 
 <template>
   <div class="flex flex-col gap-3">
-    <Button
-      v-if="rootOnPhone"
-      variant="ghost"
-      size="icon"
-      class="touch-hit -ms-2 self-start"
-      :aria-label="t('nav.stores')"
-      data-wallet-back
-      @click="router.push({ name: 'stores' })"
-    >
-      <ChevronLeft class="size-5" />
-    </Button>
-    <PageHeader v-else :crumbs="crumbs" />
+    <PageHeader v-if="!rootOnPhone" :crumbs="crumbs" />
 
     <div v-if="!(props.empty && phone)" class="flex items-center gap-3">
       <CryptoAddressCard

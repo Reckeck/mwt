@@ -1,23 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterView, useRoute, useRouter } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ChevronLeft } from 'lucide-vue-next'
 
-import { Button } from '@/shared/ui/button'
 import { RouteTabs } from '@/shared/ui/route-tabs'
 import { useIsPhone } from '@/shared/lib/phone'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 const phone = useIsPhone()
-/** So are the bonuses (Ops-2 · 12): `‹ Bonuses and cashback`, back to the list. */
+/** On a phone the bonuses are a drill-down (Ops-2 · 12): no tabs, the top bar has Back. */
 const inBonuses = computed(() => phone.value && route.name === 'transactions-bonuses')
-function back() {
-  if (window.history.state?.back) router.back()
-  else void router.push({ name: 'transactions' })
-}
 
 /** Each tab is a child route, so a tab has its own address. */
 const tabs = computed(() => [
@@ -30,11 +23,8 @@ const tabs = computed(() => [
 
 <template>
   <div class="grid grid-cols-1 gap-4 @container">
-    <div v-if="inBonuses" class="-mx-2 flex items-center gap-1">
-      <Button variant="ghost" size="icon" :aria-label="t('actions.back')" @click="back"><ChevronLeft class="size-5" /></Button>
-      <h1 class="min-w-0 flex-1 truncate text-xl font-semibold">{{ t('transactions.tab.bonuses') }}</h1>
-    </div>
-    <div v-else class="flex min-w-0 flex-wrap items-center gap-2">
+    <!-- On a phone the bonuses are a drill-down: the top bar carries Back and the title. -->
+    <div v-if="!inBonuses" class="flex min-w-0 flex-wrap items-center gap-2">
       <div class="w-fit max-w-full" data-tour="section-tabs"><RouteTabs :tabs="tabs" /></div>
       <!-- A tab's own controls on the tabs' row (the calendar's month), teleported in. -->
       <div id="tx-section-end" class="ml-auto flex min-w-0 items-center" />
