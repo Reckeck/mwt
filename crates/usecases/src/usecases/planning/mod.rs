@@ -7,6 +7,7 @@ pub mod automation_card;
 pub mod automation_rules;
 pub mod automations;
 pub mod budget;
+pub mod conversion;
 pub mod datasources;
 pub mod distribution;
 pub mod emergency;

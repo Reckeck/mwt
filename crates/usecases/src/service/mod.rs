@@ -322,6 +322,9 @@ impl Session {
         // Built-in categories added in later versions reach old vaults too.
         let categories_added =
             crate::usecases::planning::passive::ensure_default_categories(&mut vault);
+        // The old salary -> deposit automation becomes a template's rule, once (M6, Q14).
+        let salary_converted =
+            crate::usecases::planning::conversion::convert_salary_to_rule(&mut vault)?;
         // A field became required after the workflow was switched on: off, and said so.
         let incomplete = crate::usecases::workflow::records::disable_incomplete_workflows(
             &mut vault,
@@ -349,6 +352,7 @@ impl Session {
             || keys_moved
             || envelopes_settled
             || categories_added
+            || salary_converted
             || incomplete
             || attachments_pruned
             || repaired

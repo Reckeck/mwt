@@ -12,6 +12,7 @@ mod automation_card_tests;
 mod automation_distribution_tests;
 mod automations_tests;
 mod budget_tests;
+mod conversion_tests;
 mod datasources_tests;
 mod distribution_tests;
 mod emergency_tests;
