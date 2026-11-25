@@ -40,6 +40,10 @@
   --color-scrim: var(--scrim);
   --color-tertiary: var(--text-tertiary);
   --color-strong: var(--border-strong);
+  --color-money-income: var(--money-income);
+  --color-money-expense: var(--money-expense);
+  --color-money-in-transit: var(--money-in-transit);
+  --color-money-transfer: var(--money-transfer);
   --color-chart-actual: var(--chart-actual);
   --color-chart-reference: var(--chart-reference);
   --color-chart-bank: var(--chart-bank);
@@ -179,6 +183,11 @@
   --chart-heat-2: #B4AE9F;
   --chart-heat-3: #6F716B;
   --chart-heat-4: #1B1E1C;
+  /* Money kinds: income/expense/in-transit follow the semantic colours, transfer is a neutral blue-grey. */
+  --money-income: var(--success);
+  --money-expense: var(--destructive);
+  --money-in-transit: var(--warning);
+  --money-transfer: #4A5F7A;
 
   /* Sidebar (shadcn-vue): a shade off the page so the rail reads as chrome. */
   --sidebar: #FDFCF8;
@@ -280,6 +289,10 @@
   --chart-heat-2: #5C635E;
   --chart-heat-3: #9EA39D;
   --chart-heat-4: #ECE9E1;
+  --money-income: var(--success);
+  --money-expense: var(--destructive);
+  --money-in-transit: var(--warning);
+  --money-transfer: #94A3B8;
 
   --sidebar: #1A1D1B;
   --sidebar-foreground: #ECE9E1;

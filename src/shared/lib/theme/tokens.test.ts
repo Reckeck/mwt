@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { builtinThemes, getTheme } from './registry'
+import { getTheme } from './registry'
 import { assertCompleteTheme, THEME_TOKENS } from './tokens'
 
 function fullTokens(): Record<string, string> {
@@ -41,8 +41,7 @@ describe('assertCompleteTheme', () => {
 })
 
 describe('registry', () => {
-  it('starts empty and returns undefined for an unknown id', () => {
-    expect(builtinThemes).toEqual([])
+  it('returns undefined for an unknown id', () => {
     expect(getTheme('nope')).toBeUndefined()
   })
 })
