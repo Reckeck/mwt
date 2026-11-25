@@ -9,9 +9,45 @@
 //   { wait: ms }       { eval: 'page code, returns anything' }
 // `login: false` — no login: the shot starts from a reloaded, locked app (mock state and LocalStorage reset), route as given.
 // `desktop` / `phone` steps run only there (`{ desktop: [...] }`, `{ phone: [...] }`).
+import { readdirSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-import { login, mounted, setTheme } from '../../tests/e2e/layout/lib/scenario.mjs'
+import { login, mounted } from '../../tests/e2e/layout/lib/scenario.mjs'
+
+/** Built-in theme ids: the files in src/shared/lib/theme/themes are named by id. */
+export const THEME_IDS = readdirSync(new URL('../../src/shared/lib/theme/themes', import.meta.url))
+  .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+  .map((file) => file.slice(0, -3))
+  .sort()
+
+const THEME_ALIASES = { light: 'default-light', dark: 'default-dark' }
+
+/**
+ * The themes of `--theme <id|all>`: `light` / `dark` are Default light / dark, `all` every built-in.
+ * Unknown values throw with the valid ids listed. Labels (what file names carry) are the value as given.
+ */
+export function resolveThemes(value) {
+  if (!value) return ['light', 'dark']
+  if (value === 'all') return THEME_IDS
+  const wanted = value.split(',')
+  const unknown = wanted.filter((label) => !THEME_IDS.includes(THEME_ALIASES[label] ?? label))
+  if (unknown.length) {
+    throw new Error(`unknown theme '${unknown.join("', '")}'; valid: all, light, dark, ${THEME_IDS.join(', ')}`)
+  }
+  return wanted
+}
+
+/** Pick a theme through the app's own setting: its id and mode, no per-mode pair. */
+export async function setTheme(page, label) {
+  const id = THEME_ALIASES[label] ?? label
+  await page.eval(`${APP}
+    const { getTheme } = await import('/src/shared/lib/theme/registry.ts')
+    const mode = getTheme('${id}')?.mode
+    if (!mode) throw new Error('unknown theme ${id}')
+    await gp.$pinia._s.get('settings').updateApp({ theme: mode, theme_id: '${id}', theme_light_id: '', theme_dark_id: '' })
+    return true`)
+  await page.sleep(300)
+}
 
 /** Page code: wait for the app to mount (a Vite reload may be under way), then `gp` is its global properties. */
 export const GP = `
