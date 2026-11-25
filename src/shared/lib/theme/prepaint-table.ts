@@ -3,4 +3,35 @@
 import type { ThemeMode } from './types'
 
 /** Canvas colour (`--background`) and mode of every built-in theme, read by the inline script in index.html (TP5). */
-export const PREPAINT_TABLE: Readonly<Record<string, readonly [string, ThemeMode]>> = {"default-light":["#f3f0e8","light"],"default-dark":["#111312","dark"],"dracula":["#282a36","dark"],"alucard":["#fffbeb","light"],"nord":["#2e3440","dark"],"nord-snow-storm":["#eceff4","light"],"solarized-dark":["#002b36","dark"],"solarized-light":["#fdf6e3","light"],"gruvbox-dark":["#282828","dark"],"gruvbox-light":["#fbf1c7","light"],"catppuccin-mocha":["#1e1e2e","dark"],"catppuccin-macchiato":["#24273a","dark"],"catppuccin-frappe":["#303446","dark"],"catppuccin-latte":["#eff1f5","light"],"tokyo-night":["#1a1b26","dark"],"tokyo-night-storm":["#24283b","dark"],"tokyo-night-day":["#e1e2e7","light"],"one-dark":["#282c34","dark"],"one-light":["#fafafa","light"],"rose-pine":["#191724","dark"],"rose-pine-moon":["#232136","dark"],"rose-pine-dawn":["#faf4ed","light"],"everforest-dark":["#2d353b","dark"],"everforest-light":["#fdf6e3","light"],"kanagawa-wave":["#1f1f28","dark"],"kanagawa-lotus":["#f2ecbc","light"],"github-dark":["#0d1117","dark"],"github-light":["#ffffff","light"],"ayu-mirage":["#1f2430","dark"],"ayu-light":["#fcfcfc","light"]}
+export const PREPAINT_TABLE: Readonly<Record<string, readonly [string, ThemeMode]>> = {
+  'default-light': ['#f3f0e8', 'light'],
+  'default-dark': ['#111312', 'dark'],
+  dracula: ['#282a36', 'dark'],
+  alucard: ['#fffbeb', 'light'],
+  nord: ['#2e3440', 'dark'],
+  'nord-snow-storm': ['#eceff4', 'light'],
+  'solarized-dark': ['#002b36', 'dark'],
+  'solarized-light': ['#fdf6e3', 'light'],
+  'gruvbox-dark': ['#282828', 'dark'],
+  'gruvbox-light': ['#fbf1c7', 'light'],
+  'catppuccin-mocha': ['#1e1e2e', 'dark'],
+  'catppuccin-macchiato': ['#24273a', 'dark'],
+  'catppuccin-frappe': ['#303446', 'dark'],
+  'catppuccin-latte': ['#eff1f5', 'light'],
+  'tokyo-night': ['#1a1b26', 'dark'],
+  'tokyo-night-storm': ['#24283b', 'dark'],
+  'tokyo-night-day': ['#e1e2e7', 'light'],
+  'one-dark': ['#282c34', 'dark'],
+  'one-light': ['#fafafa', 'light'],
+  'rose-pine': ['#191724', 'dark'],
+  'rose-pine-moon': ['#232136', 'dark'],
+  'rose-pine-dawn': ['#faf4ed', 'light'],
+  'everforest-dark': ['#2d353b', 'dark'],
+  'everforest-light': ['#fdf6e3', 'light'],
+  'kanagawa-wave': ['#1f1f28', 'dark'],
+  'kanagawa-lotus': ['#f2ecbc', 'light'],
+  'github-dark': ['#0d1117', 'dark'],
+  'github-light': ['#ffffff', 'light'],
+  'ayu-mirage': ['#1f2430', 'dark'],
+  'ayu-light': ['#fcfcfc', 'light'],
+}

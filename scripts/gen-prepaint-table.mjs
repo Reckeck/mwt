@@ -31,6 +31,10 @@ try {
 
 const table = Object.fromEntries(themes.map((theme) => [theme.id, [theme.tokens['--background'].toLowerCase(), theme.mode]]))
 const json = JSON.stringify(table)
+const key = (id) => (/^[A-Za-z_$][\w$]*$/.test(id) ? id : `'${id}'`)
+const tsRows = Object.entries(table)
+  .map(([id, [background, mode]]) => `  ${key(id)}: ['${background}', '${mode}'],`)
+  .join('\n')
 
 writeFileSync(
   tableFile,
@@ -39,7 +43,9 @@ writeFileSync(
 import type { ThemeMode } from './types'
 
 /** Canvas colour (\`--background\`) and mode of every built-in theme, read by the inline script in index.html (TP5). */
-export const PREPAINT_TABLE: Readonly<Record<string, readonly [string, ThemeMode]>> = ${json}
+export const PREPAINT_TABLE: Readonly<Record<string, readonly [string, ThemeMode]>> = {
+${tsRows}
+}
 `,
 )
 

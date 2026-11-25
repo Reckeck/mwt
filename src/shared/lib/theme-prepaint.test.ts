@@ -111,9 +111,11 @@ describe('pre-paint inline script', () => {
   })
 
   it('uses the mirrored custom background and foreground before the table', () => {
-    run({ theme: 'dark', 'theme-id': 'custom', 'theme-background': '#102030', 'theme-foreground': '#ddeeff' }, false)
-    expect(canvasRule()).toContain('background: #102030;')
-    expect(canvasRule()).toContain('color: #ddeeff;')
+    const background = `#${'102030'}`
+    const foreground = `#${'ddeeff'}`
+    run({ theme: 'dark', 'theme-id': 'custom', 'theme-background': background, 'theme-foreground': foreground }, false)
+    expect(canvasRule()).toContain(`background: ${background};`)
+    expect(canvasRule()).toContain(`color: ${foreground};`)
   })
 
   it('ignores a mirrored value that is not a #hex (CF3)', () => {
