@@ -41,6 +41,15 @@ pub struct RepairReport {
     /// S11: ids of the incomes that lost a distribution part whose effect is gone; the amount of
     /// the part went back to the remainder.
     pub dropped_parts: Vec<String>,
+    /// S11: ids of the incomes that adopted an effect whose `income_ref` was empty or pointed at
+    /// an income that is gone.
+    pub adopted_effects: Vec<String>,
+    /// S11: ids of the incomes whose part took the amount of its surviving effect; the difference
+    /// went to the remainder.
+    pub settled_parts: Vec<String>,
+    /// S11: ids of the incomes whose part differs from its effect and the remainder cannot take
+    /// the difference; the distribution stays as it is. A computed flag, found again every pass.
+    pub unsettled_parts: Vec<String>,
     /// S11: ids of the transfers and envelope moves whose `income_ref` pointed at nothing; the
     /// record stays, only the back-reference is cleared.
     pub cleared_income_refs: Vec<String>,
@@ -172,6 +181,30 @@ impl RepairReport {
                 format!("incomes that lost a distribution part (its amount went back to the remainder): {count}")
             });
         }
+        if !self.adopted_effects.is_empty() {
+            let count = self.adopted_effects.len();
+            parts.push(if ru {
+                format!("доходы, принявшие операции раскладки без ссылки на доход: {count}")
+            } else {
+                format!("incomes that adopted distribution records with no income link: {count}")
+            });
+        }
+        if !self.settled_parts.is_empty() {
+            let count = self.settled_parts.len();
+            parts.push(if ru {
+                format!("доходы, у которых сумма части приведена к сумме операции (разница в остатке): {count}")
+            } else {
+                format!("incomes whose part took the amount of its record (the difference is in the remainder): {count}")
+            });
+        }
+        if !self.unsettled_parts.is_empty() {
+            let count = self.unsettled_parts.len();
+            parts.push(if ru {
+                format!("доходы, у которых сумма части расходится с операцией, а остатка не хватает: {count}")
+            } else {
+                format!("incomes whose part differs from its record and the remainder cannot cover it: {count}")
+            });
+        }
         if !self.cleared_income_refs.is_empty() {
             let count = self.cleared_income_refs.len();
             parts.push(if ru {
@@ -235,7 +268,7 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}:distribution:{}:{}:templates:{}",
+            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}:distribution:{}:{}:{}:{}:{}:templates:{}",
             ids(&self.restored),
             ids(&self.detached_accounts),
             ids(&self.dropped_envelopes),
@@ -249,6 +282,9 @@ impl RepairReport {
             ids(&self.restored_organizer),
             self.unrestored.join(","),
             self.dropped_parts.join(","),
+            self.adopted_effects.join(","),
+            self.settled_parts.join(","),
+            self.unsettled_parts.join(","),
             self.cleared_income_refs.join(","),
             self.dropped_template_refs
         )

@@ -18,7 +18,10 @@ use mwt_model::{
 /// Fix every income whose distribution `check_distribution` finds broken in the two ways above.
 pub(super) fn repair_distributions(doc: &mut VaultDoc, report: &mut RepairReport) {
     for income_id in income_ids(doc) {
-        adopt_named_effects(doc, &income_id);
+        if adopt_named_effects(doc, &income_id) {
+            report.adopted_effects.push(income_id.clone());
+        }
+        settle_differing_amounts(doc, &income_id, report);
         let found = check_distribution(doc, &income_id);
         if found.iter().any(|item| item.code == EFFECT_MISSING) {
             drop_gone_parts(doc, &income_id, report);
@@ -138,7 +141,9 @@ fn distribution_of<'doc>(doc: &'doc VaultDoc, income_id: &str) -> Option<&'doc [
 /// A part names an effect whose `income_ref` is empty or points to an income that is gone (two
 /// devices booked the same planned moment under different income ids and the other income was
 /// dropped): the naming income adopts the effect, so its distribution agrees again.
-fn adopt_named_effects(doc: &mut VaultDoc, income_id: &str) {
+/// Returns whether any record was adopted.
+fn adopt_named_effects(doc: &mut VaultDoc, income_id: &str) -> bool {
+    let mut adopted = false;
     let named: Vec<EffectRef> = distribution_of(doc, income_id)
         .unwrap_or_default()
         .iter()
@@ -161,6 +166,7 @@ fn adopt_named_effects(doc: &mut VaultDoc, income_id: &str) {
                     let meta = tx.meta_mut();
                     if &meta.id == tx_id && orphaned(&meta.income_ref) {
                         meta.income_ref = Some(income_id.to_string());
+                        adopted = true;
                     }
                 }
             }
@@ -176,12 +182,90 @@ fn adopt_named_effects(doc: &mut VaultDoc, income_id: &str) {
                     for entry in envelope.moves.iter_mut().filter(|each| &each.id == move_id) {
                         if orphaned(&entry.income_ref) {
                             entry.income_ref = Some(income_id.to_string());
+                            adopted = true;
                         }
                     }
                 }
             }
         }
     }
+    adopted
+}
+
+/// The amount of the surviving record of `effect` when it points back to `income_id`.
+fn effect_amount(doc: &VaultDoc, effect: &EffectRef, income_id: &str) -> Option<mwt_base::Amount> {
+    match effect {
+        EffectRef::Transfer { tx_id } => doc.transactions.iter().find_map(|tx| match tx {
+            Transaction::Transfer(transfer)
+                if &transfer.meta.id == tx_id
+                    && transfer.meta.income_ref.as_deref() == Some(income_id) =>
+            {
+                Some(transfer.amount)
+            }
+            _ => None,
+        }),
+        EffectRef::EnvelopeMove {
+            envelope_id,
+            move_id,
+        } => doc
+            .envelopes
+            .iter()
+            .filter(|envelope| &envelope.id == envelope_id)
+            .flat_map(|envelope| envelope.moves.iter())
+            .find(|entry| &entry.id == move_id && entry.income_ref.as_deref() == Some(income_id))
+            .map(|entry| entry.delta),
+    }
+}
+
+/// Two devices booked one effect with two amounts: the part takes the amount of the surviving
+/// record and the difference goes to the remainder. When the remainder cannot take it (it would
+/// go below zero, or there is none to give back to) the distribution stays and the income is
+/// reported. A record is never changed.
+fn settle_differing_amounts(doc: &mut VaultDoc, income_id: &str, report: &mut RepairReport) {
+    let wanted: Vec<Option<mwt_base::Amount>> = distribution_of(doc, income_id)
+        .unwrap_or_default()
+        .iter()
+        .map(|part| {
+            let effect = part.effect.as_ref()?;
+            effect_amount(doc, effect, income_id).filter(|amount| *amount != part.amount)
+        })
+        .collect();
+    if wanted.iter().all(Option::is_none) {
+        return;
+    }
+    let Some(Transaction::Topup(topup)) = doc
+        .transactions
+        .iter_mut()
+        .find(|tx| tx.meta().id == income_id)
+    else {
+        return;
+    };
+    let Some(parts) = topup.distribution.as_mut() else {
+        return;
+    };
+    let remainder_at = parts
+        .iter()
+        .position(|part| matches!(part.kind, DistKind::Remainder));
+    let mut remainder = remainder_at.map_or(mwt_base::Amount::ZERO, |at| parts[at].amount);
+    let mut settled = parts.clone();
+    for (part, amount) in settled.iter_mut().zip(&wanted) {
+        if let Some(amount) = amount {
+            remainder += part.amount - *amount;
+            part.amount = *amount;
+        }
+    }
+    let fits = !remainder.is_negative()
+        && wanted.iter().flatten().all(|amount| amount.is_positive())
+        && (remainder_at.is_some() || remainder == mwt_base::Amount::ZERO);
+    if !fits {
+        report.unsettled_parts.push(income_id.to_string());
+        return;
+    }
+    if let Some(at) = remainder_at {
+        settled[at].amount = remainder;
+    }
+    *parts = settled;
+    report.settled_parts.push(income_id.to_string());
 }
 
 /// Clear `income_ref` on the records that point to `income_id` but that no part of it names.
@@ -392,6 +476,89 @@ mod tests {
                 .all(|entry| entry.income_ref.is_none())
         );
         clean(&fixture);
+    }
+
+    fn set_transfer(fixture: &mut Fixture, value: &str, income_ref: Option<String>) {
+        for tx in &mut fixture.vault.doc.transactions {
+            if let Transaction::Transfer(transfer) = tx {
+                transfer.amount = amount(value);
+                transfer.meta.income_ref = income_ref.clone();
+            }
+        }
+    }
+
+    fn set_move(fixture: &mut Fixture, value: &str) {
+        for envelope in &mut fixture.vault.doc.envelopes {
+            for entry in &mut envelope.moves {
+                entry.delta = amount(value);
+            }
+        }
+    }
+
+    fn assert_second_pass_silent(fixture: &mut Fixture) {
+        let before = serde_json::to_string(&fixture.vault.doc).unwrap();
+        assert!(
+            repair_invariants(&mut fixture.vault, None)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(serde_json::to_string(&fixture.vault.doc).unwrap(), before);
+    }
+
+    /// S11 repair: a transfer of another amount (the surviving record) wins; the remainder pays.
+    #[test]
+    fn s11_a_differing_transfer_amount_moves_the_difference_to_the_remainder() {
+        let mut fixture = fixture();
+        let income_id = fixture.income_id.clone();
+        set_transfer(&mut fixture, "350", Some(income_id));
+        let report = repair_invariants(&mut fixture.vault, None).unwrap();
+        assert_eq!(report.settled_parts, vec![fixture.income_id.clone()]);
+        assert!(report.adopted_effects.is_empty() && report.unsettled_parts.is_empty());
+        assert_eq!(remainder_of(&fixture), amount("450"));
+        clean(&fixture);
+        assert_second_pass_silent(&mut fixture);
+    }
+
+    /// S11 repair: the same for an envelope move.
+    #[test]
+    fn s11_a_differing_envelope_move_amount_moves_the_difference_to_the_remainder() {
+        let mut fixture = fixture();
+        set_move(&mut fixture, "150");
+        let report = repair_invariants(&mut fixture.vault, None).unwrap();
+        assert_eq!(report.settled_parts, vec![fixture.income_id.clone()]);
+        assert_eq!(remainder_of(&fixture), amount("550"));
+        clean(&fixture);
+        assert_second_pass_silent(&mut fixture);
+    }
+
+    /// S11 repair: the remainder cannot take the difference, so nothing changes and it is reported.
+    #[test]
+    fn s11_a_difference_the_remainder_cannot_take_is_reported_and_left_alone() {
+        let mut fixture = fixture();
+        let income_id = fixture.income_id.clone();
+        set_transfer(&mut fixture, "900", Some(income_id));
+        let before = serde_json::to_string(&fixture.vault.doc.transactions).unwrap();
+        let report = repair_invariants(&mut fixture.vault, None).unwrap();
+        assert_eq!(report.unsettled_parts, vec![fixture.income_id.clone()]);
+        assert!(report.settled_parts.is_empty());
+        assert_eq!(remainder_of(&fixture), amount("500"));
+        assert_eq!(
+            serde_json::to_string(&fixture.vault.doc.transactions).unwrap(),
+            before
+        );
+    }
+
+    /// S11 repair: an adoption is reported, and with the amount agreeing nothing else changes.
+    #[test]
+    fn s11_an_adopted_effect_is_reported() {
+        let mut fixture = fixture();
+        set_transfer(&mut fixture, "300", None);
+        let report = repair_invariants(&mut fixture.vault, None).unwrap();
+        assert_eq!(report.adopted_effects, vec![fixture.income_id.clone()]);
+        assert!(report.settled_parts.is_empty());
+        assert!(report.notice_body(false).is_some());
+        clean(&fixture);
+        assert_second_pass_silent(&mut fixture);
     }
 
     /// S11 repair: a consistent distribution is left alone (nothing stamped, nothing reported).
