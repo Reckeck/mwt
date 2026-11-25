@@ -12,6 +12,14 @@ import { nord } from './themes/nord'
 import { nordSnowStorm } from './themes/nord-snow-storm'
 import { solarizedDark } from './themes/solarized-dark'
 import { solarizedLight } from './themes/solarized-light'
+import { oneDark } from './themes/one-dark'
+import { oneLight } from './themes/one-light'
+import { rosePine } from './themes/rose-pine'
+import { rosePineDawn } from './themes/rose-pine-dawn'
+import { rosePineMoon } from './themes/rose-pine-moon'
+import { tokyoNight } from './themes/tokyo-night'
+import { tokyoNightDay } from './themes/tokyo-night-day'
+import { tokyoNightStorm } from './themes/tokyo-night-storm'
 import type { Theme } from './types'
 
 export const builtinThemes: readonly Theme[] = [
@@ -29,6 +37,14 @@ export const builtinThemes: readonly Theme[] = [
   catppuccinMacchiato,
   catppuccinFrappe,
   catppuccinLatte,
+  tokyoNight,
+  tokyoNightStorm,
+  tokyoNightDay,
+  oneDark,
+  oneLight,
+  rosePine,
+  rosePineMoon,
+  rosePineDawn,
 ]
 
 export function getTheme(id: string): Theme | undefined {
