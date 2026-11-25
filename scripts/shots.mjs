@@ -17,7 +17,7 @@ import { join } from 'node:path'
 import { findChromium, launch } from '../tests/e2e/harness/cdp.mjs'
 import { login, mounted } from '../tests/e2e/layout/lib/scenario.mjs'
 import { freePort, startVite } from './shots/serve.mjs'
-import { canvasShot, ensureReady, freshStart, pairShot, resolveThemes, runSteps, setTheme, settle } from './shots/steps.mjs'
+import { canvasShot, checkTheme, ensureReady, freshStart, pairShot, resolveThemes, runSteps, setInsets, setTheme, settle } from './shots/steps.mjs'
 import { SETS } from './shots/sets.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -87,7 +87,7 @@ try {
           await setTheme(page, theme)
           for (const [width, height] of sizes) {
             await page.viewport(width, height, touch)
-            await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+            await setInsets(page, touch)
             for (const shot of list) {
               const file = join(out, `${shot.name}-${scenario}-${theme}-${width}.png`)
               try {
@@ -95,6 +95,7 @@ try {
                 if (!fresh) await ensureReady(page, theme, touch)
                 await runSteps(page, shot, touch)
                 await settle(page, scenario)
+                await checkTheme(page, theme)
                 await page.shot(file)
                 written.push(file)
               } catch (error) {
