@@ -4,21 +4,21 @@ import type { Theme } from '../types'
 /**
  * Ayu light: mode light, radius 0.5rem.
  * Upstream palette: Ayu (https://github.com/ayu-theme/ayu-colors), MIT licence, source https://github.com/ayu-theme/ayu-colors.
- * tuned from upstream: --muted-foreground, #8A9199
- * tuned from upstream: --primary, #FA8D3E
+ * derived: --muted-foreground, #8A9199 (alpha)
+ * tuned from upstream: --primary, #FA8532
  * tuned from upstream: --destructive, #F07171
  * tuned from upstream: --success, #6CBF43
- * tuned from upstream: --warning, #F2AE49
+ * tuned from upstream: --warning, #EBA400
  * tuned from upstream: --money-income, #6CBF43
  * tuned from upstream: --money-expense, #F07171
- * tuned from upstream: --money-transfer, #399EE6
- * tuned from upstream: --money-in-transit, #F2AE49
- * tuned from upstream: --chart-1, #399EE6
+ * tuned from upstream: --money-transfer, #22A4E6
+ * tuned from upstream: --money-in-transit, #EBA400
+ * tuned from upstream: --chart-1, #22A4E6
  * tuned from upstream: --chart-2, #6CBF43
- * tuned from upstream: --chart-3, #FA8D3E
+ * tuned from upstream: --chart-3, #FA8532
  * tuned from upstream: --chart-5, #F07171
  * tuned from upstream: --chart-bank, #6CBF43
- * tuned from upstream: --chart-crypto, #FA8D3E
+ * tuned from upstream: --chart-crypto, #FA8532
  * tuned from upstream: --chart-property, #4CBF99
  * tuned from upstream: --chart-income, #6CBF43
  * tuned from upstream: --chart-over, #F07171
