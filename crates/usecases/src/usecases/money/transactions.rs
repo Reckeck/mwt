@@ -20,7 +20,8 @@ use crate::usecases::money::portfolio::recompute_holdings;
 use crate::usecases::planning::distribution::{
     apply_distribution, apply_distribution_unsaved, drop_distribution_of, rows_of,
 };
-use mwt_model::{AccountRef, DistributionRow};
+use mwt_model::{AccountRef, DistributionRow, PeriodRule};
+use mwt_planning::period_rule::{SpreadBefore, resolve_period_for_new, settle_spread};
 
 use super::stores::rebase_and_commit;
 
@@ -63,10 +64,32 @@ pub fn add_transaction(vault: &mut Session, tx: Transaction) -> Result<Transacti
 /// [`add_transaction`], linked to a property (plan G4).
 pub fn add_transaction_for(
     vault: &mut Session,
-    mut tx: Transaction,
+    tx: Transaction,
     property_id: Option<&str>,
 ) -> Result<Transaction> {
+    add_transaction_ruled(vault, tx, property_id, &CreationRules::default())
+}
+
+/// What a new operation's period may come from besides its own input (spec D3).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CreationRules {
+    /// The rule of the template the operation is made from.
+    pub template_rule: Option<PeriodRule>,
+    /// «Really none»: an operation without a period takes no rule.
+    pub no_period_rule: bool,
+}
+
+/// [`add_transaction_for`] with the rules of the creation: a period the input does not carry
+/// comes from the template's rule, else the rule of the main category, and is stored (D3, D4).
+pub fn add_transaction_ruled(
+    vault: &mut Session,
+    mut tx: Transaction,
+    property_id: Option<&str>,
+    rules: &CreationRules,
+) -> Result<Transaction> {
     refuse_forged_income_ref(&tx)?;
+    apply_period_rules(vault, &mut tx, rules);
+    settle_tx_spread(&mut tx, None);
     check_property_link(vault, property_id)?;
     let rows = take_distribution_rows(&mut tx);
     prepare_transaction(vault, &mut tx)?;
@@ -90,6 +113,71 @@ pub fn add_transaction_for(
         None => rebase_and_commit(vault)?,
     }
     Ok(tx)
+}
+
+/// The amount a period spreads and the minor digits it is cut to; none for a kind with no period.
+fn spreadable(tx: &Transaction) -> Option<(Amount, u32)> {
+    match tx {
+        Transaction::Topup(inner) => Some((inner.amount, inner.asset.minor_places())),
+        Transaction::Payment(inner) => Some((inner.amount, inner.asset.minor_places())),
+        _ => None,
+    }
+}
+
+/// D3: give a new income or expense without a period the period of its rule, cut in the zone of
+/// the group's schedule from the local date of its timestamp.
+fn apply_period_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
+    if spreadable(tx).is_none() || tx.meta().period.is_some() {
+        return;
+    }
+    let zone = vault
+        .doc
+        .settings
+        .schedule_timezone
+        .as_deref()
+        .unwrap_or("UTC");
+    let Some(money_date) = crate::calendar::Calendar::new(zone).date_of_iso(&tx.meta().timestamp)
+    else {
+        return;
+    };
+    let category_rule = tx.meta().categories.first().and_then(|key| {
+        vault
+            .doc
+            .categories
+            .iter()
+            .find(|category| &category.key == key)
+            .and_then(|category| category.period_rule)
+    });
+    tx.meta_mut().period = resolve_period_for_new(
+        None,
+        rules.no_period_rule,
+        rules.template_rule,
+        category_rule,
+        money_date,
+    );
+}
+
+/// P6, P8: keep the stored shares in step with the amount and the period; `before` is the
+/// record as stored when this is an edit.
+fn settle_tx_spread(tx: &mut Transaction, before: Option<&Transaction>) {
+    let Some((amount, places)) = spreadable(tx) else {
+        return;
+    };
+    let stored = before.and_then(|old| {
+        spreadable(old).map(|(old_amount, _)| SpreadBefore {
+            amount: old_amount,
+            period: old.meta().period.as_ref(),
+            spread: old.meta().spread.as_ref(),
+        })
+    });
+    let meta = tx.meta_mut();
+    meta.spread = settle_spread(
+        meta.period.as_ref(),
+        meta.spread.take(),
+        amount,
+        places,
+        stored.as_ref(),
+    );
 }
 
 /// A record with an `income_ref` cannot be deleted on its own.
@@ -303,6 +391,7 @@ fn edit(
     let mut tx = patched(&stored, id, patch);
     keep_income_links(&stored, &mut tx)?;
     let redistribute = rows_for_edited_income(&stored, &mut tx);
+    settle_tx_spread(&mut tx, Some(&stored));
     prepare_transaction(vault, &mut tx)?;
     let event_edit = if follow_events {
         crate::household::shared_events::ledger::plan_tx_edit(&vault.doc, id, &tx)?

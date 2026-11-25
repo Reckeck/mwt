@@ -29,6 +29,7 @@ pub mod passive;
 pub mod period;
 #[cfg(test)]
 mod period_props;
+pub mod period_rule;
 pub mod recurring;
 pub mod scenarios;
 pub mod schedule;
