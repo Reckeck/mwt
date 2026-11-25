@@ -72,6 +72,16 @@ pub enum Locale {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AppSettings {
     pub theme: Theme,
+    /// Colour theme picked for this device (any mode); `None` = the default.
+    /// Device-only: never part of the vault doc.
+    #[serde(default)]
+    pub theme_id: Option<String>,
+    /// Theme used while the resolved mode is light; `None` = follow `theme_id`.
+    #[serde(default)]
+    pub theme_light_id: Option<String>,
+    /// Theme used while the resolved mode is dark; `None` = follow `theme_id`.
+    #[serde(default)]
+    pub theme_dark_id: Option<String>,
     pub locale: Locale,
     /// ISO 4217 code the whole portfolio is valued in (e.g. `usd`, `rub`).
     pub base_currency: String,
@@ -323,6 +333,14 @@ fn parse_inflation<'pair>(
     (rates, dropped)
 }
 
+/// Set (trimmed) or, for an empty string, clear one theme id; `None` = untouched.
+fn apply_theme_id(field: &mut Option<String>, patch: &Option<String>) {
+    if let Some(id) = patch {
+        let id = id.trim();
+        *field = (!id.is_empty()).then(|| id.to_string());
+    }
+}
+
 fn chosen_before_the_field() -> bool {
     true
 }
@@ -335,6 +353,9 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             theme: Theme::Auto,
+            theme_id: None,
+            theme_light_id: None,
+            theme_dark_id: None,
             locale: Locale::Auto,
             base_currency: DEFAULT_BASE_CURRENCY.into(),
             base_currency_chosen: false,
@@ -408,6 +429,9 @@ impl AppSettings {
         if let Some(theme) = patch.theme {
             self.theme = theme;
         }
+        apply_theme_id(&mut self.theme_id, &patch.theme_id);
+        apply_theme_id(&mut self.theme_light_id, &patch.theme_light_id);
+        apply_theme_id(&mut self.theme_dark_id, &patch.theme_dark_id);
         if let Some(locale) = patch.locale {
             self.locale = locale;
         }
@@ -600,6 +624,13 @@ fn is_ticker(code: &str) -> bool {
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct UpdateAppSettingsInput {
     pub theme: Option<Theme>,
+    /// Theme ids: an empty string clears the choice.
+    #[serde(default)]
+    pub theme_id: Option<String>,
+    #[serde(default)]
+    pub theme_light_id: Option<String>,
+    #[serde(default)]
+    pub theme_dark_id: Option<String>,
     pub locale: Option<Locale>,
     pub base_currency: Option<String>,
     /// Marks the base currency as picked without changing it.
@@ -974,6 +1005,48 @@ mod tests {
     }
 
     #[test]
+    fn theme_ids_load_from_old_files_set_clear_and_round_trip() {
+        let old: AppSettings =
+            serde_json::from_str(r#"{"theme":"dark","locale":"auto","base_currency":"rub"}"#)
+                .expect("settings from before the fields");
+        assert_eq!(old.theme, Theme::Dark);
+        assert_eq!(old.theme_id, None);
+        assert_eq!(old.theme_light_id, None);
+        assert_eq!(old.theme_dark_id, None);
+
+        let mut settings = old;
+        settings.apply(&UpdateAppSettingsInput {
+            theme_id: Some("nord".into()),
+            theme_light_id: Some("paper".into()),
+            theme_dark_id: Some("ink".into()),
+            ..Default::default()
+        });
+        let json = serde_json::to_string(&settings).expect("serialize");
+        let back: AppSettings = serde_json::from_str(&json).expect("parse");
+        assert_eq!(back, settings);
+        assert_eq!(back.theme_id.as_deref(), Some("nord"));
+        assert_eq!(back.theme_light_id.as_deref(), Some("paper"));
+        assert_eq!(back.theme_dark_id.as_deref(), Some("ink"));
+
+        settings.apply(&UpdateAppSettingsInput {
+            theme_light_id: Some(String::new()),
+            ..Default::default()
+        });
+        assert_eq!(settings.theme_light_id, None);
+        assert_eq!(settings.theme_id.as_deref(), Some("nord"));
+        assert_eq!(settings.theme_dark_id.as_deref(), Some("ink"));
+    }
+
+    #[test]
+    fn theme_ids_are_not_part_of_the_vault_settings() {
+        let vault = serde_json::to_value(crate::vault::Settings::default()).expect("serialize");
+        let object = vault.as_object().expect("settings is an object");
+        for key in ["theme", "theme_id", "theme_light_id", "theme_dark_id"] {
+            assert!(!object.contains_key(key), "{key} must stay device-only");
+        }
+    }
+
+    #[test]
     fn defaults_are_sane() {
         let settings = AppSettings::default();
         assert_eq!(settings.base(), DEFAULT_BASE_CURRENCY);
@@ -1112,6 +1185,9 @@ mod tests {
         let dir = temp_dir("roundtrip");
         let settings = AppSettings {
             theme: Theme::Light,
+            theme_id: Some("nord".into()),
+            theme_light_id: Some("paper".into()),
+            theme_dark_id: None,
             locale: Locale::Ru,
             base_currency: "eur".into(),
             base_currency_chosen: true,
