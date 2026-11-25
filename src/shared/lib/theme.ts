@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { call } from '@/shared/api/ipc'
 import { usePlatform } from '@/shared/lib/platform'
 import { applyTheme } from '@/shared/lib/theme/apply'
+import { toHex } from '@/shared/lib/theme/contrast'
 import { builtinThemes, getTheme } from '@/shared/lib/theme/registry'
 import type { Theme, ThemeMode } from '@/shared/lib/theme/types'
 import { useSettingsStore } from '@/shared/store/settings'
@@ -53,6 +54,15 @@ function mirror(key: string, value: string | null) {
   }
 }
 
+/** The desktop window background follows the theme's `--background`; Rust keeps no colour table (TK7). */
+function paintWindow(theme: Theme) {
+  try {
+    call('set_window_background', { rgb: toHex(theme.tokens['--background']) }).catch(() => undefined)
+  } catch {
+    // A colour the parser does not know keeps the previous window background.
+  }
+}
+
 export function useTheme() {
   const settingsStore = useSettingsStore()
   const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -69,6 +79,7 @@ export function useTheme() {
 
   function apply() {
     applyTheme(theme.value)
+    paintWindow(theme.value)
     if (settingsStore.app) {
       mirror(THEME_STORAGE_KEY, choice.value.preference)
       mirror(THEME_ID_STORAGE_KEY, choice.value.themeId)

@@ -3,8 +3,10 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, nextTick } from 'vue'
 
+import { call } from '@/shared/api/ipc'
 import { useSettingsStore } from '@/shared/store/settings'
 
+import { getTheme } from './theme/registry'
 import { resolveTheme, useTheme } from './theme'
 
 vi.mock('@/shared/api/ipc', () => ({ call: vi.fn().mockResolvedValue(undefined) }))
@@ -89,6 +91,30 @@ describe('useTheme', () => {
     expect(localStorage.getItem('trade-app:theme')).toBe('auto')
     expect(localStorage.getItem('trade-app:theme-light-id')).toBe('nord-snow-storm')
     expect(localStorage.getItem('trade-app:theme-dark-id')).toBe('dracula')
+    wrapper.unmount()
+  })
+
+  it('paints the window with the resolved --background on every apply and on an Auto system switch', async () => {
+    const store = useSettingsStore()
+    store.app = { theme: 'auto', theme_id: null, theme_light_id: 'nord-snow-storm', theme_dark_id: 'dracula' } as never
+    vi.mocked(call).mockClear()
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useTheme()
+          return () => null
+        },
+      }),
+    )
+    const light = getTheme('nord-snow-storm')?.tokens['--background']
+    const dark = getTheme('dracula')?.tokens['--background']
+    expect(call).toHaveBeenLastCalledWith('set_window_background', { rgb: light?.toLowerCase() })
+    listener?.({ matches: true })
+    await nextTick()
+    expect(call).toHaveBeenLastCalledWith('set_window_background', { rgb: dark?.toLowerCase() })
+    store.app = { ...store.app, theme: 'light', theme_id: 'nord-snow-storm' } as never
+    await nextTick()
+    expect(call).toHaveBeenLastCalledWith('set_window_background', { rgb: light?.toLowerCase() })
     wrapper.unmount()
   })
 })

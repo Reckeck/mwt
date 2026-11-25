@@ -143,6 +143,16 @@ function luminance(color: Rgba): number {
   return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
 }
 
+/** The colour as opaque `#rrggbb` (alpha composited on the default surface); an unsupported colour is a ColorParseError. */
+export function toHex(color: string): string {
+  const opaque = composite(parseColor(color), { red: 1, green: 1, blue: 1, alpha: 1 })
+  const byte = (value: number) =>
+    Math.round(clamp01(value) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${byte(opaque.red)}${byte(opaque.green)}${byte(opaque.blue)}`
+}
+
 /** WCAG 2.x contrast ratio; alpha of the background is composited on `surface`, then the foreground on the result. */
 export function contrastRatio(foreground: string, background: string, surface = DEFAULT_SURFACE): number {
   const base = composite(

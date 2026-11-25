@@ -156,6 +156,12 @@ function normalizeCodes(raw: string[]): string[] {
 export const appSettingsOutsideCommands: MockCommands = {
   // `?platform=android` in the address previews the phone build in the browser.
   app_platform: (_call) => resolve(new URLSearchParams(location.search).get('platform') ?? 'linux'),
+  // Same rule as the backend: only `#rrggbb` is accepted; the browser has no window to paint.
+  set_window_background: ({ args }) => {
+    if (!/^#[0-9a-f]{6}$/i.test(String(args?.rgb)))
+      throw `invalid colour ${JSON.stringify(args?.rgb)}, expected #rrggbb`
+    return resolve(null)
+  },
   get_app_settings: (_call) => {
     return resolve(mockAppSettings)
   },
