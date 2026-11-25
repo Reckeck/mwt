@@ -63,6 +63,13 @@ export function useProfileMenu(options: ProfileMenuOptions) {
   const noticesOpen = ref(false)
   const { unread } = useUnreadNotices()
   const sync = useSyncIndicator()
+  /** Icon and colour of the sync row: busy, then unreliable clock, then connected devices. */
+  function syncLook(): { icon: Component; iconClass?: string } {
+    if (sync.busy.value) return { icon: RefreshCw, iconClass: 'animate-spin' }
+    if (sync.unreliable.value) return { icon: TriangleAlert, iconClass: 'text-warning' }
+    if (sync.connected.value) return { icon: RefreshCw, iconClass: 'text-success' }
+    return { icon: RefreshCw }
+  }
   /** The profile button's dot: something unread, or sync in trouble. */
   const attention = computed(() => unread.value > 0 || (sync.enabled.value && sync.unreliable.value))
 
@@ -119,8 +126,7 @@ export function useProfileMenu(options: ProfileMenuOptions) {
     if (sync.enabled.value) {
       entries.push({
         id: 'sync',
-        icon: sync.unreliable.value ? TriangleAlert : RefreshCw,
-        iconClass: sync.unreliable.value ? 'text-warning' : undefined,
+        ...syncLook(),
         label: t('sync.title'),
         hint: sync.label.value,
         run: () => close(() => void router.push({ query: settingsQuery(router.currentRoute.value.query, 'sync') })),

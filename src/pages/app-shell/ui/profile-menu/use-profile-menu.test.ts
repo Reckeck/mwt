@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import { mount } from '@vue/test-utils'
 
 import { i18n } from '@/shared/config/i18n'
@@ -9,6 +9,15 @@ import { i18n } from '@/shared/config/i18n'
 import { useProfileMenu } from './use-profile-menu'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn(), currentRoute: { value: { query: {} } } }) }))
+
+const syncState = {
+  enabled: ref(true),
+  busy: ref(false),
+  unreliable: ref(false),
+  connected: ref(false),
+  label: ref(''),
+}
+vi.mock('@/features/vault-sync', () => ({ useSyncIndicator: () => syncState }))
 
 function setup() {
   let api!: ReturnType<typeof useProfileMenu>
@@ -59,5 +68,17 @@ describe('useProfileMenu', () => {
       { global: { plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]] } },
     )
     expect(api.statusEntries.value.map((entry) => entry.id)).not.toContain('tour')
+  })
+
+  it('picks the sync row icon from busy, then unreliable, then connected', () => {
+    const menu = setup()
+    const syncRow = () => menu.statusEntries.value.find((entry) => entry.id === 'sync')
+    syncState.busy.value = true
+    expect(syncRow()?.iconClass).toBe('animate-spin')
+    syncState.busy.value = false
+    syncState.connected.value = true
+    expect(syncRow()?.iconClass).toBe('text-success')
+    syncState.unreliable.value = true
+    expect(syncRow()?.iconClass).toBe('text-warning')
   })
 })

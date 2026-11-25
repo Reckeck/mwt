@@ -13,10 +13,11 @@ export function useSyncIndicator() {
     sessions.value.some((session) => session.phase === 'exchanging' || session.phase === 'connecting'),
   )
   const unreliable = computed(() => sessions.value.some((session) => session.unreliable))
+  const hasConnected = computed(() => connected.value.length > 0)
   const label = computed(() => {
     const role = status.data.value?.role ?? 'off'
     if (connected.value.length) return t('sync.indicator.connected', { count: connected.value.length })
     return t(`sync.role.${role}`)
   })
-  return { enabled, busy, unreliable, label }
+  return { enabled, busy, unreliable, connected: hasConnected, label }
 }
