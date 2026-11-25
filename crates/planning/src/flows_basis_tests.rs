@@ -396,3 +396,21 @@ fn an_operation_outside_the_window_in_money_and_months_is_skipped_before_valuing
     let inside = expense("", "5", None, "2026-11-05T09:00:00Z");
     assert!(may_reach_window(&cal, &inside, from, to));
 }
+
+#[test]
+fn r3_last_month_savings_keeps_the_money_date() {
+    // Salary paid 3 Nov for 16-31 Oct: on 5 Nov it is November's, not October's.
+    let mut tx = salary("", "1000", "2026-11-03T09:00:00Z");
+    tx.meta_mut().period = Some(period(PeriodKind::Half, "2026-10-16", "2026-10-31"));
+    let mut doc = VaultDoc::default();
+    let account = bank();
+    doc.stores.push(account.clone());
+    set_store(&mut tx, &account.id);
+    doc.transactions.push(tx);
+    let source = Source(doc);
+    let books = Books::new(&source);
+    let now = Calendar::new(ZONE).start_of(date(2026, 11, 5));
+    let (saved, month) = crate::allocation::last_month_savings(&books, now, ZONE, "USD");
+    assert_eq!(month, "2026-10");
+    assert_eq!(saved, Amount::ZERO);
+}
