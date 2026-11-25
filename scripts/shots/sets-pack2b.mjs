@@ -19,5 +19,5 @@ export const pack2b = [
   { name: 'p2b-spending', route: '/money', steps: [{ wait: 1000 }] },
   { name: 'p2b-spending-12', route: '/money?from=2025-11&to=2026-10', steps: [{ wait: 1000 }] },
   { name: 'p2b-money-more', route: '/money', steps: [{ wait: 700 }, { click: '[data-tour="route-tabs-more"]' }, { wait: 500 }] },
-  { name: 'p2b-more-sheet', route: '/', desktop: false, steps: [{ wait: 700 }, { phone: [{ click: '[data-bottom-more]' }] }, { wait: 500 }] },
+  { name: 'p2b-profile-sheet', route: '/', steps: [{ wait: 700 }, { click: '[data-profile-trigger]' }, { wait: 500 }] },
 ]

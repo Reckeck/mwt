@@ -10,7 +10,7 @@ import { entityKey, entityLocation } from '@/shared/lib/entity-link'
 import { SECTION_HOTKEYS, hotkeyLabel } from '@/shared/lib/hotkeys'
 import { openQuickAdd } from '@/shared/lib/quick-add'
 
-import { CONTACTS_ITEM, NAV_ITEMS } from '../../app-shell.constants'
+import { NAV_SECTIONS, sectionOfRoute } from '../../lib/nav-sections'
 import type { RecentRow } from './use-palette-recent'
 
 /**
@@ -34,7 +34,8 @@ const RECORD: { kind: TxKind; icon: Component; key: string; hotkey?: boolean }[]
 function iconOf(row: RecentRow): Component {
   if (row.entity) return ENTITY_ICONS[row.entity.kind] ?? History
   if (row.wallet) return WalletCards
-  return NAV_ITEMS.find((item) => item.prefix && row.path?.startsWith(item.prefix))?.icon ?? History
+  const name = row.path ? router.resolve(row.path).name : undefined
+  return sectionOfRoute(String(name ?? ''))?.icon ?? History
 }
 
 /** A wallet screen glances like the wallet itself. */
@@ -66,14 +67,10 @@ function openRow(row: RecentRow) {
     </CommandItem>
   </CommandGroup>
   <CommandGroup :heading="t('palette.go')" data-palette-go>
-    <CommandItem v-for="(item, index) in NAV_ITEMS" :key="item.name" :value="`screen-${item.name}`" @select="go({ name: item.name })">
-      <component :is="item.icon" />
-      <span class="min-w-0 flex-1 truncate">{{ t(item.key) }}</span>
+    <CommandItem v-for="(section, index) in NAV_SECTIONS" :key="section.id" :value="`screen-${section.root}`" @select="go({ name: section.root })">
+      <component :is="section.icon" />
+      <span class="min-w-0 flex-1 truncate">{{ t(section.key) }}</span>
       <CommandShortcut v-if="SECTION_HOTKEYS[index]" class="tracking-normal">{{ hotkeyLabel(SECTION_HOTKEYS[index]) }}</CommandShortcut>
-    </CommandItem>
-    <CommandItem :value="`screen-${CONTACTS_ITEM.name}`" @select="go({ name: CONTACTS_ITEM.name })">
-      <component :is="CONTACTS_ITEM.icon" />
-      <span class="min-w-0 flex-1 truncate">{{ t(CONTACTS_ITEM.key) }}</span>
     </CommandItem>
   </CommandGroup>
   <CommandGroup :heading="t('palette.record')" data-palette-record>

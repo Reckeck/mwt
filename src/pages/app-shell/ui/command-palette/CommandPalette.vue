@@ -108,7 +108,7 @@ const TRIGGER_WIDE = { variant: 'outline', class: 'w-full justify-start gap-2 px
         role="dialog"
         :aria-label="t('palette.title')"
         class="fixed z-overlay flex flex-col overflow-hidden bg-popover text-popover-foreground"
-        :class="phone ? 'inset-0 pt-(--safe-top) pb-(--safe-bottom)' : `left-1/2 top-[90px] max-h-[calc(100dvh-120px)] -translate-x-1/2 rounded-xl border shadow-2xl ${width}`"
+        :class="phone ? 'inset-0 pt-(--safe-top) pb-(--safe-bottom)' : `left-1/2 top-[90px] max-h-[calc(100dvh-120px)] -translate-x-1/2 rounded-lg border shadow-lg ${width}`"
         data-command-palette
         data-open="true"
       >

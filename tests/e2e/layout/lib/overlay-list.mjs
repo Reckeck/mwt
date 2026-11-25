@@ -14,8 +14,7 @@
 const overlay = (id) => `[data-overlay="${id}"]`
 
 /** A sum that is not inside a button or a link: a click on it opens the money card. */
-// The sidebar's pinned wallets carry sums too, laid over their links: not a plain sum.
-const PLAIN_SUM = '[data-money-convertible]:not(a *, button *, label *, [role="button"] *, [role="tab"] *, [data-slot="sidebar"] *)'
+const PLAIN_SUM = '[data-money-convertible]:not(a *, button *, label *, [role="button"] *, [role="tab"] *)'
 const ADD = '[data-tour="quick-add"]'
 /** A «⋯» button of an action menu, and an item of the menu it opens (a menu on a desktop, a sheet on a phone). */
 const ACTION_MORE = 'button[aria-label="Ещё"]'
@@ -70,8 +69,8 @@ export const OVERLAYS = [
     open: [{ eval: PINIA("settings", "enrichmentConsentOpen = true") }],
     layer: overlay('enrichment-consent'),
   },
+  { id: 'profile-menu', route: '/', phone: true, open: [{ click: '[data-profile-trigger]' }], layer: overlay('profile-menu') },
   { id: 'notifications', route: '/', phone: true, open: [{ click: '[data-tour="notification-bell"]' }], layer: overlay('notifications') },
-  { id: 'bottom-more', route: '/', phone: 'only', open: [{ click: '[data-bottom-more]' }], layer: overlay('bottom-more') },
   { id: 'entity-tx', route: '/transactions', phone: true, open: [{ click: '[data-tx-open]' }], layer: '[data-tx-card]', keys: ['open'] },
   { id: 'entity-goal', route: '/money/plan', phone: true, open: [{ query: { open: 'goal:{goal}' } }], layer: '[data-goal-card]', keys: ['open'] },
   { id: 'entity-automation', route: '/automations', phone: true, open: [{ query: { open: 'automation:{automation}' } }], layer: '[data-automation-card]', keys: ['open'] },

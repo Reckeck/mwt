@@ -47,7 +47,7 @@ function later() {
 </script>
 
 <template>
-  <Alert v-if="shown" class="pointer-events-auto bg-card shadow-lg" data-testid="update-notice">
+  <Alert v-if="shown" class="pointer-events-auto border bg-card" data-testid="update-notice">
     <Download />
     <AlertTitle>{{ t(view.kind === 'ready' ? 'update.notice.readyTitle' : 'update.notice.availableTitle', { version }) }}</AlertTitle>
     <AlertDescription>

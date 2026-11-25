@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { CircleHelp, Plus, WifiOff } from 'lucide-vue-next'
+import { CircleHelp, WifiOff } from 'lucide-vue-next'
 
 import { SyncIndicator } from '@/features/vault-sync'
 import { Money } from '@/entities/currency'
@@ -10,11 +10,14 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { DropdownMenu } from '@/shared/ui/dropdown-menu'
 import { DropdownMenuItem } from '@/shared/ui/dropdown-menu-item'
-import { Kbd } from '@/shared/ui/kbd'
-import { hotkeyLabel } from '@/shared/lib/hotkeys'
 import { pluralForm } from '@/shared/lib/format'
 
-/** The top bar: where you are, whether the app is online, the net worth, and the global actions. */
+import { ProfileMenu } from '../profile-menu'
+
+/**
+ * The top bar: the page title, whether the app is online, the net worth, search (a field with the
+ * `Ctrl K` hint on a desktop, an icon on a phone) and the profile menu that took over from «More».
+ */
 const props = defineProps<{
   title: string
   summary: PortfolioSummary | undefined
@@ -26,7 +29,7 @@ const props = defineProps<{
   /** Something above (the sandbox bar) already clears the status bar. */
   covered?: boolean
 }>()
-const emit = defineEmits<{ quickAdd: []; startTour: []; allTours: [] }>()
+const emit = defineEmits<{ startTour: []; allTours: [] }>()
 
 const { t, locale } = useI18n()
 </script>
@@ -36,7 +39,7 @@ const { t, locale } = useI18n()
     class="relative box-content flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 max-md:gap-1 max-md:pr-2 md:px-4"
     :class="!props.covered && 'pt-safe'"
   >
-    <!-- The sidebar folds from its own logo (AppSidebar); a phone reaches it from «More». -->
+    <!-- The sidebar folds from its own logo (AppSidebar); a phone has no sidebar. -->
     <h1 class="heading-page min-w-0 flex-1 truncate">{{ props.title }}</h1>
 
     <Badge v-if="!props.online" variant="destructive" class="gap-1">
@@ -54,14 +57,9 @@ const { t, locale } = useI18n()
       <Money :amount="props.summary.net_worth_base" :currency="props.summary.base_currency" :decimals="2" />
     </RouterLink>
 
+    <slot name="search" />
     <SyncIndicator />
     <NotificationBell />
-    <slot name="search" />
-    <Button size="sm" class="shrink-0 max-md:hidden" :title="t('quickAdd.title')" data-tour="quick-add" @click="emit('quickAdd')">
-      <Plus class="size-4" />
-      <span class="hidden sm:inline">{{ t('quickAdd.button') }}</span>
-      <Kbd class="hidden border-primary-foreground/30 bg-primary-foreground/15 text-primary-foreground xl:inline-flex">{{ hotkeyLabel('quickAdd') }}</Kbd>
-    </Button>
 
     <!-- «?»: this screen's tour, or all of them in Settings › Help. -->
     <DropdownMenu v-if="props.hasTour" align="end">
@@ -90,5 +88,7 @@ const { t, locale } = useI18n()
         </span>
       </DropdownMenuItem>
     </DropdownMenu>
+
+    <ProfileMenu />
   </header>
 </template>

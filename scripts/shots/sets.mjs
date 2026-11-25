@@ -100,7 +100,6 @@ const before = [
 ]
 
 /** Stage 1: the shell, Money › Spending, the month balance, the period. */
-const MORE = [{ phone: [{ click: '[data-bottom-more]' }] }]
 const PERIOD = [{ click: '[data-period-trigger]' }]
 /** The mock keeps its settings between shots of a run: run these two as separate `--only` runs, each starts from «off» and presses the switch. */
 const CARRY_ON = [
@@ -121,7 +120,6 @@ const stage1 = [
   { name: 'money-more', route: '/money', steps: [{ click: '[data-tour="route-tabs-more"]' }] },
   { name: 'automations', route: '/automations', scenarios: ['year', 'empty'] },
   { name: 'palette', route: '/money', steps: PALETTE, canvas: { board: 'Shell', frame: '4.' } },
-  { name: 'more-sheet', route: '/', steps: MORE, desktop: false, canvas: { board: 'Shell', frame: '6.' } },
   { name: 'sidebar-collapsed', route: '/money', steps: COLLAPSE, phone: false, canvas: { board: 'Shell', frame: '7.' } },
   EXPAND,
 ]
