@@ -16,6 +16,7 @@ pub mod health;
 pub mod my_automations;
 pub mod notifications;
 pub mod passive;
+pub mod period_preview;
 pub mod recurring;
 pub mod scenarios;
 pub mod templates;

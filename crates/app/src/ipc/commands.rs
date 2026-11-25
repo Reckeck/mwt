@@ -274,7 +274,7 @@ pub(crate) mod tests {
     /// The spec's 402 counted `#[tauri::command]` attributes: `get_autostart` and
     /// `set_autostart` each carry one per platform (desktop and mobile twins), so two names
     /// are counted twice.
-    const COMMAND_COUNT: usize = 400;
+    const COMMAND_COUNT: usize = 403;
 
     #[test]
     fn the_command_count_is_unchanged() {

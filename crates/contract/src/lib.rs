@@ -21,8 +21,8 @@ use mwt_model::StoreScope;
 use mwt_model::{
     AccountRef, AdjustmentLine, AdjustmentTx, AssetSellTx, ConvertSide, ConvertTx, DebtEffect,
     DefiAction, DefiTx, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails,
-    Liquidity, PaymentTx, PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction,
-    TransferTx, TxKind, TxMeta, allowed_kinds, default_kind,
+    Liquidity, OpPeriod, PaymentTx, PriceStamp, ReceivedPart, Spread, TopupTx, TradeFuturesTx,
+    TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind, TxMeta, allowed_kinds, default_kind,
 };
 use mwt_model::{AlertCondition, BudgetPeriod, BudgetTarget, Schedule, TransactionDraft};
 use mwt_model::{
@@ -424,6 +424,18 @@ pub struct TxCommonInput {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub property_id: Option<String>,
+    /// What the operation is «for» (spec P1); none lets a rule decide (D3).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period: Option<OpPeriod>,
+    /// How an operation over several months is cut into months (spec P5).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub spread: Option<Spread>,
+    /// «Really no period»: a new operation without a period takes no rule (spec D3).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub no_period_rule: bool,
 }
 
 impl TxCommonInput {
@@ -438,6 +450,8 @@ impl TxCommonInput {
             .contact_id
             .clone()
             .filter(|contact| !contact.is_empty());
+        meta.period = self.period.clone();
+        meta.spread = self.spread.clone();
         meta
     }
 
@@ -447,6 +461,28 @@ impl TxCommonInput {
             price_base: self.price_base,
             price_base_currency: self.price_base_currency.clone(),
             fx_override: self.fx_override,
+        }
+    }
+}
+
+/// One receiving part of an income that arrived in parts (spec S1).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ReceivedPartInput {
+    pub store_id: String,
+    pub amount: Amount,
+    /// The part's own date; `None` = the income's `timestamp`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub timestamp: Option<String>,
+}
+
+impl ReceivedPartInput {
+    fn to_part(&self) -> ReceivedPart {
+        ReceivedPart {
+            store_id: self.store_id.clone(),
+            amount: self.amount,
+            timestamp: self.timestamp.clone().filter(|stamp| !stamp.is_empty()),
         }
     }
 }
@@ -503,6 +539,10 @@ pub enum TransactionInput {
         fee: Option<FeeInput>,
         from: Option<AccountRef>,
         details: KindDetails,
+        /// «Arrived in parts» (spec S1): empty = a single-store income.
+        #[serde(default)]
+        #[cfg_attr(feature = "ts", ts(as = "Option<Vec<ReceivedPartInput>>", optional))]
+        parts: Vec<ReceivedPartInput>,
     },
     Payment {
         common: TxCommonInput,
@@ -662,8 +702,9 @@ impl TransactionInput {
                 fee,
                 from,
                 details,
+                parts,
             } => Transaction::Topup(TopupTx {
-                parts: Vec::new(),
+                parts: parts.iter().map(ReceivedPartInput::to_part).collect(),
                 distribution: None,
                 meta: common.meta(),
                 store_id: store_id.clone(),
@@ -890,6 +931,25 @@ pub struct UpdateTransactionInput {
 pub struct PreviewTransactionInput {
     pub transaction: TransactionInput,
     pub replaces: Option<String>,
+}
+
+/// One month of a period change: what the operation counts for in it before and after, in the
+/// budget currency (spec I7).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct MonthEffect {
+    /// Month key `YYYY-MM`.
+    pub month: String,
+    pub before: Amount,
+    pub after: Amount,
+}
+
+/// What a new period or spread would do to the months an operation counts in (spec I7).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PeriodEffect {
+    /// Oldest first; months the change leaves at zero on both sides are left out.
+    pub months: Vec<MonthEffect>,
 }
 
 /// Which transaction kinds a wallet of one kind accepts, split the way the
@@ -3140,5 +3200,77 @@ mod secret_debug_tests {
             password: LEAK.into(),
         };
         assert!(!leaks(format!("{input:?}")));
+    }
+}
+
+#[cfg(test)]
+mod period_input_tests {
+    use super::*;
+    use mwt_model::{MonthShare, PeriodKind, SpreadMode};
+
+    fn topup(parts: Vec<ReceivedPartInput>) -> TransactionInput {
+        TransactionInput::Topup {
+            common: TxCommonInput::default(),
+            store_id: "card".into(),
+            asset: AssetIdent {
+                symbol: "USD".into(),
+                ..AssetIdent::default()
+            },
+            amount: Amount::parse("100").unwrap(),
+            fee: None,
+            from: None,
+            details: KindDetails::default(),
+            parts,
+        }
+    }
+
+    #[test]
+    fn an_input_without_the_new_fields_reads_as_before() {
+        let mut json = serde_json::to_value(topup(Vec::new())).unwrap();
+        let object = json.as_object_mut().unwrap();
+        object.remove("parts");
+        let common = object.get_mut("common").unwrap().as_object_mut().unwrap();
+        for key in ["period", "spread", "no_period_rule"] {
+            common.remove(key);
+        }
+        let input: TransactionInput = serde_json::from_value(json).unwrap();
+        let tx = input.to_transaction();
+        assert_eq!(tx.meta().period, None);
+        assert_eq!(tx.meta().spread, None);
+        assert!(!input.common().no_period_rule);
+        let Transaction::Topup(topup) = tx else {
+            panic!("a top-up")
+        };
+        assert!(topup.parts.is_empty());
+    }
+
+    #[test]
+    fn period_spread_and_parts_reach_the_transaction() {
+        let part = ReceivedPartInput {
+            store_id: "card".into(),
+            amount: Amount::parse("60").unwrap(),
+            timestamp: Some(String::new()),
+        };
+        let mut input = topup(vec![part]);
+        input.common_mut().period = Some(OpPeriod {
+            kind: PeriodKind::Quarter,
+            start: "2026-10-01".into(),
+            end: "2026-12-31".into(),
+        });
+        input.common_mut().spread = Some(Spread {
+            mode: SpreadMode::Even,
+            shares: vec![MonthShare {
+                month: "2026-10".into(),
+                amount: Amount::parse("33.33").unwrap(),
+            }],
+        });
+        let tx = input.to_transaction();
+        assert_eq!(tx.meta().period, input.common().period);
+        assert_eq!(tx.meta().spread, input.common().spread);
+        let Transaction::Topup(topup) = tx else {
+            panic!("a top-up")
+        };
+        assert_eq!(topup.parts.len(), 1);
+        assert_eq!(topup.parts[0].timestamp, None);
     }
 }

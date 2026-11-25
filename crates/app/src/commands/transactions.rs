@@ -15,6 +15,7 @@ use mwt_money::preview::TxPreview;
 use mwt_money::{preview, rebase};
 use mwt_usecases::usecases::household::ledger;
 use mwt_usecases::usecases::money::adjustments::adjustment_draft;
+use mwt_usecases::usecases::money::transactions::CreationRules;
 use mwt_usecases::usecases::money::{rates, transactions};
 
 use crate::commands::AppState;
@@ -91,7 +92,7 @@ pub async fn get_tx_graph(
 }
 
 /// Every kind of transaction goes through here: build, auto-categorize,
-/// validate, append, re-derive holdings, persist.
+/// give a period without one by the rules (`no_period_rule` opts out), validate, append, re-derive holdings, persist.
 #[tauri::command]
 pub async fn add_transaction(
     input: TransactionInput,
@@ -102,10 +103,15 @@ pub async fn add_transaction(
         let mut input = input;
         with_vault_mut::<_, IpcError>(&state, |vault| {
             rates::resolve_input_price(vault, &mut input)?;
-            transactions::add_transaction_for(
+            let rules = CreationRules {
+                no_period_rule: input.common().no_period_rule,
+                ..CreationRules::default()
+            };
+            transactions::add_transaction_ruled(
                 vault,
                 input.to_transaction(),
                 input.property_id().as_deref(),
+                &rules,
             )
         })?
     };
