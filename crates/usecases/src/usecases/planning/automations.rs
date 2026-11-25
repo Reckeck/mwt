@@ -363,8 +363,13 @@ fn answer_confirmed(
         crate::usecases::workflow::runs::answer_workflow_wait(vault, wait_id, true, now, zone);
     vault.confirmation = None;
     let run = answered?.run;
-    if let RunOutcome::Rejected { reason, .. } = run.outcome {
-        return Err(rules::funds_error(&vault.doc, reason));
+    match run.outcome {
+        RunOutcome::Rejected { reason, .. } => {
+            return Err(rules::funds_error(&vault.doc, reason));
+        }
+        // The run's own refusal (the rows ask too much, ...): its text keeps the stable code.
+        RunOutcome::Failed { message } => return Err(Error::InvalidInput(message)),
+        _ => {}
     }
     run.created
         .into_iter()

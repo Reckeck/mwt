@@ -360,6 +360,25 @@ fn p5_rule_period_of_one_month_saves_without_the_derived_spread() {
     assert_eq!(spread_of(&saved), None);
 }
 
+/// P5: a manual spread beside a one-month period a rule gave is refused, not dropped silently.
+#[test]
+fn p5_rule_period_of_one_month_with_a_manual_spread_is_refused() {
+    let (_dir, mut vault, card) = vault_with_card();
+    rule_on_salary(&mut vault, Some(PeriodRule::PrevMonth));
+    let mut tx = salary(&card, "90");
+    tx.meta_mut().spread = Some(Spread {
+        mode: SpreadMode::Manual,
+        shares: vec![MonthShare {
+            month: "2026-10".into(),
+            amount: amount("90"),
+        }],
+    });
+    let before = vault.doc.clone();
+    let refused = add_transaction(&mut vault, tx);
+    assert!(matches!(refused, Err(crate::error::Error::InvalidInput(_))));
+    assert!(vault.doc == before);
+}
+
 /// P8: an edit moving a manual spread to a one-month period drops it.
 #[test]
 fn p8_edit_moving_a_manual_spread_to_a_one_month_period_drops_it() {

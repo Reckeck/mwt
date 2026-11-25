@@ -434,6 +434,39 @@ fn an_old_income_and_manual_transfer_stay_unlinked_in_both_formats() {
     }
 }
 
+/// The open hook (M6, Q14): an unmarked fitting pair is converted by `Session::open` itself, once,
+/// and the result is written, in both snapshot formats.
+#[test]
+fn opening_an_unmarked_vault_converts_the_pair_once_and_persists_it() {
+    for fmt in [SnapshotFormat::Json, SnapshotFormat::Pack] {
+        let mut fix = fixture();
+        fix.vault.switch_format(fmt).unwrap();
+        let income = salary(&mut fix.vault, &fix.card);
+        let old = move_to_deposit(&mut fix.vault, transfer_tx(&fix.card, &fix.deposit, "5000"));
+        assert!(!converted(&fix.vault), "{fmt:?}");
+        fix.vault.persist().unwrap();
+        let path = fix.vault.path.clone();
+        drop(fix.vault);
+        let opened = Session::open(path.clone(), "pw").unwrap();
+        assert!(converted(&opened), "{fmt:?}");
+        assert_eq!(opened.doc.operation_templates.len(), 1, "{fmt:?}");
+        assert!(
+            workflow(&opened, &income)
+                .automation
+                .as_ref()
+                .unwrap()
+                .operation_template_id
+                .is_some(),
+            "{fmt:?}"
+        );
+        assert!(!workflow(&opened, &old).active, "{fmt:?}");
+        let converted_doc = opened.doc.clone();
+        drop(opened);
+        let again = Session::open(path, "pw").unwrap();
+        assert!(again.doc == converted_doc, "{fmt:?}");
+    }
+}
+
 #[test]
 fn a_pair_made_after_the_first_open_is_never_converted() {
     let mut fix = fixture();

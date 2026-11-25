@@ -435,6 +435,11 @@ fn a_confirmation_that_still_asks_changes_nothing() {
     let (_dir, mut vault, card, vacation) = setup();
     let run_id = waiting(&mut vault, &card, vec![five_percent(&vacation)]);
     assert_refused(&mut vault, &run_id, "31000", None);
+    let refusal = confirm_at_13(&mut vault, &run_id, "31000", None).unwrap_err();
+    assert!(
+        refusal.to_string().contains("the rule still asks"),
+        "{refusal}"
+    );
     assert_refused(&mut vault, &run_id, "31000", Some(OnOtherAmount::Ask));
     assert_refused(
         &mut vault,
@@ -463,6 +468,19 @@ fn a_confirmation_that_asks_too_much_changes_nothing() {
         &run_id,
         "31000",
         Some(OnOtherAmount::ShrinkRemainder),
+    );
+    let refusal = confirm_at_13(
+        &mut vault,
+        &run_id,
+        "31000",
+        Some(OnOtherAmount::ShrinkRemainder),
+    )
+    .unwrap_err();
+    assert!(
+        refusal
+            .to_string()
+            .contains(crate::usecases::planning::distribution::OVER_ALLOCATED),
+        "{refusal}"
     );
     assert!(
         vault
@@ -802,4 +820,75 @@ fn a_store_row_is_emulated_and_booked_by_a_run() {
     );
     assert_eq!(holding_of(&vault, &savings, &usd()), amount("3000"));
     assert_eq!(holding_of(&vault, &card, &usd()), amount("27000"));
+}
+
+#[test]
+fn a_run_links_only_its_income_to_the_property_not_the_transfers() {
+    let (_dir, mut vault, card, _vacation) = setup();
+    let savings = store(&mut vault, "Savings", StoreKind::Bank, None);
+    let flat = crate::usecases::money::stores::create_store_with(
+        &mut vault,
+        "Flat",
+        StoreKind::Property,
+        "#555",
+        "",
+        None,
+        crate::service::StoreExtras {
+            property: Some(mwt_model::PropertyInfo::default()),
+            ..crate::service::StoreExtras::default()
+        },
+    )
+    .unwrap()
+    .id;
+    let template = template_with(
+        &mut vault,
+        vec![row(
+            DistKind::Percent { pct: amount("10") },
+            DistTarget::Store { id: savings },
+        )],
+    );
+    let id = advance(&mut vault, &card, Some(&template));
+    vault
+        .doc
+        .workflows
+        .iter_mut()
+        .find(|workflow| workflow.id == id)
+        .unwrap()
+        .automation
+        .as_mut()
+        .unwrap()
+        .property_id = Some(flat.clone());
+    let pass = run_on_20_nov(&mut vault);
+    assert_eq!(pass.created.len(), 1);
+    let linked = |tx_id: &str| crate::household::property_links::property_of_tx(&vault.doc, tx_id);
+    assert_eq!(linked(&pass.created[0]), Some(flat.as_str()));
+    let transfers: Vec<_> = vault
+        .doc
+        .transactions
+        .iter()
+        .filter(|tx| matches!(tx, Transaction::Transfer(_)))
+        .collect();
+    assert_eq!(transfers.len(), 1);
+    assert_eq!(linked(&transfers[0].meta().id), None);
+}
+
+#[test]
+fn create_now_keeps_the_error_of_a_refused_preparation() {
+    let (_dir, mut vault, card, _vacation) = setup();
+    let id = advance(&mut vault, &card, None);
+    vault.doc.stores.retain(|known| known.id != card);
+    let now = unix_secs("2026-11-20T12:00:00Z").unwrap();
+    let refusal = run_automation(&mut vault, &id, now).unwrap_err();
+    // The kind (hence the stable code) of the validation error is the one `add_transaction` gives.
+    let plain = crate::usecases::money::transactions::add_transaction(
+        &mut vault,
+        income(&card, "30000", "advance"),
+    )
+    .unwrap_err();
+    assert_eq!(
+        std::mem::discriminant(&refusal),
+        std::mem::discriminant(&plain),
+        "{refusal} / {plain}"
+    );
+    assert_eq!(refusal.to_string(), plain.to_string());
 }

@@ -120,7 +120,7 @@ fn settle_manual(
 }
 
 /// P5, P8: on a single-month period a spread the caller gave with that period is kept (so that
-/// validation refuses it); a spread beside a period a rule gave, or beside a period an edit
+/// validation refuses it); a manual spread is always kept, a spread beside a period a rule gave, or beside a period an edit
 /// moved to that month, is dropped.
 fn keep_on_one_month(
     spread: Spread,
@@ -129,7 +129,7 @@ fn keep_on_one_month(
     before: Option<&SpreadBefore<'_>>,
 ) -> Option<Spread> {
     let period_unchanged = before.is_none_or(|stored| stored.period == Some(period));
-    (period_given && period_unchanged).then_some(spread)
+    (period_unchanged && (period_given || spread.mode == SpreadMode::Manual)).then_some(spread)
 }
 
 /// The spread to store (P6, P8): a single-month period drops it (a spread given with an explicit

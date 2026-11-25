@@ -28,7 +28,7 @@ use crate::usecases::planning::automation_rules::expected_payout;
 use crate::usecases::planning::templates::held_quantity;
 use mwt_model::{
     AccountRef, AssetRef, DistKind, DistTarget, DistributionPart, DistributionRow, EffectRef,
-    OpPeriod, TopupTx, Transaction, TransferTx, TxKind, TxMeta, VaultDoc,
+    OpPeriod, TopupTx, Transaction, TransferTx, TxKind, TxMeta, TxOrigin, VaultDoc,
 };
 
 /// Stable code of a distribution whose rows ask for more than the income.
@@ -46,6 +46,56 @@ struct Income {
     amount: Amount,
     timestamp: String,
     old_parts: Vec<DistributionPart>,
+    /// Who made the income, when an automation run books it: its effects carry this identity so
+    /// that the sync dedupe takes the effects of a removed twin with it.
+    run: Option<RunIdentity>,
+}
+
+/// The run an income came from: its effects are named after it.
+struct RunIdentity {
+    workflow_id: String,
+    run_id: String,
+    /// The workflow and the income's run key (else its planned moment): the same on every device.
+    key: String,
+}
+
+impl RunIdentity {
+    /// Only the income of a run (`booked_by_run`) has one.
+    fn of(origin: &TxOrigin, booked_by_run: bool) -> Option<Self> {
+        let TxOrigin::Workflow {
+            workflow_id,
+            run_id,
+            planned_at,
+            run_key,
+            ..
+        } = origin
+        else {
+            return None;
+        };
+        let moment = run_key.as_ref().or(planned_at.as_ref())?;
+        let key = format!("{workflow_id}:{moment}");
+        booked_by_run.then(|| Self {
+            workflow_id: workflow_id.clone(),
+            run_id: run_id.clone(),
+            key,
+        })
+    }
+
+    /// The key of the effect of the row at `index`.
+    fn effect_key(&self, index: usize) -> String {
+        format!("{}:{index}", self.key)
+    }
+
+    fn effect_origin(&self, index: usize) -> TxOrigin {
+        TxOrigin::Workflow {
+            workflow_id: self.workflow_id.clone(),
+            run_id: self.run_id.clone(),
+            planned_at: None,
+            planned_date: None,
+            estimated: false,
+            run_key: Some(self.effect_key(index)),
+        }
+    }
 }
 
 /// Distribute an income that does not distribute yet: one effect per non-remainder row, the list
@@ -151,6 +201,7 @@ fn read_income(vault: &Session, income_id: &str, now_ms: Option<i64>) -> Result<
         amount: topup.amount,
         timestamp: topup.meta.timestamp.clone(),
         old_parts: topup.distribution.clone().unwrap_or_default(),
+        run: RunIdentity::of(&topup.meta.origin, now_ms.is_some()),
     })
 }
 
@@ -214,11 +265,12 @@ fn book(
         drop_effect(vault, effect);
     }
     recompute_holdings(vault);
-    for part in parts
+    for (index, part) in parts
         .iter_mut()
-        .filter(|part| part.effect.is_none() && !matches!(part.kind, DistKind::Remainder))
+        .enumerate()
+        .filter(|(_, part)| part.effect.is_none() && !matches!(part.kind, DistKind::Remainder))
     {
-        part.effect = Some(create_effect(vault, income, part)?);
+        part.effect = Some(create_effect(vault, income, part, index)?);
     }
     store_list(vault, &income.id, keep_list.then(|| parts.clone()))?;
     let violations = verify_distribution(&vault.books(), &income.id);
@@ -256,16 +308,17 @@ fn create_effect(
     vault: &mut Session,
     income: &Income,
     part: &DistributionPart,
+    index: usize,
 ) -> Result<EffectRef> {
     match &part.target {
-        DistTarget::Store { id } => create_transfer(vault, income, id, part.amount),
+        DistTarget::Store { id } => create_transfer(vault, income, id, part.amount, index),
         DistTarget::Envelope { id } => {
             let envelope_id = id.clone();
-            fill_envelope(vault, income, &envelope_id, part.amount)
+            fill_envelope(vault, income, &envelope_id, part.amount, index)
         }
         DistTarget::Goal { goal_id, store_id } => {
             let envelope_id = goal_envelope(vault, income, goal_id, store_id, part.amount)?;
-            fill_envelope(vault, income, &envelope_id, part.amount)
+            fill_envelope(vault, income, &envelope_id, part.amount, index)
         }
         DistTarget::None => Err(Error::InvalidInput(
             "only the remainder may stay on the card".into(),
@@ -278,8 +331,12 @@ fn create_transfer(
     income: &Income,
     target_store: &str,
     amount: Amount,
+    index: usize,
 ) -> Result<EffectRef> {
     let mut meta = TxMeta::new("");
+    if let Some(run) = &income.run {
+        meta.origin = run.effect_origin(index);
+    }
     meta.timestamp = income.timestamp.clone();
     meta.income_ref = Some(income.id.clone());
     let mut transfer = Transaction::Transfer(TransferTx {
@@ -345,6 +402,7 @@ fn fill_envelope(
     income: &Income,
     envelope_id: &str,
     amount: Amount,
+    index: usize,
 ) -> Result<EffectRef> {
     let envelope = vault
         .doc
@@ -370,6 +428,10 @@ fn fill_envelope(
         .last_mut()
         .ok_or_else(|| Error::InvalidInput("the envelope kept no entry for the move".into()))?;
     entry.income_ref = Some(income.id.clone());
+    // One id on every device: the same run's move merges into one instead of being added twice.
+    if let Some(run) = &income.run {
+        entry.id = run.effect_key(index);
+    }
     Ok(EffectRef::EnvelopeMove {
         envelope_id: envelope_id.to_string(),
         move_id: entry.id.clone(),

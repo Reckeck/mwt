@@ -76,6 +76,8 @@ mod convergence_catalog;
 #[cfg(test)]
 mod convergence_tests;
 #[cfg(test)]
+mod distribution_run_tests;
+#[cfg(test)]
 mod envelope_tests;
 #[cfg(test)]
 mod inflation_tests;

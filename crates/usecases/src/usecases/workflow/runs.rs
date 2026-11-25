@@ -85,7 +85,7 @@ pub fn wf_insert(
 ) -> std::result::Result<Vec<Transaction>, String> {
     insert_checked(vault, txs, now).map_err(|refusal| match refusal {
         InsertRefusal::Short(reason) => describe_reject(&reason),
-        InsertRefusal::Invalid(message) => message,
+        InsertRefusal::Invalid(error) => error.to_string(),
     })
 }
 
@@ -93,7 +93,8 @@ pub fn wf_insert(
 enum InsertRefusal {
     /// The money is short: the one place that says so.
     Short(Box<RejectReason>),
-    Invalid(String),
+    /// Any other refusal, with the error as it was raised (its kind and code stay).
+    Invalid(Error),
 }
 
 fn insert_checked(
@@ -127,7 +128,7 @@ fn book_one(
     mut tx: Transaction,
     now: i64,
 ) -> std::result::Result<Transaction, InsertRefusal> {
-    let invalid = |err: Error| InsertRefusal::Invalid(err.to_string());
+    let invalid = InsertRefusal::Invalid;
     // The user's answer to a question comes first: the rules below read the confirmed amount.
     if let Some(confirmation) = &vault.confirmation {
         confirmation.settle(&mut tx).map_err(invalid)?;
@@ -180,7 +181,7 @@ pub(crate) fn book_manual_run(
                 InsertRefusal::Short(reason) => {
                     crate::planning::automations::funds_error(&vault.doc, *reason)
                 }
-                InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+                InsertRefusal::Invalid(error) => error,
             };
             vault.doc = backup;
             return Err(error);
@@ -563,7 +564,7 @@ fn retry_queued_refusal(
             InsertRefusal::Short(reason) => Error::InsufficientFunds(
                 crate::planning::automations::describe_shortfall(&vault.doc, &reason),
             ),
-            InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+            InsertRefusal::Invalid(error) => error,
         })
     })?;
     // `RunClosing::Required` already failed with `Missing` when the run is gone.
@@ -956,9 +957,8 @@ fn fire_due_automations(
         ctx.trigger_label = trigger_label(&trigger.kind, &at);
         ctx.trigger_values = BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
         ctx.mode = RunMode::Live;
-        let before = vault.doc.transactions.len();
         let mut report = exec::run(vault, &graph, &ctx);
-        link_to_property(vault, &workflow, before);
+        link_to_property(vault, &workflow, &report.run.created);
         let planned = cal.date_of(moment);
         stamp_planned_date(&mut vault.doc, &report.run.created, planned);
         report.run.planned_date = Some(planned);
@@ -969,8 +969,8 @@ fn fire_due_automations(
 }
 
 /// What an automation books belongs to its property (plan G4): the operations
-/// added since `before` get the link.
-fn link_to_property(vault: &mut Session, workflow: &Workflow, before: usize) {
+/// the run created get the link (not the transfers its distribution booked beside them).
+fn link_to_property(vault: &mut Session, workflow: &Workflow, created: &[String]) {
     let Some(property) = workflow
         .automation
         .as_ref()
@@ -981,12 +981,8 @@ fn link_to_property(vault: &mut Session, workflow: &Workflow, before: usize) {
     else {
         return;
     };
-    let made: Vec<String> = vault.doc.transactions[before.min(vault.doc.transactions.len())..]
-        .iter()
-        .map(|tx| tx.meta().id.clone())
-        .collect();
-    for id in made {
-        crate::usecases::household::property_links::set_property_link(vault, &id, Some(&property));
+    for id in created {
+        crate::usecases::household::property_links::set_property_link(vault, id, Some(&property));
     }
 }
 
