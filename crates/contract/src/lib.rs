@@ -35,6 +35,7 @@ use mwt_planning::automations::AutomationDraft;
 use mwt_planning::budget::BudgetDraft;
 use mwt_planning::distribution::ResolvedDistribution;
 use mwt_planning::goals::GoalDraft;
+use mwt_planning::templates::TemplateDraft;
 
 pub use mwt_household::shared_events::inputs::{
     AttachPaymentInput, SetShareOverrideInput, SetSharedDueInput, SetSharedItemSplitInput,
@@ -1083,6 +1084,97 @@ impl DistributionPreview {
                 .collect(),
         }
     }
+}
+
+// -- operation templates (spec op-period I13) -------------------------------------------
+
+/// An operation template as the form edits it; the id, the archive mark and the creation time
+/// are the vault's.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct OperationTemplateInput {
+    pub name: String,
+    pub kind: mwt_model::TemplateKind,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub store_id: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub asset: Option<AssetRef>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub amount: Option<Amount>,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default)]
+    pub comment: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub contact_id: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<mwt_model::PeriodRule>,
+    /// Income only.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub distribution: Option<mwt_model::DistributionRule>,
+}
+
+impl OperationTemplateInput {
+    pub fn to_draft(&self) -> TemplateDraft {
+        TemplateDraft {
+            name: self.name.clone(),
+            kind: self.kind,
+            store_id: self.store_id.clone(),
+            asset: self.asset.clone(),
+            amount: self.amount,
+            categories: self.categories.clone(),
+            comment: self.comment.clone(),
+            contact_id: self.contact_id.clone(),
+            period_rule: self.period_rule,
+            distribution: self.distribution.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct UpdateOperationTemplateInput {
+    pub id: String,
+    pub template: OperationTemplateInput,
+}
+
+/// Quick-add from a template; every field left out comes from the template.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct CreateFromTemplateInput {
+    pub template_id: String,
+    /// RFC3339; now by default.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub timestamp: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub amount: Option<Amount>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub store_id: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub comment: Option<String>,
+    /// «Really none»: the operation takes no period rule.
+    #[serde(default)]
+    pub no_period_rule: bool,
+}
+
+/// The operation a template made. `ask` means the distribution rule asks for a confirmation:
+/// the income is saved whole and nothing is distributed; the tree of an income that distributed
+/// is `get_income_distribution`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct TemplateOperation {
+    pub transaction: Transaction,
+    pub ask: bool,
 }
 
 /// An envelope move a distribution made (spec I9).

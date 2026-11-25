@@ -14,8 +14,8 @@ use mwt_household::utilities::{
 use mwt_model::StoreId;
 use mwt_model::Transaction;
 use mwt_model::{
-    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
-    UtilityItem,
+    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, OperationTemplate,
+    PriceAlert, Reminder, UtilityItem,
 };
 use mwt_model::{MonthShare, OpPeriod, PeriodRule, Spread, SpreadMode, Store};
 use mwt_money::interest as interest_reads;
@@ -32,10 +32,11 @@ use mwt_planning::{
 };
 use mwt_usecases::ipc_contract::{
     AdjustPointsInput, AssetIdent, AutomationInput, BudgetInput, ConfirmDistributionInput,
-    ConfirmEstimatedInput, CreateLoyaltyProgramInput, DistributionPreview, GoalInput,
-    MeterReadingInput, PeriodEffect, PriceAlertInput, ReminderInput, SetDepositTermsInput,
-    SetLoyaltyInfoInput, SimulateAutomationsInput, SnoozeReminderInput, UpdateAutomationInput,
-    UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput, UpdatePriceAlertInput,
+    ConfirmEstimatedInput, CreateFromTemplateInput, CreateLoyaltyProgramInput, DistributionPreview,
+    GoalInput, MeterReadingInput, OperationTemplateInput, PeriodEffect, PriceAlertInput,
+    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput,
+    SnoozeReminderInput, TemplateOperation, UpdateAutomationInput, UpdateBudgetInput,
+    UpdateGoalInput, UpdateMeterReadingInput, UpdateOperationTemplateInput, UpdatePriceAlertInput,
     UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
 use mwt_usecases::service::Session;
@@ -44,11 +45,13 @@ use mwt_usecases::usecases::money::interest;
 use mwt_usecases::usecases::money::rebase;
 use mwt_usecases::usecases::planning::{
     agenda, auto_reminders, automation_card, automation_rules, automations, budget, emergency,
-    goals, my_automations, period_preview, scenarios,
+    goals, my_automations, period_preview, scenarios, templates as template_usecases,
 };
 use mwt_workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
+use crate::commands::enrichment::enrich_in_background;
+use crate::commands::templates;
 use crate::commands::{AppState, with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -338,6 +341,74 @@ pub async fn confirm_distribution(
             &zone,
         )
     })
+}
+
+// -- operation templates (spec op-period I13) ------------------------------------------
+
+/// Every template, live and archived, by name.
+#[tauri::command]
+pub async fn list_operation_templates(
+    state: State<'_, AppState>,
+) -> Result<Vec<OperationTemplate>, IpcError> {
+    with_vault(&state, |vault| {
+        Ok(template_usecases::list_operation_templates(vault))
+    })
+}
+
+#[tauri::command]
+pub async fn create_operation_template(
+    input: OperationTemplateInput,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::create_operation_template(vault, input.to_draft())
+    })
+}
+
+#[tauri::command]
+pub async fn update_operation_template(
+    input: UpdateOperationTemplateInput,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::update_operation_template(vault, &input.id, input.template.to_draft())
+    })
+}
+
+/// Archive or bring back; allowed while automations use the template.
+#[tauri::command]
+pub async fn archive_operation_template(
+    id: String,
+    archived: bool,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::archive_operation_template(vault, &id, archived)
+    })
+}
+
+/// Refused while an automation refers to the template; returns the deleted one.
+#[tauri::command]
+pub async fn delete_operation_template(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::delete_operation_template(vault, &id)
+    })
+}
+
+/// Quick-add: the template's operation with explicit fields winning, its period by the rule, and
+/// for an income with a distribution rule the rows applied in the same write.
+#[tauri::command]
+pub async fn create_transaction_from_template(
+    input: CreateFromTemplateInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TemplateOperation, IpcError> {
+    let done = with_vault_mut::<_, IpcError>(&state, |vault| templates::quick_add(vault, input))?;
+    enrich_in_background(&app, templates::operation_id(&done));
+    Ok(done)
 }
 
 // -- goals -----------------------------------------------------------------------
@@ -903,4 +974,4 @@ pub async fn get_utility_payment_draft(
     })
 }
 
-ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, resolve_period_rule, preview_spread, preview_period_change, preview_distribution_rule, confirm_distribution, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);
+ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, resolve_period_rule, preview_spread, preview_period_change, preview_distribution_rule, confirm_distribution, list_operation_templates, create_operation_template, update_operation_template, archive_operation_template, delete_operation_template, create_transaction_from_template, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);
