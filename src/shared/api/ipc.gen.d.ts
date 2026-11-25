@@ -5415,6 +5415,12 @@ closed_pnl: Amount | null, kind: ImportKind,
 from_account: string | null, to_account: string | null, };
 
 /**
+ * A span of days the list is for, both ends `YYYY-MM-DD`, inclusive: the
+ * period an operation is «for», not the day the money moved (spec I3).
+ */
+type PeriodFilter = { from: string, to: string, };
+
+/**
  * The kind of an operation period (spec op-period P1, P2).
  */
 type PeriodKind = "month" | "half" | "quarter" | "year" | "range";
@@ -8123,7 +8129,12 @@ with_attachments: boolean,
  * Only operations the budget could not value: a side had no rate
  * (Currency-1 · 7).
  */
-unpriced: boolean, };
+unpriced: boolean, 
+/**
+ * Only operations whose period (or, with none, the month of their date)
+ * intersects this span; it combines with `from`/`to` by AND (Q17).
+ */
+period?: PeriodFilter | null, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
