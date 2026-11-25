@@ -99,10 +99,11 @@
   --color-node-list: var(--node-list);
   --color-node-date: var(--node-date);
   --color-node-text: var(--node-text);
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  /* Derived from the themed --radius (0.75rem = 12px in Default): 8 / 12 / 16 / 24 px. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 12px);
   /* Container widths of the project's own. Not --container-sm/md/lg: in Tailwind v4 those
      also size max-w-sm/md/lg, and overriding them made a «md» dialog wider than an «lg» one.
      36rem is Tailwind's own @xl. */
@@ -119,6 +120,11 @@
   --container-wide: 52rem;
   /* A page's widest: on a 4K screen rows stretched to 3000px and the eye lost the line. */
   --container-page: 96rem;
+}
+
+/* Theme token (TK4): a theme overrides it inline; this is the Default value. */
+:where(:root) {
+  --radius: 0.75rem;
 }
 
 :root {
