@@ -306,6 +306,8 @@
   "settings.theme.auto": "Same as system",
   "settings.theme.light": "Light",
   "settings.theme.dark": "Dark",
+  "settings.theme.lightSlot": "Light theme",
+  "settings.theme.darkSlot": "Dark theme",
   "themePicker.label": "Colour theme",
   "themePicker.group.light": "Light themes",
   "themePicker.group.dark": "Dark themes",

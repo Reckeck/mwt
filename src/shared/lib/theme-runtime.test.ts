@@ -112,7 +112,7 @@ describe('useTheme', () => {
     listener?.({ matches: true })
     await nextTick()
     expect(call).toHaveBeenLastCalledWith('set_window_background', { rgb: dark?.toLowerCase() })
-    store.app = { ...store.app, theme: 'light', theme_id: 'nord-snow-storm' } as never
+    store.app = { ...(store.app as object), theme: 'light', theme_id: 'nord-snow-storm' } as never
     await nextTick()
     expect(call).toHaveBeenLastCalledWith('set_window_background', { rgb: light?.toLowerCase() })
     wrapper.unmount()

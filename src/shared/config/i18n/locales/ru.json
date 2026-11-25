@@ -306,6 +306,8 @@
   "settings.theme.auto": "Как в системе",
   "settings.theme.light": "Светлая",
   "settings.theme.dark": "Тёмная",
+  "settings.theme.lightSlot": "Светлая тема",
+  "settings.theme.darkSlot": "Тёмная тема",
   "themePicker.label": "Тема оформления",
   "themePicker.group.light": "Светлые",
   "themePicker.group.dark": "Тёмные",
