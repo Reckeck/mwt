@@ -38,6 +38,12 @@ pub struct RepairReport {
     /// R9: exec ids dropped from the staged queue because the import is
     /// already booked or discarded. Silent: the decision was already made.
     pub dropped_imports: Vec<String>,
+    /// S11: ids of the incomes that lost a distribution part whose effect is gone; the amount of
+    /// the part went back to the remainder.
+    pub dropped_parts: Vec<String>,
+    /// S11: ids of the transfers and envelope moves whose `income_ref` pointed at nothing; the
+    /// record stays, only the back-reference is cleared.
+    pub cleared_income_refs: Vec<String>,
     /// Keys of every record the pass changed (R8 included).
     pub records: Vec<String>,
 }
@@ -156,6 +162,22 @@ impl RepairReport {
                 )
             });
         }
+        if !self.dropped_parts.is_empty() {
+            let count = self.dropped_parts.len();
+            parts.push(if ru {
+                format!("доходы, у которых пропала часть раскладки (сумма вернулась в остаток): {count}")
+            } else {
+                format!("incomes that lost a distribution part (its amount went back to the remainder): {count}")
+            });
+        }
+        if !self.cleared_income_refs.is_empty() {
+            let count = self.cleared_income_refs.len();
+            parts.push(if ru {
+                format!("сброшены ссылки на удалённый или не раскладывающий доход: {count}")
+            } else {
+                format!("cleared links to an income that is gone or does not distribute: {count}")
+            });
+        }
         if !self.unrestored.is_empty() {
             parts.push(
                 (if ru {
@@ -203,7 +225,7 @@ impl RepairReport {
                 .join(",")
         };
         format!(
-            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}",
+            "repair:restored:{}:accounts:{}:envelopes:{}:dups:{}:cash:{}:links:{}:shares:{}:linked:{}:{}:currency:{}:organizer:{}:unrestored:{}:distribution:{}:{}",
             ids(&self.restored),
             ids(&self.detached_accounts),
             ids(&self.dropped_envelopes),
@@ -215,7 +237,9 @@ impl RepairReport {
             self.merged_links.join(","),
             ids(&self.restored_currency),
             ids(&self.restored_organizer),
-            self.unrestored.join(",")
+            self.unrestored.join(","),
+            self.dropped_parts.join(","),
+            self.cleared_income_refs.join(",")
         )
     }
 }

@@ -1125,6 +1125,12 @@ fn trusting_pair(
     (main, main_events, client, client_events)
 }
 
+/// Q19: the op-period fields are additive; the vault format stays at the version it had.
+#[test]
+fn q19_op_period_does_not_bump_the_vault_format_version() {
+    assert_eq!(mwt_model::VAULT_FORMAT_VERSION, 1);
+}
+
 async fn assert_refused_on_both_sides(odd_versions: (u32, u32)) {
     let dir = tempfile::tempdir().unwrap();
     let (main, main_events, client, client_events) = trusting_pair(dir.path(), odd_versions);
