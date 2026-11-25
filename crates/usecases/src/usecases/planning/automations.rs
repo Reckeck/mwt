@@ -20,10 +20,14 @@ use crate::planning::automation_plan as plan;
 use crate::planning::automations::{self as rules, AutomationDraft, AutomationSimulation};
 use crate::service::Session;
 use crate::time::secs_or_now;
+use crate::usecases::planning::distribution::{
+    DistributionPreview, preview_rule, redistribute_income,
+};
 use crate::usecases::react::{ReactionFailure, react};
 use crate::workflow::automation as graph_of;
 use crate::workflow::model::Workflow;
 use crate::{Amount, calendar};
+use mwt_model::{OnOtherAmount, WaitKind};
 
 pub fn automations(vault: &Session) -> Vec<Automation> {
     plan::automations(&vault.books())
@@ -301,4 +305,79 @@ fn clear_estimated(vault: &mut Session, tx_id: &str) -> Result<Transaction> {
         }
         Ok(made)
     })
+}
+
+/// D11, I11: the rows of the automation's next payout under its template's rules, for the given or
+/// the expected amount. Writes nothing.
+pub fn preview_distribution_rule(
+    vault: &Session,
+    automation_id: &str,
+    amount: Option<Amount>,
+    now: i64,
+) -> Result<DistributionPreview> {
+    preview_rule(vault, &automation(vault, automation_id)?, amount, now)
+}
+
+/// D9, Q12, I12: answer "yes" to the confirmation of an automation run that asks, then distribute
+/// the booked income by the template's rule for the confirmed `amount`, as `mode` when the user
+/// chose one. Until then nothing is booked. Returns the income as stored.
+pub fn confirm_distribution(
+    vault: &mut Session,
+    run_id: &str,
+    amount: Amount,
+    mode: Option<OnOtherAmount>,
+    now: i64,
+    zone: &str,
+) -> Result<Transaction> {
+    if mode == Some(OnOtherAmount::Ask) {
+        return Err(Error::InvalidInput(
+            "a confirmation chooses how to distribute, it cannot ask again".into(),
+        ));
+    }
+    let wait = vault
+        .doc
+        .workflow_waits
+        .iter()
+        .find(|wait| wait.run_id == run_id && wait.kind == WaitKind::Confirm)
+        .cloned()
+        .ok_or_else(|| Error::Missing(format!("question of run {run_id}")))?;
+    let automation = automation(vault, &wait.workflow_id)?;
+    let mut rule = automation
+        .operation_template_id
+        .as_deref()
+        .and_then(|id| {
+            vault
+                .doc
+                .operation_templates
+                .iter()
+                .find(|known| known.id == id)
+        })
+        .and_then(|template| template.distribution.clone())
+        .ok_or_else(|| Error::Missing("the template's distribution rule".into()))?;
+    if let Some(mode) = mode {
+        rule.on_other_amount = mode;
+    }
+    let known: HashSet<String> = vault
+        .doc
+        .transactions
+        .iter()
+        .map(|tx| tx.meta().id.clone())
+        .collect();
+    crate::usecases::workflow::runs::answer_workflow_wait(vault, &wait.id, true, now, zone)?;
+    let income_id = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| !known.contains(&tx.meta().id))
+        .map(|tx| tx.meta().id.clone())
+        .ok_or_else(|| Error::InvalidInput("the run made no operation".into()))?;
+    let expected = graph_of::template_amount(&automation.template);
+    redistribute_income(vault, &income_id, amount, &rule, expected)?;
+    vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == income_id)
+        .cloned()
+        .ok_or_else(|| Error::Missing(format!("income {income_id}")))
 }

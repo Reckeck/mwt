@@ -7,21 +7,28 @@
 use crate::Amount;
 use crate::error::{Error, Result};
 use crate::model::ids::StoreId;
+use crate::model::planning::Automation;
 use crate::model::vault::now_iso;
 use crate::money::distribution::{
     BAD_TARGET, NOT_INCOME, WITH_PARTS, validate_distribution_targets, verify_distribution,
 };
 use crate::money::transactions::ensure_fresh_id;
-use crate::planning::distribution::{plan_distribution, resolve_rows};
+use crate::planning::distribution::{
+    ResolvedDistribution, plan_distribution, resolve_distribution, resolve_rows,
+};
 use crate::planning::envelopes::{EnvelopeDraft, new_envelope, plan_fund_envelope, plan_fund_goal};
 use crate::service::Session;
 use crate::usecases::household::envelopes::goal_envelope_for;
 use crate::usecases::money::portfolio::recompute_holdings;
 use crate::usecases::money::stores::rebase_and_commit;
-use crate::usecases::money::transactions::prepare_transaction;
+use crate::usecases::money::transactions::{
+    CreationRules, apply_creation_rules, prepare_transaction,
+};
+use crate::usecases::planning::templates::{RuleRows, held_quantity, resolve_rule_rows};
 use mwt_model::{
-    AccountRef, AssetRef, DistKind, DistTarget, DistributionPart, DistributionRow, EffectRef,
-    TopupTx, Transaction, TransferTx, TxKind, TxMeta, VaultDoc,
+    AccountRef, AssetRef, DistKind, DistTarget, DistributionPart, DistributionRow,
+    DistributionRule, EffectRef, OpPeriod, TopupTx, Transaction, TransferTx, TxKind, TxMeta,
+    VaultDoc,
 };
 
 /// Stable code of a distribution whose rows ask for more than the income.
@@ -371,4 +378,139 @@ fn store_list(
         .ok_or_else(|| Error::Missing(format!("income {income_id}")))?;
     topup.distribution = list;
     Ok(())
+}
+
+/// The next payout of an automation under its template's rules, as the run would book it (D11).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DistributionPreview {
+    /// The next planned moment (RFC3339), moved off days off as the schedule says.
+    pub planned_at: String,
+    /// The period the template's rule gives to that money date (D1, D2).
+    pub period: Option<OpPeriod>,
+    /// The payout the rows are resolved against: the given one, else the expected one.
+    pub amount: Amount,
+    pub resolved: ResolvedDistribution,
+}
+
+/// D11: the rows of the next planned payout of `automation`. A pure read: the payout is a copy of
+/// the one the schedule would book, resolved with the very steps of a run (`apply_creation_rules`,
+/// `resolve_distribution` against the card as held before the rows).
+pub fn preview_rule(
+    vault: &Session,
+    automation: &Automation,
+    amount: Option<Amount>,
+    now: i64,
+) -> Result<DistributionPreview> {
+    let template = automation
+        .operation_template_id
+        .as_deref()
+        .and_then(|id| {
+            vault
+                .doc
+                .operation_templates
+                .iter()
+                .find(|known| known.id == id)
+        })
+        .ok_or_else(|| Error::Missing("the automation's operation template".into()))?;
+    let rule = template
+        .distribution
+        .as_ref()
+        .ok_or_else(|| Error::Missing("the template's distribution rule".into()))?;
+    let calendar = crate::money::interest::calendar_of(&vault.doc);
+    let (_, mut payout) = crate::planning::automation_plan::automation_occurrences(
+        automation,
+        &calendar,
+        now,
+        now + NEXT_DATE_LOOKAHEAD_SECS,
+    )
+    .into_iter()
+    .next()
+    .ok_or_else(|| Error::Missing("a next planned date of the automation".into()))?;
+    let rules = CreationRules {
+        template_rule: template.period_rule,
+        no_period_rule: false,
+    };
+    apply_creation_rules(vault, &mut payout, &rules);
+    let planned_at = payout.meta().timestamp.clone();
+    let period = payout.meta().period.clone();
+    let Transaction::Topup(topup) = &mut payout else {
+        return Err(Error::InvalidInput(format!(
+            "{NOT_INCOME}: only an income distributes"
+        )));
+    };
+    if let Some(amount) = amount {
+        topup.amount = amount;
+    }
+    let resolved = resolve_distribution(
+        rule,
+        topup.amount,
+        crate::workflow::automation::template_amount(&automation.template),
+        held_quantity(vault, topup),
+        topup.asset.minor_places(),
+    )?;
+    Ok(DistributionPreview {
+        planned_at,
+        period,
+        amount: topup.amount,
+        resolved,
+    })
+}
+
+/// A year and a bit: any schedule fires within it.
+const NEXT_DATE_LOOKAHEAD_SECS: i64 = 367 * 86_400;
+
+/// Settle a booked income at the confirmed `amount` under `rule` (Q12): the old effects go, the
+/// amount is set and the rows of the rule are applied against the card as it was before them, all
+/// in one commit. A rule that still asks or asks too much refuses it and nothing changes.
+pub(crate) fn redistribute_income(
+    vault: &mut Session,
+    income_id: &str,
+    amount: Amount,
+    rule: &DistributionRule,
+    expected: Amount,
+) -> Result<()> {
+    let backup = vault.doc.clone();
+    let settled = settle_income(vault, income_id, amount, rule, expected);
+    if settled.is_err() {
+        vault.doc = backup;
+        recompute_holdings(vault);
+        return settled;
+    }
+    rebase_and_commit(vault)
+}
+
+fn settle_income(
+    vault: &mut Session,
+    income_id: &str,
+    amount: Amount,
+    rule: &DistributionRule,
+    expected: Amount,
+) -> Result<()> {
+    drop_distribution_of(vault, income_id)?;
+    let topup = vault
+        .doc
+        .transactions
+        .iter_mut()
+        .find_map(|tx| match tx {
+            Transaction::Topup(topup) if topup.meta.id == income_id => Some(topup),
+            _ => None,
+        })
+        .ok_or_else(|| Error::Missing(format!("income {income_id}")))?;
+    topup.amount = amount;
+    let mut payout = topup.clone();
+    recompute_holdings(vault);
+    // The income is on the card already: what `held_quantity` adds for an unbooked one is nil.
+    payout.amount = Amount::ZERO;
+    let held = held_quantity(vault, &payout);
+    payout.amount = amount;
+    match resolve_rule_rows(rule, &payout, expected, held)? {
+        RuleRows::Ask => Err(Error::InvalidInput(
+            "the rule still asks: choose how to distribute".into(),
+        )),
+        RuleRows::Over(over) => Err(Error::InvalidInput(format!(
+            "{OVER_ALLOCATED}: the rows ask {over} more than the income"
+        ))),
+        RuleRows::Rows(None) => Ok(()),
+        RuleRows::Rows(Some(rows)) => apply_distribution_unsaved(vault, income_id, &rows).map(drop),
+    }
 }

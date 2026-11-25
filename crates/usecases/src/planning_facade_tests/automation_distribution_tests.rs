@@ -9,7 +9,9 @@ use crate::planning::templates::TemplateDraft;
 use crate::service::Session;
 use crate::service::test_support::*;
 use crate::time::unix_secs;
-use crate::usecases::planning::automations::create_automation;
+use crate::usecases::planning::automations::{
+    confirm_distribution, create_automation, preview_distribution_rule,
+};
 use crate::usecases::planning::templates::create_operation_template;
 use crate::usecases::workflow::runs::run_due_workflows;
 use mwt_model::{
@@ -36,6 +38,14 @@ fn envelope_on(vault: &mut Session, card: &str, name: &str) -> String {
 
 /// A template with the advance rule: the first half of the month, then `rows` and the remainder.
 fn template_with(vault: &mut Session, rows: Vec<DistributionRow>) -> String {
+    template_on_other(vault, rows, OnOtherAmount::ShrinkRemainder)
+}
+
+fn template_on_other(
+    vault: &mut Session,
+    rows: Vec<DistributionRow>,
+    on_other_amount: OnOtherAmount,
+) -> String {
     let mut rows = rows;
     rows.push(row(DistKind::Remainder, DistTarget::None));
     create_operation_template(
@@ -53,7 +63,7 @@ fn template_with(vault: &mut Session, rows: Vec<DistributionRow>) -> String {
             period_rule: Some(PeriodRule::ThisHalfFirst),
             distribution: Some(DistributionRule {
                 rows,
-                on_other_amount: OnOtherAmount::ShrinkRemainder,
+                on_other_amount,
                 keep_on_card_min: None,
             }),
         },
@@ -64,6 +74,15 @@ fn template_with(vault: &mut Session, rows: Vec<DistributionRow>) -> String {
 
 /// The advance of 30 000 on the 20th, bound to the template when `template_id` is given.
 fn advance(vault: &mut Session, card: &str, template_id: Option<&str>) -> String {
+    advance_asking(vault, card, template_id, false)
+}
+
+fn advance_asking(
+    vault: &mut Session,
+    card: &str,
+    template_id: Option<&str>,
+    asks: bool,
+) -> String {
     let Transaction::Topup(inner) = income(card, "30000", "advance") else {
         unreachable!()
     };
@@ -80,7 +99,7 @@ fn advance(vault: &mut Session, card: &str, template_id: Option<&str>) -> String
             workday_shift: Default::default(),
             property_id: None,
             time: None,
-            asks: false,
+            asks,
             for_month_offset: Some(0),
         },
     )
@@ -270,4 +289,101 @@ fn over_books_the_income_alone_and_raises_the_notice() {
         vault.doc.notification_log
     );
     assert!(!id.is_empty());
+}
+
+fn day_before() -> i64 {
+    unix_secs("2026-11-19T12:00:00Z").unwrap()
+}
+
+#[test]
+fn a4_the_preview_of_the_next_advance_equals_the_booked_result() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_with(&mut vault, vec![five_percent(&vacation)]);
+    let id = advance(&mut vault, &card, Some(&template));
+    let preview = preview_distribution_rule(&vault, &id, None, day_before()).unwrap();
+    assert_eq!(preview.amount, amount("30000"));
+    let period = preview.period.as_ref().expect("a period");
+    assert_eq!(
+        (period.start.as_str(), period.end.as_str()),
+        ("2026-11-01", "2026-11-15")
+    );
+    let previewed: Vec<_> = preview.resolved.rows.iter().map(|row| row.amount).collect();
+    assert_eq!(previewed, vec![amount("1500"), amount("28500")]);
+    let pass = run_on_20_nov(&mut vault);
+    let Some(Transaction::Topup(topup)) = vault
+        .doc
+        .transactions
+        .iter()
+        .find(|tx| tx.meta().id == pass.created[0])
+    else {
+        panic!("an income")
+    };
+    let booked: Vec<_> = topup
+        .distribution
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|part| part.amount)
+        .collect();
+    assert_eq!(previewed, booked);
+    assert_eq!(topup.meta.period, preview.period);
+}
+
+#[test]
+fn the_preview_resolves_another_amount_and_writes_nothing() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_with(&mut vault, vec![five_percent(&vacation)]);
+    let id = advance(&mut vault, &card, Some(&template));
+    let before = vault.doc.clone();
+    let revision = vault.session.revision();
+    let preview =
+        preview_distribution_rule(&vault, &id, Some(amount("31000")), day_before()).unwrap();
+    let rows: Vec<_> = preview.resolved.rows.iter().map(|row| row.amount).collect();
+    assert_eq!(rows, vec![amount("1550"), amount("29450")]);
+    assert!(vault.doc == before);
+    assert_eq!(vault.session.revision(), revision);
+}
+
+#[test]
+fn a3_ask_books_nothing_until_confirmed_and_confirmation_distributes() {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_on_other(
+        &mut vault,
+        vec![five_percent(&vacation)],
+        OnOtherAmount::Ask,
+    );
+    let id = advance_asking(&mut vault, &card, Some(&template), true);
+    let preview =
+        preview_distribution_rule(&vault, &id, Some(amount("31000")), day_before()).unwrap();
+    assert!(preview.resolved.ask);
+    assert!(preview.resolved.rows.is_empty());
+    let pass = run_on_20_nov(&mut vault);
+    assert!(pass.created.is_empty());
+    assert!(vault.doc.transactions.is_empty());
+    assert_eq!(vault.doc.workflow_waits.len(), 1);
+    let run_id = vault.doc.workflow_waits[0].run_id.clone();
+    let now = unix_secs("2026-11-20T13:00:00Z").unwrap();
+    let income = confirm_distribution(
+        &mut vault,
+        &run_id,
+        amount("31000"),
+        Some(OnOtherAmount::ShrinkRemainder),
+        now,
+        "UTC",
+    )
+    .unwrap();
+    let Transaction::Topup(topup) = income else {
+        panic!("an income")
+    };
+    assert_eq!(topup.amount, amount("31000"));
+    let parts: Vec<_> = topup
+        .distribution
+        .as_ref()
+        .unwrap()
+        .iter()
+        .map(|part| part.amount)
+        .collect();
+    assert_eq!(parts, vec![amount("1550"), amount("29450")]);
+    assert_eq!(holding_of(&vault, &card, &usd()), amount("31000"));
+    assert!(vault.doc.workflow_waits.is_empty());
 }
