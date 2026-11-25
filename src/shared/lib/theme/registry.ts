@@ -1,4 +1,10 @@
 import { alucard } from './themes/alucard'
+import { catppuccinFrappe } from './themes/catppuccin-frappe'
+import { catppuccinLatte } from './themes/catppuccin-latte'
+import { catppuccinMacchiato } from './themes/catppuccin-macchiato'
+import { catppuccinMocha } from './themes/catppuccin-mocha'
+import { gruvboxDark } from './themes/gruvbox-dark'
+import { gruvboxLight } from './themes/gruvbox-light'
 import { defaultDark } from './themes/default-dark'
 import { defaultLight } from './themes/default-light'
 import { dracula } from './themes/dracula'
@@ -17,6 +23,12 @@ export const builtinThemes: readonly Theme[] = [
   nordSnowStorm,
   solarizedDark,
   solarizedLight,
+  gruvboxDark,
+  gruvboxLight,
+  catppuccinMocha,
+  catppuccinMacchiato,
+  catppuccinFrappe,
+  catppuccinLatte,
 ]
 
 export function getTheme(id: string): Theme | undefined {
