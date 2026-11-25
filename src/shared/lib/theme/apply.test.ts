@@ -4,13 +4,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { applyTheme, clearTheme } from './apply'
 import { defaultDark } from './themes/default-dark'
 import { defaultLight } from './themes/default-light'
+import { solarizedLight } from './themes/solarized-light'
 import { THEME_TOKENS } from './tokens'
 import type { Theme } from './types'
 
 const otherLight: Theme = {
   ...defaultLight,
   id: 'other-light',
-  tokens: { ...defaultLight.tokens, '--background': '#FAF0E6' },
+  tokens: { ...defaultLight.tokens, '--background': solarizedLight.tokens['--background'] },
 }
 const css = readFileSync(resolve(process.cwd(), 'src/app/styles.css'), 'utf8')
 

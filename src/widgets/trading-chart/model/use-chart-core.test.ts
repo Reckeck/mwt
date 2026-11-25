@@ -7,12 +7,12 @@ import { nord } from '@/shared/lib/theme/themes/nord'
 
 const theme = shallowRef(defaultDark)
 const palette = vi.fn(() => ({
-  background: '#000000',
-  text: '#ffffff',
-  border: '#111111',
-  primary: '#222222',
-  up: '#00ff00',
-  down: '#ff0000',
+  background: defaultDark.tokens['--background'],
+  text: defaultDark.tokens['--foreground'],
+  border: defaultDark.tokens['--border'],
+  primary: defaultDark.tokens['--primary'],
+  up: defaultDark.tokens['--success'],
+  down: defaultDark.tokens['--destructive'],
 }))
 
 vi.mock('@/shared/lib/theme', async () => {
