@@ -17,6 +17,8 @@ const syncState = {
   connected: ref(false),
   label: ref(''),
 }
+const unreadCount = ref(0)
+vi.mock('@/widgets/notification-bell', () => ({ useUnreadNotices: () => ({ unread: unreadCount, notices: ref({}) }) }))
 vi.mock('@/features/vault-sync', () => ({ useSyncIndicator: () => syncState }))
 
 function setup() {
@@ -80,5 +82,21 @@ describe('useProfileMenu', () => {
     expect(syncRow()?.iconClass).toBe('text-success')
     syncState.unreliable.value = true
     expect(syncRow()?.iconClass).toBe('text-warning')
+  })
+
+  it('lights the dot for unread notices or unreliable sync, only with sync enabled', () => {
+    const menu = setup()
+    syncState.unreliable.value = false
+    unreadCount.value = 2
+    expect(menu.attention.value).toBe(true)
+    unreadCount.value = 0
+    expect(menu.attention.value).toBe(false)
+    syncState.enabled.value = true
+    syncState.unreliable.value = true
+    expect(menu.attention.value).toBe(true)
+    syncState.enabled.value = false
+    expect(menu.attention.value).toBe(false)
+    syncState.enabled.value = true
+    syncState.unreliable.value = false
   })
 })

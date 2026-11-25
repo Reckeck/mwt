@@ -8,6 +8,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { useIsPhone } from '@/shared/lib/phone'
 
+import { goBackOrToRoot } from '../../lib/header-back'
 import { showBack as showsBack } from '../../lib/show-back'
 import { ProfileMenu } from '../profile-menu'
 
@@ -36,10 +37,7 @@ const phone = useIsPhone()
 
 const showBack = computed(() => showsBack(phone.value, route.name))
 
-function goBack() {
-  if (window.history.length > 1) router.back()
-  else void router.push({ name: 'dashboard' })
-}
+const goBack = () => goBackOrToRoot(router, route)
 </script>
 
 <template>
