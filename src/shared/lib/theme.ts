@@ -63,17 +63,40 @@ function paintWindow(theme: Theme) {
   }
 }
 
+function readMirror(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+/** Before the settings load the choice is the one index.html already painted (TP4), not Default. */
+function mirroredChoice(): ThemeChoice {
+  const stored = readMirror(THEME_STORAGE_KEY)
+  return {
+    preference: stored === 'light' || stored === 'dark' ? stored : 'auto',
+    themeId: readMirror(THEME_ID_STORAGE_KEY),
+    themeLightId: readMirror(THEME_LIGHT_ID_STORAGE_KEY),
+    themeDarkId: readMirror(THEME_DARK_ID_STORAGE_KEY),
+  }
+}
+
 export function useTheme() {
   const settingsStore = useSettingsStore()
   const media = window.matchMedia('(prefers-color-scheme: dark)')
   const systemDark = ref(media.matches)
 
-  const choice = computed<ThemeChoice>(() => ({
-    preference: settingsStore.app?.theme ?? 'auto',
-    themeId: settingsStore.app?.theme_id ?? null,
-    themeLightId: settingsStore.app?.theme_light_id ?? null,
-    themeDarkId: settingsStore.app?.theme_dark_id ?? null,
-  }))
+  const choice = computed<ThemeChoice>(() => {
+    const { app } = settingsStore
+    if (!app) return mirroredChoice()
+    return {
+      preference: app.theme ?? 'auto',
+      themeId: app.theme_id ?? null,
+      themeLightId: app.theme_light_id ?? null,
+      themeDarkId: app.theme_dark_id ?? null,
+    }
+  })
   const theme = computed(() => resolveTheme(choice.value, systemDark.value))
   const resolved = computed<ResolvedTheme>(() => theme.value.mode)
 

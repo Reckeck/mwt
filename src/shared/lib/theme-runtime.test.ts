@@ -117,4 +117,29 @@ describe('useTheme', () => {
     expect(call).toHaveBeenLastCalledWith('set_window_background', { rgb: light?.toLowerCase() })
     wrapper.unmount()
   })
+
+  it('before the settings load it keeps the mirrored theme instead of applying Default (TP4)', () => {
+    const store = useSettingsStore()
+    store.app = null
+    localStorage.setItem('trade-app:theme', 'dark')
+    localStorage.setItem('trade-app:theme-id', 'dracula')
+    vi.mocked(call).mockClear()
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useTheme()
+          return () => null
+        },
+      }),
+    )
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    const dracula = getTheme('dracula')?.tokens['--background']
+    expect(document.documentElement.style.getPropertyValue('--background')).toBe(dracula)
+    const colours = vi
+      .mocked(call)
+      .mock.calls.filter(([name]) => name === 'set_window_background')
+      .map(([, args]) => (args as { rgb: string }).rgb)
+    expect(colours).toEqual([dracula?.toLowerCase()])
+    wrapper.unmount()
+  })
 })

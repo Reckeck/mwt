@@ -29,7 +29,7 @@ function setMode(mode: Theme) {
 </script>
 
 <template>
-  <div class="grid gap-4">
+  <div class="grid gap-4" data-tour="appearance-settings">
     <div class="grid gap-1.5">
       <Label>{{ t('settings.theme.title') }}</Label>
       <ToggleGroup
