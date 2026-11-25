@@ -32,7 +32,7 @@ function defaultTheme(mode: ThemeMode): Theme {
 }
 
 /** A stored id counts only when it exists and has the wanted mode; otherwise Default of the mode (TP7). */
-function themeOfMode(id: string | null, mode: ThemeMode): Theme {
+export function themeOfMode(id: string | null, mode: ThemeMode): Theme {
   const found = id ? getTheme(id) : undefined
   return found && found.mode === mode ? found : defaultTheme(mode)
 }

@@ -4,14 +4,14 @@ import type { Theme } from '../types'
 /**
  * Kanagawa Lotus: mode light, radius 0.25rem.
  * Upstream palette: Kanagawa (https://github.com/rebelot/kanagawa.nvim), MIT licence, source https://github.com/rebelot/kanagawa.nvim.
- * tuned from upstream: --muted-foreground, #605E52
- * tuned from upstream: --success, #516438
- * tuned from upstream: --warning, #934F00
- * tuned from upstream: --money-income, #516438
- * tuned from upstream: --money-expense, #AA3747
- * tuned from upstream: --money-transfer, #47618F
- * tuned from upstream: --money-in-transit, #934F00
- * tuned from upstream: --destructive, #AA3747
+ * tuned from upstream: --muted-foreground, #8A8980
+ * tuned from upstream: --success, #6F894E
+ * tuned from upstream: --warning, #CC6D00
+ * tuned from upstream: --money-income, #6F894E
+ * tuned from upstream: --money-expense, #C84053
+ * tuned from upstream: --money-transfer, #4D699B
+ * tuned from upstream: --money-in-transit, #CC6D00
+ * tuned from upstream: --destructive, #C84053
  */
 export const kanagawaLotus: Theme = {
   id: 'kanagawa-lotus',

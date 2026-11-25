@@ -62,7 +62,7 @@ export function useChartCore(options: {
   indicators: Ref<IndicatorKey[]>
   onReady: (handles: ChartHandles) => void
 }) {
-  const { resolved: theme } = useTheme()
+  const { theme } = useTheme()
   const handles: ChartHandles = markRaw({
     chart: null,
     candles: null,

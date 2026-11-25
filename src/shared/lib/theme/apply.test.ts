@@ -7,6 +7,11 @@ import { defaultLight } from './themes/default-light'
 import { THEME_TOKENS } from './tokens'
 import type { Theme } from './types'
 
+const otherLight: Theme = {
+  ...defaultLight,
+  id: 'other-light',
+  tokens: { ...defaultLight.tokens, '--background': '#FAF0E6' },
+}
 const css = readFileSync(resolve(process.cwd(), 'src/app/styles.css'), 'utf8')
 
 afterEach(() => {
@@ -31,13 +36,15 @@ describe('applyTheme', () => {
     expect(root.style.colorScheme).toBe('light')
   })
 
-  it('adds the theme-switching frame only when the mode changes', () => {
+  it('adds the theme-switching frame whenever the applied theme changes, not on a repeat', () => {
     const root = document.documentElement
     applyTheme(defaultLight, root)
     expect(root.classList.contains('theme-switching')).toBe(true)
     root.classList.remove('theme-switching')
     applyTheme(defaultLight, root)
     expect(root.classList.contains('theme-switching')).toBe(false)
+    applyTheme(otherLight, root)
+    expect(root.classList.contains('theme-switching')).toBe(true)
   })
 
   it('ignores properties outside the whitelist and never touches --font-*', () => {

@@ -4,26 +4,26 @@ import type { Theme } from '../types'
 /**
  * Everforest light: mode light, radius 0.5rem.
  * Upstream palette: Everforest (https://github.com/sainnhe/everforest), MIT licence, source https://github.com/sainnhe/everforest.
- * tuned from upstream: --muted-foreground, #626C61
- * tuned from upstream: --primary, #6A7A01
- * tuned from upstream: --destructive, #BA403D
- * tuned from upstream: --success, #627001
- * tuned from upstream: --warning, #886300
- * tuned from upstream: --money-income, #627001
- * tuned from upstream: --money-expense, #BA403D
- * tuned from upstream: --money-transfer, #2C6F94
- * tuned from upstream: --money-in-transit, #886300
- * tuned from upstream: --chart-1, #388EBD
- * tuned from upstream: --chart-2, #7D8F01
- * tuned from upstream: --chart-3, #D06A21
- * tuned from upstream: --chart-4, #CD61AC
- * tuned from upstream: --chart-5, #EE524F
- * tuned from upstream: --chart-bank, #7D8F01
- * tuned from upstream: --chart-crypto, #D06A21
- * tuned from upstream: --chart-property, #319A72
- * tuned from upstream: --chart-accent, #CD61AC
- * tuned from upstream: --chart-income, #7D8F01
- * tuned from upstream: --chart-over, #EE524F
+ * tuned from upstream: --muted-foreground, #939F91
+ * tuned from upstream: --primary, #8DA101
+ * tuned from upstream: --destructive, #F85552
+ * tuned from upstream: --success, #8DA101
+ * tuned from upstream: --warning, #DFA000
+ * tuned from upstream: --money-income, #8DA101
+ * tuned from upstream: --money-expense, #F85552
+ * tuned from upstream: --money-transfer, #3A94C5
+ * tuned from upstream: --money-in-transit, #DFA000
+ * tuned from upstream: --chart-1, #3A94C5
+ * tuned from upstream: --chart-2, #8DA101
+ * tuned from upstream: --chart-3, #F57D26
+ * tuned from upstream: --chart-4, #DF69BA
+ * tuned from upstream: --chart-5, #F85552
+ * tuned from upstream: --chart-bank, #8DA101
+ * tuned from upstream: --chart-crypto, #F57D26
+ * tuned from upstream: --chart-property, #35A77C
+ * tuned from upstream: --chart-accent, #DF69BA
+ * tuned from upstream: --chart-income, #8DA101
+ * tuned from upstream: --chart-over, #F85552
  */
 export const everforestLight: Theme = {
   id: 'everforest-light',

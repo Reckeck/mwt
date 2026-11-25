@@ -5,11 +5,14 @@ const WHITELIST: ReadonlySet<string> = new Set(THEME_TOKENS)
 
 /**
  * Applies a theme to `root` (TK6): only whitelisted tokens become inline custom properties; the
- * mode sets `.dark`, `data-theme` and `colorScheme`. A mode change gets one frame without
- * transitions, like the preference switch in `shared/lib/theme.ts`.
+ * mode sets `.dark`, `data-theme` and `colorScheme`. Any change of the applied theme (another mode
+ * or another theme of the same mode) gets one frame without transitions, like the preference switch
+ * in `shared/lib/theme.ts`.
  */
 export function applyTheme(theme: Theme, root: HTMLElement = document.documentElement): void {
-  const changed = root.getAttribute('data-theme') !== theme.mode
+  const changed =
+    root.getAttribute('data-theme') !== theme.mode ||
+    root.style.getPropertyValue('--background') !== theme.tokens['--background']
   if (changed) root.classList.add('theme-switching')
   for (const [name, value] of Object.entries(theme.tokens)) {
     if (WHITELIST.has(name)) root.style.setProperty(name, value)

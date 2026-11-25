@@ -4,24 +4,24 @@ import type { Theme } from '../types'
 /**
  * Ayu light: mode light, radius 0.5rem.
  * Upstream palette: Ayu (https://github.com/ayu-theme/ayu-colors), MIT licence, source https://github.com/ayu-theme/ayu-colors.
- * tuned from upstream: --muted-foreground, #666C73
- * tuned from upstream: --primary, #AD622C
- * tuned from upstream: --destructive, #A64E4E
- * tuned from upstream: --success, #427529
- * tuned from upstream: --warning, #886329
- * tuned from upstream: --money-income, #427529
- * tuned from upstream: --money-expense, #A64E4E
- * tuned from upstream: --money-transfer, #276D9F
- * tuned from upstream: --money-in-transit, #886329
- * tuned from upstream: --chart-1, #3592D4
- * tuned from upstream: --chart-2, #589C37
- * tuned from upstream: --chart-3, #CC7334
- * tuned from upstream: --chart-5, #DD6868
- * tuned from upstream: --chart-bank, #589C37
- * tuned from upstream: --chart-crypto, #CC7334
- * tuned from upstream: --chart-property, #3D9C7D
- * tuned from upstream: --chart-income, #589C37
- * tuned from upstream: --chart-over, #DD6868
+ * tuned from upstream: --muted-foreground, #8A9199
+ * tuned from upstream: --primary, #FA8D3E
+ * tuned from upstream: --destructive, #F07171
+ * tuned from upstream: --success, #6CBF43
+ * tuned from upstream: --warning, #F2AE49
+ * tuned from upstream: --money-income, #6CBF43
+ * tuned from upstream: --money-expense, #F07171
+ * tuned from upstream: --money-transfer, #399EE6
+ * tuned from upstream: --money-in-transit, #F2AE49
+ * tuned from upstream: --chart-1, #399EE6
+ * tuned from upstream: --chart-2, #6CBF43
+ * tuned from upstream: --chart-3, #FA8D3E
+ * tuned from upstream: --chart-5, #F07171
+ * tuned from upstream: --chart-bank, #6CBF43
+ * tuned from upstream: --chart-crypto, #FA8D3E
+ * tuned from upstream: --chart-property, #4CBF99
+ * tuned from upstream: --chart-income, #6CBF43
+ * tuned from upstream: --chart-over, #F07171
  */
 export const ayuLight: Theme = {
   id: 'ayu-light',

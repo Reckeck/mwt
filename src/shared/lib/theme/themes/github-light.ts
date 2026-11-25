@@ -4,8 +4,8 @@ import type { Theme } from '../types'
 /**
  * GitHub light: mode light, radius 0.375rem.
  * Upstream palette: GitHub Primer (https://primer.style/foundations/color), MIT licence, source https://github.com/primer/primitives.
- * tuned from upstream: --money-in-transit, #946300
- * tuned from upstream: --warning, #946300
+ * tuned from upstream: --money-in-transit, #9A6700
+ * tuned from upstream: --warning, #9A6700
  */
 export const githubLight: Theme = {
   id: 'github-light',

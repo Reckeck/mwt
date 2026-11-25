@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { ThemePicker } from '@/features/theme-picker'
-import { getTheme } from '@/shared/lib/theme/registry'
+import { themeOfMode } from '@/shared/lib/theme'
 import type { ThemeMode } from '@/shared/lib/theme/types'
 import { Label } from '@/shared/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
@@ -20,12 +20,6 @@ const { t } = useI18n()
 const settingsStore = useSettingsStore()
 
 const modes: Theme[] = ['light', 'dark', 'auto']
-
-/** A stored id counts only when it exists with the wanted mode; otherwise Default of the mode (TP8). */
-function selectedOf(id: string | null, mode: ThemeMode): string {
-  const found = id ? getTheme(id) : undefined
-  return found && found.mode === mode ? found.id : `default-${mode}`
-}
 
 const singleMode = computed<ThemeMode | null>(() => (settingsStore.theme === 'auto' ? null : settingsStore.theme))
 
@@ -56,7 +50,7 @@ function setMode(mode: Theme) {
     <ThemePicker
       v-if="singleMode"
       :modes="singleMode"
-      :selected-id="selectedOf(settingsStore.themeId, singleMode)"
+      :selected-id="themeOfMode(settingsStore.themeId, singleMode).id"
       @select="emit('change', { theme_id: $event })"
     />
     <template v-else>
@@ -64,7 +58,7 @@ function setMode(mode: Theme) {
         <Label>{{ t('settings.theme.lightSlot') }}</Label>
         <ThemePicker
           modes="light"
-          :selected-id="selectedOf(settingsStore.themeLightId, 'light')"
+          :selected-id="themeOfMode(settingsStore.themeLightId, 'light').id"
           @select="emit('change', { theme_light_id: $event })"
         />
       </div>
@@ -72,7 +66,7 @@ function setMode(mode: Theme) {
         <Label>{{ t('settings.theme.darkSlot') }}</Label>
         <ThemePicker
           modes="dark"
-          :selected-id="selectedOf(settingsStore.themeDarkId, 'dark')"
+          :selected-id="themeOfMode(settingsStore.themeDarkId, 'dark').id"
           @select="emit('change', { theme_dark_id: $event })"
         />
       </div>

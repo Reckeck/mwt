@@ -4,10 +4,10 @@ import type { Theme } from '../types'
 /**
  * Everforest dark: mode dark, radius 0.5rem.
  * Upstream palette: Everforest (https://github.com/sainnhe/everforest), MIT licence, source https://github.com/sainnhe/everforest.
- * tuned from upstream: --muted-foreground, #AFB8B1
- * tuned from upstream: --money-expense, #EEA2A3
- * tuned from upstream: --money-transfer, #89C1B9
- * tuned from upstream: --destructive, #EEA2A3
+ * tuned from upstream: --muted-foreground, #859289
+ * tuned from upstream: --money-expense, #E67E80
+ * tuned from upstream: --money-transfer, #7FBBB3
+ * tuned from upstream: --destructive, #E67E80
  */
 export const everforestDark: Theme = {
   id: 'everforest-dark',

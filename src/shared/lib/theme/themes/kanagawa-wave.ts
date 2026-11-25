@@ -4,8 +4,8 @@ import type { Theme } from '../types'
 /**
  * Kanagawa Wave: mode dark, radius 0.25rem.
  * Upstream palette: Kanagawa (https://github.com/rebelot/kanagawa.nvim), MIT licence, source https://github.com/rebelot/kanagawa.nvim.
- * tuned from upstream: --money-expense, #E9848F
- * tuned from upstream: --destructive, #E9848F
+ * tuned from upstream: --money-expense, #E46876
+ * tuned from upstream: --destructive, #E46876
  */
 export const kanagawaWave: Theme = {
   id: 'kanagawa-wave',
