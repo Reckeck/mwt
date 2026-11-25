@@ -5,7 +5,7 @@ use crate::calendar::Calendar;
 use crate::error::Error;
 use crate::model::store::StoreKind;
 use crate::money::bulk::TxStore;
-use crate::money::distribution::{WITH_PARTS, verify_distribution};
+use crate::money::distribution::{LINKED_TO_INCOME, WITH_PARTS, verify_distribution};
 use crate::money::worth::FlowClass;
 use crate::planning::envelopes::EnvelopeDraft;
 use crate::service::Session;
@@ -13,8 +13,7 @@ use crate::service::test_support::{amount, empty_vault, income_of, store};
 use crate::usecases::household::envelopes::{create_envelope, delete_envelope, fund_envelope};
 use crate::usecases::money::bulk::{delete_transactions, move_transactions, restore_transactions};
 use crate::usecases::money::transactions::{
-    LINKED_TO_INCOME, add_linked_transactions, add_transaction, delete_transaction,
-    update_transaction,
+    add_linked_transactions, add_transaction, delete_transaction, update_transaction,
 };
 use crate::usecases::planning::distribution::{
     OVER_ALLOCATED, apply_distribution, remove_distribution, replace_distribution,
@@ -750,4 +749,38 @@ fn a2b_restoring_a_deleted_distributed_income_restores_its_distribution() {
     assert_eq!(transfers(&fixture), 1);
     assert_eq!(allocated(&fixture, &fixture.vacation), amount("6000"));
     clean(&fixture);
+}
+
+/// S9: an edit that turns a plain operation into an income carrying a distribution is refused.
+#[test]
+fn s9_edit_into_a_topup_with_a_distribution_is_refused() {
+    let mut fixture = fixture();
+    let spent = crate::service::test_support::payment(&fixture.card, "10", "coffee");
+    let id = add_transaction(&mut fixture.vault, spent)
+        .unwrap()
+        .meta()
+        .id
+        .clone();
+    let before = snapshot(&fixture);
+    let salary = salary_with(&fixture, "20000");
+    refused_as_linked(update_transaction(&mut fixture.vault, &id, salary));
+    assert_eq!(snapshot(&fixture), before);
+}
+
+/// S9: a forged income_ref in a restore is refused like in an add, the vault unchanged.
+#[test]
+fn s9_restore_refuses_a_supplied_income_ref() {
+    let mut fixture = fixture();
+    let spent = crate::service::test_support::payment(&fixture.card, "10", "coffee");
+    let id = add_transaction(&mut fixture.vault, spent)
+        .unwrap()
+        .meta()
+        .id
+        .clone();
+    let mut deleted = delete_transactions(&mut fixture.vault, &[id]).unwrap();
+    deleted[0].transaction.meta_mut().income_ref = Some(fixture.income_id.clone());
+    let before = snapshot(&fixture);
+    let err = restore_transactions(&mut fixture.vault, deleted).unwrap_err();
+    assert!(err.to_string().contains("INCOME_REF_RESERVED"), "{err}");
+    assert_eq!(snapshot(&fixture), before);
 }

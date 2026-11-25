@@ -9,6 +9,7 @@ use crate::error::{Error, Result};
 use crate::model::store::StoreScope;
 use crate::model::transaction::Transaction;
 use crate::model::vault::{iso_to_millis, now_iso};
+use crate::money::distribution::{income_ref_reserved, linked_to_income};
 use crate::money::transactions::{
     TransactionPatch, complete_transaction, ensure_fresh_id, patched, replacing,
 };
@@ -91,19 +92,6 @@ pub fn add_transaction_for(
     Ok(tx)
 }
 
-/// Stable code of an operation that arrives already linked to an income.
-pub const INCOME_REF_RESERVED: &str = "INCOME_REF_RESERVED";
-
-/// Stable code of an edit that would break an income's distribution (spec S11 guards).
-pub const LINKED_TO_INCOME: &str = "LINKED_TO_INCOME";
-
-/// The refusal of a change to a record an income's distribution owns.
-pub(crate) fn linked_to_income(what: &str) -> Error {
-    Error::InvalidInput(format!(
-        "{LINKED_TO_INCOME}: {what} belongs to an income distribution; change it with replace_distribution"
-    ))
-}
-
 /// A record with an `income_ref` cannot be deleted on its own.
 pub(crate) fn refuse_if_linked(tx: &Transaction) -> Result<()> {
     if tx.meta().income_ref.is_some() {
@@ -140,6 +128,9 @@ fn keep_income_links(stored: &Transaction, tx: &mut Transaction) -> Result<()> {
         }
         (Transaction::Topup(old), _) if old.distribution.is_some() => {
             return Err(linked_to_income("an income with a distribution"));
+        }
+        (_, Transaction::Topup(new)) if new.distribution.is_some() => {
+            return Err(linked_to_income("an operation that is not an income"));
         }
         _ => {}
     }
@@ -190,11 +181,9 @@ fn stored_income(vault: &Session, income: &Transaction) -> Result<Transaction> {
 }
 
 /// Only a distribution may link an operation to an income; a caller's link is forged.
-fn refuse_forged_income_ref(tx: &Transaction) -> Result<()> {
+pub(crate) fn refuse_forged_income_ref(tx: &Transaction) -> Result<()> {
     if tx.meta().income_ref.is_some() {
-        return Err(Error::InvalidInput(format!(
-            "{INCOME_REF_RESERVED}: only a distribution may link an operation to an income"
-        )));
+        return Err(income_ref_reserved());
     }
     Ok(())
 }

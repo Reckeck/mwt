@@ -100,7 +100,7 @@ pub fn delete_envelope(vault: &mut Session, id: &str) -> Result<()> {
                 .any(|entry| entry.income_ref.is_some())
     });
     if linked {
-        return Err(crate::usecases::money::transactions::linked_to_income(
+        return Err(crate::money::distribution::linked_to_income(
             "a move of this envelope",
         ));
     }

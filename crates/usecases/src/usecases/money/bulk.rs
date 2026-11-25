@@ -4,6 +4,8 @@
 //! the ones before it), and the call ends in one commit; an error puts the
 //! document back as it was and writes nothing.
 
+use std::collections::HashMap;
+
 use crate::error::{Error, Result};
 use crate::model::transaction::Transaction;
 use crate::money::bulk::{
@@ -13,7 +15,8 @@ use crate::service::Session;
 use crate::usecases::household::property_links::{check_property_link, set_property_link};
 
 use super::stores::rebase_and_commit;
-use super::transactions::{linked_to_income, prepare_transaction, refuse_if_linked};
+use super::transactions::{prepare_transaction, refuse_forged_income_ref, refuse_if_linked};
+use crate::money::distribution::linked_to_income;
 use crate::usecases::planning::distribution::{
     apply_distribution_unsaved, drop_distribution_of, rows_of,
 };
@@ -64,10 +67,10 @@ pub fn delete_transactions(vault: &mut Session, ids: &[String]) -> Result<Vec<De
             }
         }
         // The stored incomes with their distribution, kept for the undo.
-        let mut stored_before = Vec::with_capacity(ids.len());
+        let mut stored_before = HashMap::with_capacity(ids.len());
         for id in ids {
             let index = tx_index(&vault.doc, id)?;
-            stored_before.push(vault.doc.transactions[index].clone());
+            stored_before.insert(id, vault.doc.transactions[index].clone());
         }
         for id in ids {
             drop_distribution_of(vault, id)?;
@@ -79,8 +82,9 @@ pub fn delete_transactions(vault: &mut Session, ids: &[String]) -> Result<Vec<De
                 .map(str::to_string);
             crate::usecases::household::shared_events::cascade_shared_delete(vault, id);
             vault.run(|run| Ok(run.doc_mut().transactions.remove(index)))?;
-            let position = ids.iter().position(|other| other == id).unwrap_or_default();
-            let transaction = stored_before[position].clone();
+            let transaction = stored_before
+                .remove(id)
+                .ok_or_else(|| Error::Missing(format!("transaction {id}")))?;
             set_property_link(vault, id, None);
             out.push(DeletedTransaction {
                 transaction,
@@ -95,6 +99,7 @@ pub fn delete_transactions(vault: &mut Session, ids: &[String]) -> Result<Vec<De
 pub fn restore_transactions(vault: &mut Session, items: Vec<DeletedTransaction>) -> Result<()> {
     all_or_nothing(vault, |vault| {
         for item in items {
+            refuse_forged_income_ref(&item.transaction)?;
             let id = item.transaction.meta().id.clone();
             if tx_index(&vault.doc, &id).is_ok() {
                 return Err(Error::InvalidInput(format!(

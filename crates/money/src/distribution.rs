@@ -38,6 +38,24 @@ pub const NOT_INCOME: &str = "DISTRIBUTION_NOT_INCOME";
 pub const WITH_PARTS: &str = "DISTRIBUTION_WITH_PARTS";
 /// A part's target is missing, foreign, archived or not allowed for its kind.
 pub const BAD_TARGET: &str = "DISTRIBUTION_BAD_TARGET";
+/// Stable code of an operation that arrives already linked to an income.
+pub const INCOME_REF_RESERVED: &str = "INCOME_REF_RESERVED";
+/// Stable code of an edit that would break an income's distribution (spec S11 guards).
+pub const LINKED_TO_INCOME: &str = "LINKED_TO_INCOME";
+
+/// The refusal of a change to a record an income's distribution owns.
+pub fn linked_to_income(what: &str) -> Error {
+    Error::InvalidInput(format!(
+        "{LINKED_TO_INCOME}: {what} belongs to an income distribution; change it with replace_distribution"
+    ))
+}
+
+/// The refusal of an operation a caller linked to an income itself.
+pub fn income_ref_reserved() -> Error {
+    Error::InvalidInput(format!(
+        "{INCOME_REF_RESERVED}: only a distribution may link an operation to an income"
+    ))
+}
 
 /// One broken invariant, with a stable `code` for callers and tests.
 #[derive(Debug, Clone, PartialEq, Eq)]
