@@ -4,10 +4,12 @@
 
 use mwt_base::error::{Error, Result};
 use mwt_model::{
-    Automation, DistributionPart, DistributionRule, OperationTemplate, PartStatus, PeriodRule,
-    TemplateKind, TxKind, VaultDoc,
+    Automation, DistKind, DistributionPart, DistributionRule, OperationTemplate, PartStatus,
+    PeriodRule, TemplateKind, TxKind, VaultDoc,
 };
-use mwt_money::distribution::{check_single_remainder, validate_distribution_targets};
+use mwt_money::distribution::{
+    PART_NOT_POSITIVE, check_single_remainder, validate_distribution_targets,
+};
 
 /// What the user saves; the id, the archive mark and the creation time are not theirs to set.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -81,9 +83,25 @@ fn check_references(doc: &VaultDoc, template: &OperationTemplate) -> Result<()> 
     Ok(())
 }
 
+/// V1: a sum or a percent row asks for something; the floor may cut a row to zero later, never the rule.
+fn check_rows_positive(rule: &DistributionRule) -> Result<()> {
+    let not_positive = rule.rows.iter().find_map(|row| match &row.kind {
+        DistKind::Sum { amount } if !amount.is_positive() => Some(*amount),
+        DistKind::Percent { pct } if !pct.is_positive() => Some(*pct),
+        _ => None,
+    });
+    match not_positive {
+        Some(value) => Err(Error::InvalidInput(format!(
+            "{PART_NOT_POSITIVE}: a row of {value} is not allowed"
+        ))),
+        None => Ok(()),
+    }
+}
+
 /// D7: ordered rows, exactly one remainder, targets that exist and are own (S6, S7).
 fn check_distribution_rule(doc: &VaultDoc, rule: &DistributionRule) -> Result<()> {
     check_single_remainder(rule.rows.iter().map(|row| &row.kind))?;
+    check_rows_positive(rule)?;
     let parts: Vec<DistributionPart> = rule
         .rows
         .iter()

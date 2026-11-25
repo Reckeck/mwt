@@ -281,6 +281,27 @@ fn p8_even_is_rederived_and_a_single_month_period_drops_the_spread() {
     assert_eq!(spread_of(&dropped), None);
 }
 
+/// P5: a manual spread on a one-month period is refused at creation, the vault unchanged.
+#[test]
+fn p5_manual_spread_on_a_one_month_period_is_refused_at_creation() {
+    let (_dir, mut vault, card) = vault_with_card();
+    let month = OpPeriod {
+        kind: PeriodKind::Month,
+        start: "2026-11-01".into(),
+        end: "2026-11-30".into(),
+    };
+    let tx = with_spread(
+        salary(&card, "90"),
+        month,
+        SpreadMode::Manual,
+        &[("2026-11", "90")],
+    );
+    let before = vault.doc.transactions.len();
+    let refused = add_transaction(&mut vault, tx);
+    assert!(matches!(refused, Err(crate::error::Error::InvalidInput(_))));
+    assert_eq!(vault.doc.transactions.len(), before);
+}
+
 fn income_in(vault: &Session, month: &str, basis: Basis) -> Amount {
     crate::usecases::planning::budget::month_summary_with_basis(
         &vault.books(),

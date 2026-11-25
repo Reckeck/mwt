@@ -165,6 +165,52 @@ fn t2_rule_targets_exist_and_are_own() {
     assert!(refused(&mut vault, input).contains("remainder"));
 }
 
+/// V1: a sum or percent row that is not positive is refused on create and on update.
+#[test]
+fn v1_rows_must_be_positive() {
+    let (_dir, mut vault, card) = vault_with_card();
+    let bad_kinds = [
+        DistKind::Sum {
+            amount: amount("0"),
+        },
+        DistKind::Sum {
+            amount: amount("-5000"),
+        },
+        DistKind::Percent { pct: amount("0") },
+    ];
+    let mut ok = draft("Salary", TemplateKind::Income);
+    ok.distribution = Some(rule(vec![remainder()]));
+    let saved = create_operation_template(&mut vault, ok.clone()).unwrap();
+    let before = vault.doc.operation_templates.clone();
+    for kind in bad_kinds {
+        let mut input = ok.clone();
+        input.distribution = Some(rule(vec![
+            row(kind, DistTarget::Store { id: card.clone() }),
+            remainder(),
+        ]));
+        let created = message(
+            create_operation_template(
+                &mut vault,
+                TemplateDraft {
+                    name: "Other".into(),
+                    ..input.clone()
+                },
+            )
+            .unwrap_err(),
+        );
+        assert!(
+            created.contains("DISTRIBUTION_PART_NOT_POSITIVE"),
+            "{created}"
+        );
+        let updated = message(update_operation_template(&mut vault, &saved.id, input).unwrap_err());
+        assert!(
+            updated.contains("DISTRIBUTION_PART_NOT_POSITIVE"),
+            "{updated}"
+        );
+        assert_eq!(vault.doc.operation_templates, before);
+    }
+}
+
 #[test]
 fn t2_name_is_required_and_unique_among_live_templates() {
     let (_dir, mut vault, _card) = vault_with_card();
@@ -628,6 +674,52 @@ mod quick_add {
         let saved = add_transaction_ruled(&mut vault, tx, None, &rules).unwrap();
         assert_eq!(saved.meta().period, Some(period));
         assert_eq!(holding_of(&vault, &deposit, &rub()), amount("100"));
+    }
+
+    /// S1: parts set on an input saved under a template period rule are stored; the period stays.
+    #[test]
+    fn parts_on_an_input_under_a_template_rule_are_saved() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let mut tx = crate::service::test_support::income_of(&card, rub(), "1000", "0.01", "x");
+        at(&mut tx, "2026-11-05T10:00:00Z");
+        let period = mwt_model::OpPeriod {
+            kind: mwt_model::PeriodKind::Month,
+            start: "2026-09-01".into(),
+            end: "2026-09-30".into(),
+        };
+        tx.meta_mut().period = Some(period.clone());
+        if let Transaction::Topup(topup) = &mut tx {
+            topup.distribution = Some(vec![
+                mwt_model::DistributionPart {
+                    kind: DistKind::Sum {
+                        amount: amount("100"),
+                    },
+                    target: DistTarget::Store {
+                        id: deposit.clone(),
+                    },
+                    amount: amount("100"),
+                    status: mwt_model::PartStatus::Done,
+                    effect: None,
+                },
+                mwt_model::DistributionPart {
+                    kind: DistKind::Remainder,
+                    target: DistTarget::None,
+                    amount: amount("900"),
+                    status: mwt_model::PartStatus::Done,
+                    effect: None,
+                },
+            ]);
+        }
+        let rules = CreationRules {
+            template_rule: Some(PeriodRule::PrevHalfSecond),
+            no_period_rule: false,
+        };
+        let saved = add_transaction_ruled(&mut vault, tx, None, &rules).unwrap();
+        let Transaction::Topup(topup) = &saved else {
+            panic!("an income");
+        };
+        assert_eq!(topup.distribution.as_ref().map(Vec::len), Some(2));
+        assert_eq!(saved.meta().period, Some(period));
     }
 
     #[test]
