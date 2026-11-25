@@ -56,8 +56,12 @@ describe('Appearance settings', () => {
   it('under Auto two pickers persist the light and the dark slot, keeping themeId', async () => {
     const { wrapper, store } = await mountModal({ theme: 'auto', theme_id: 'nord' })
     expect(wrapper.findAll('[role="radiogroup"]')).toHaveLength(2)
-    const lightId = wrapper.find('[data-slot="light"] [role="radio"]:not([aria-checked="true"])').attributes('data-theme-id')
-    const darkId = wrapper.find('[data-slot="dark"] [role="radio"]:not([aria-checked="true"])').attributes('data-theme-id')
+    const lightId = wrapper
+      .find('[data-slot="light"] [role="radio"]:not([aria-checked="true"])')
+      .attributes('data-theme-id')
+    const darkId = wrapper
+      .find('[data-slot="dark"] [role="radio"]:not([aria-checked="true"])')
+      .attributes('data-theme-id')
     await wrapper.find(`[data-slot="light"] [data-theme-id="${lightId}"]`).trigger('click')
     await wrapper.find(`[data-slot="dark"] [data-theme-id="${darkId}"]`).trigger('click')
     await vi.waitFor(() => expect(store.themeDarkId).toBe(darkId))

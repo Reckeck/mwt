@@ -11,7 +11,8 @@ fn parse_rgb(rgb: &str) -> Result<(u8, u8, u8), String> {
         .strip_prefix('#')
         .filter(|digits| digits.len() == 6 && digits.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .ok_or_else(|| format!("invalid colour {rgb:?}, expected #rrggbb"))?;
-    let channel = |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).map_err(|err| err.to_string());
+    let channel =
+        |at: usize| u8::from_str_radix(&digits[at..at + 2], 16).map_err(|err| err.to_string());
     Ok((channel(0)?, channel(2)?, channel(4)?))
 }
 
@@ -44,7 +45,17 @@ mod tests {
 
     #[test]
     fn rejects_anything_else() {
-        for bad in ["", "#fff", "ffffff", "#gggggg", "#1234567", "#12345", "rgb(1,2,3)", "#ffffffff", "#é12345"] {
+        for bad in [
+            "",
+            "#fff",
+            "ffffff",
+            "#gggggg",
+            "#1234567",
+            "#12345",
+            "rgb(1,2,3)",
+            "#ffffffff",
+            "#é12345",
+        ] {
             assert!(parse_rgb(bad).is_err(), "{bad:?} must be refused");
         }
     }
