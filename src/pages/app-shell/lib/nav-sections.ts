@@ -1,5 +1,5 @@
 import type { Component } from 'vue'
-import { Banknote, House, List, PiggyBank, Users } from 'lucide-vue-next'
+import { ChartPie, House, List, TrendingUp, Users } from 'lucide-vue-next'
 
 export interface NavSection {
   id: 'home' | 'operations' | 'budget' | 'people' | 'capital'
@@ -24,7 +24,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   },
   {
     id: 'budget',
-    icon: Banknote,
+    icon: ChartPie,
     key: 'nav.section.budget',
     root: 'money',
     routes: ['money', 'money-month', 'money-plan', 'money-where', 'money-calculator', 'money-health'],
@@ -38,7 +38,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   },
   {
     id: 'capital',
-    icon: PiggyBank,
+    icon: TrendingUp,
     key: 'nav.section.capital',
     root: 'stores',
     routes: ['stores', 'wallet', 'wallet-settings', 'money-wealth', 'money-investments', 'crypto-positions'],

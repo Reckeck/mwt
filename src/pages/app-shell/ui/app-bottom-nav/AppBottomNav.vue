@@ -61,7 +61,7 @@ const PILL = 'flex h-7 w-12 items-center justify-center rounded-full transition-
       data-tour="quick-add"
       @click="emit('quickAdd')"
     >
-      <Plus class="size-6" />
+      <Plus class="size-7" />
     </Button>
   </nav>
 </template>
