@@ -167,3 +167,51 @@ mod rate_change_tests {
         }
     }
 }
+
+/// R3: the spendable figures of the month pace are the money date's in both readings;
+/// only income, spent and saved follow the basis.
+#[test]
+fn the_month_pace_plan_figures_ignore_the_basis() {
+    use crate::planning::flows::Basis;
+    use mwt_model::{OpPeriod, PeriodKind};
+    let (_dir, mut vault) = empty_vault();
+    vault.set_base_currency("usd");
+    quote_usd(&mut vault);
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let mut pay = dated(
+        income(&card, "1000", "pay"),
+        "salary",
+        "2026-10-05T10:00:00Z",
+    );
+    // Labelled for the previous month: by period it is not October's income.
+    pay.meta_mut().period = Some(OpPeriod {
+        kind: PeriodKind::Range,
+        start: "2026-09-01".into(),
+        end: "2026-09-30".into(),
+    });
+    for tx in [
+        pay,
+        dated(
+            payment(&card, "100", "food"),
+            "groceries",
+            "2026-10-06T10:00:00Z",
+        ),
+    ] {
+        crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
+    }
+    let now = unix_secs("2026-10-10T12:00:00Z").unwrap();
+    let by_date = crate::reports::dashboard_tiles::month_pace_by(
+        &vault.books(),
+        Basis::MoneyDate,
+        now,
+        "UTC",
+    );
+    let by_period =
+        crate::reports::dashboard_tiles::month_pace_by(&vault.books(), Basis::Period, now, "UTC");
+    assert_eq!(by_date.income.value, amount("1000"));
+    assert_eq!(by_period.income.value, amount("0"));
+    assert!(by_date.spend_plan_to_date.is_some());
+    assert_eq!(by_period.spend_plan_to_date, by_date.spend_plan_to_date);
+    assert_eq!(by_period.savings_plan, by_date.savings_plan);
+    assert_eq!(by_period.forecast_spent, by_date.forecast_spent);
+}

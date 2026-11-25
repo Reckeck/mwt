@@ -131,12 +131,25 @@ pub fn month_pace_by(books: &Books, basis: Basis, now: i64, zone: &str) -> Month
     let day = today.day();
     let days = calendar::days_in_month(today);
     let ratio = Amount::from(day) / Amount::from(days);
-    let savings_plan = current.income * books.doc().settings.savings_rate;
-    let spend_plan_to_date = current
+    // The spendable figures are `month_pace` of R3: always the money date.
+    let money = match basis {
+        Basis::MoneyDate => None,
+        Basis::Period => Some(pace_totals(
+            books,
+            &cal,
+            &currency,
+            first,
+            today,
+            Basis::MoneyDate,
+        )),
+    };
+    let money = money.as_ref().unwrap_or(&current);
+    let savings_plan = money.income * books.doc().settings.savings_rate;
+    let spend_plan_to_date = money
         .income
         .is_positive()
-        .then(|| ((current.income - savings_plan) * ratio).round(2));
-    let forecast_spent = (current.spent / ratio).round(2);
+        .then(|| ((money.income - savings_plan) * ratio).round(2));
+    let forecast_spent = (money.spent / ratio).round(2);
 
     let mut growth: Vec<CategoryGrowth> = current
         .by_category

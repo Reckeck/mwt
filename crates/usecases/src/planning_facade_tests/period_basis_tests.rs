@@ -319,3 +319,35 @@ fn r5_own_transfers_are_never_daily_or_fixed() {
         assert_eq!(november.budget_out, amount("700"));
     }
 }
+
+/// Q10, R4: a workflow run reads a Month budget by the money date, so a spending
+/// labelled for another month still counts.
+#[test]
+fn q10_workflow_host_reads_budgets_by_money_date() {
+    use crate::workflow::host::WorkflowHost;
+    let mut design = november_design();
+    let card = design.card.clone();
+    add(
+        &mut design.vault,
+        labelled(
+            dated(payment(&card, "1000", "gift"), "2026-11-18T10:00:00Z"),
+            PeriodKind::Range,
+            "2026-10-01",
+            "2026-10-31",
+        ),
+    );
+    let now = unix_secs("2026-11-20T12:00:00Z").unwrap();
+    let (spent, used, remaining) = {
+        let statuses = crate::usecases::planning::budget::budget_status_by(
+            &design.vault.books(),
+            now,
+            "UTC",
+            Some(Basis::MoneyDate),
+        );
+        (statuses[0].spent, statuses[0].used, statuses[0].remaining)
+    };
+    assert_eq!(spent, amount("64200"));
+    let reading = design.vault.budget_status(now, "UTC");
+    assert_eq!(reading[0].used, used);
+    assert_eq!(reading[0].remaining, remaining);
+}
