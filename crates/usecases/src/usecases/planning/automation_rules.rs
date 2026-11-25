@@ -317,6 +317,16 @@ pub(crate) fn run_template(vault: &Session, tx: &Transaction) -> Option<RunTempl
     })
 }
 
+/// The graph a workflow runs: an automation's through [`firing_graph`], any other as stored.
+/// Every path that starts a run (schedule, Run now, retry) takes its graph here.
+pub(crate) fn run_graph(doc: &VaultDoc, workflow: &Workflow) -> Result<Graph> {
+    let stored = Graph::parse(&workflow.graph)?;
+    Ok(match &workflow.automation {
+        Some(spec) => firing_graph(doc, spec, stored),
+        None => stored,
+    })
+}
+
 /// The graph an automation fires. A distribution rule that asks needs the question ahead of the
 /// booking though the form did not set it (D9, Q12): the stored graph then gets it.
 pub(crate) fn firing_graph(doc: &VaultDoc, spec: &AutomationSpec, stored: Graph) -> Graph {
@@ -347,8 +357,8 @@ impl RunTemplate {
     }
 
     /// The distribution rows of an income, resolved against the card as it is before the rows
-    /// (D8). `ask` and a rule with nothing to move leave the income whole; `over` too, with the
-    /// notice of a rejected run (Q11). A refused rule is an error, nothing is booked. After the
+    /// (D8). `ask` and a rule with nothing to move leave the income whole; `over` too, with a
+    /// notice that the income is undistributed (Q11). A refused rule is an error, nothing is booked. After the
     /// user's confirmation `ask` and `over` are errors: the answer must distribute.
     pub(crate) fn rows(
         &self,
@@ -379,7 +389,8 @@ impl RunTemplate {
         })
     }
 
-    /// The income is booked alone; the notice says the distribution did not happen.
+    /// The income is booked alone; the notice says the distribution did not happen. It is kept
+    /// on the session for the run's caller to deliver (Q11).
     fn notice_over(&self, vault: &mut Session, tx: &Transaction, over: Amount) {
         let date = tx.meta().timestamp.get(..10).unwrap_or_default();
         let name = &self.workflow_name;
@@ -398,13 +409,12 @@ impl RunTemplate {
         };
         let record = notice(
             NoticeCategory::Automation,
-            format!("automation-rejected:{}", self.run_id),
+            format!("automation-undistributed:{}", self.run_id),
             &title,
             body,
             Some(crate::routes::AUTOMATIONS.to_string()),
             tx.meta().timestamp.clone(),
         );
-        let fresh = crate::planning::notifications::fresh_notices(&vault.doc, vec![record]);
-        crate::planning::notifications::append_notices(&mut vault.doc.notification_log, &fresh);
+        vault.run_notices.push(record);
     }
 }

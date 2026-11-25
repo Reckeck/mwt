@@ -136,6 +136,9 @@ pub struct Session {
     /// The answer being given to the question of an automation run that asks; set only while
     /// that one answer runs (see `confirm_distribution`).
     pub(crate) confirmation: Option<crate::usecases::planning::automation_rules::Confirmation>,
+    /// Notices a booking made while a run was in progress (an income booked undistributed);
+    /// the run's caller takes them into its pass.
+    pub(crate) run_notices: Vec<crate::model::notify::NoticeRecord>,
 }
 
 impl Session {
@@ -212,6 +215,7 @@ impl Session {
             session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
             confirmation: None,
+            run_notices: Vec::new(),
         };
         crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
@@ -243,6 +247,7 @@ impl Session {
             session: crate::kernel::session::Write::with_store(store),
             device_keys: exchange_keys::DeviceKeys::default(),
             confirmation: None,
+            run_notices: Vec::new(),
         }
     }
 
@@ -313,6 +318,7 @@ impl Session {
             session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
             confirmation: None,
+            run_notices: Vec::new(),
         };
         if let Some(device_id) = device_id {
             crate::usecases::sync::peer_sync::set_device(&mut vault, device_id);
@@ -437,6 +443,7 @@ impl Session {
             session: crate::kernel::session::Write::sandboxed(),
             device_keys: exchange_keys::DeviceKeys::default(),
             confirmation: None,
+            run_notices: Vec::new(),
         }
     }
 

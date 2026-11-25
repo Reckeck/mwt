@@ -297,15 +297,25 @@ fn over_books_the_income_alone_and_raises_the_notice() {
             .iter()
             .all(|envelope| envelope.allocated == amount("0"))
     );
+    let keys: Vec<&str> = pass
+        .notices
+        .iter()
+        .map(|record| record.key.as_str())
+        .collect();
+    assert_eq!(keys.len(), 1, "{keys:?}");
+    assert!(keys[0].starts_with("automation-undistributed:"), "{keys:?}");
     assert!(
         vault
             .doc
             .notification_log
             .iter()
-            .any(|record| record.key.starts_with("automation-rejected:")),
+            .all(|record| !record.key.starts_with("automation-rejected:")),
         "{:?}",
         vault.doc.notification_log
     );
+    // The moment is done: a later pass says nothing again.
+    let again = run_on(&mut vault, "2026-11-20T18:00:00Z");
+    assert!(again.notices.is_empty(), "{:?}", again.notices);
     assert!(!id.is_empty());
 }
 
@@ -969,4 +979,105 @@ fn a_distribution_transfer_never_counts_toward_the_estimate_of_the_next_run() {
 
 fn run_on(vault: &mut Session, moment: &str) -> crate::workflow::service::runs::WorkflowPass {
     run_due_workflows(vault, unix_secs(moment).unwrap(), "UTC").unwrap()
+}
+
+/// What a path left of an automation whose rule asks, to compare two ways of setting the question.
+#[derive(Debug, PartialEq)]
+struct Left {
+    incomes: usize,
+    undistributed: usize,
+    waits: usize,
+    created: usize,
+}
+
+fn left(vault: &Session, created: usize) -> Left {
+    Left {
+        incomes: vault.doc.transactions.len(),
+        undistributed: vault
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| matches!(tx, Transaction::Topup(topup) if topup.distribution.is_none()))
+            .count(),
+        waits: vault.doc.workflow_waits.len(),
+        created,
+    }
+}
+
+/// An advance whose rule asks, with the form's `asks` as given, and one path run on it.
+fn through(asks: bool, path: fn(&mut Session, &str) -> usize) -> Left {
+    let (_dir, mut vault, card, vacation) = setup();
+    let template = template_on_other(
+        &mut vault,
+        vec![five_percent(&vacation)],
+        OnOtherAmount::Ask,
+    );
+    let id = advance_asking(&mut vault, &card, Some(&template), asks);
+    let created = path(&mut vault, &id);
+    left(&vault, created)
+}
+
+fn run_now(vault: &mut Session, id: &str) -> usize {
+    let now = unix_secs("2026-11-20T12:00:00Z").unwrap();
+    crate::usecases::workflow::runs::run_workflow_now(vault, id, None, now, "UTC")
+        .unwrap()
+        .run
+        .created
+        .len()
+}
+
+fn create_now(vault: &mut Session, id: &str) -> usize {
+    let now = unix_secs("2026-11-20T12:00:00Z").unwrap();
+    run_automation(vault, id, now).unwrap();
+    1
+}
+
+fn retry(vault: &mut Session, id: &str) -> usize {
+    let refused = crate::workflow::model::WorkflowRun {
+        id: "refused".into(),
+        workflow_id: id.into(),
+        trigger: "schedule 2026-11-20".into(),
+        started_at: "2026-11-20T00:00:00Z".into(),
+        outcome: crate::workflow::model::RunOutcome::Rejected {
+            reason: RejectReason::Invalid {
+                message: "no free balance".into(),
+            },
+            trigger_node: crate::workflow::automation::TRIGGER.into(),
+            planned_at: Some("2026-11-20T00:00:00Z".into()),
+        },
+        created: Vec::new(),
+        queued: 0,
+        trace: Vec::new(),
+        dry_run: false,
+        planned_date: None,
+    };
+    vault.doc.workflow_runs.push(refused);
+    let now = unix_secs("2026-11-20T13:00:00Z").unwrap();
+    crate::usecases::workflow::runs::retry_workflow_run(vault, "refused", now, "UTC")
+        .unwrap()
+        .created
+        .len()
+}
+
+#[test]
+fn run_now_follows_an_ask_rule_like_an_automation_that_asks() {
+    let reference = through(true, run_now);
+    assert_eq!(reference.waits, 1);
+    assert_eq!(reference.incomes, 0);
+    assert_eq!(through(false, run_now), reference);
+}
+
+#[test]
+fn a_retry_follows_an_ask_rule_like_an_automation_that_asks() {
+    let reference = through(true, retry);
+    assert_eq!(reference.waits, 1);
+    assert_eq!(reference.incomes, 0);
+    assert_eq!(through(false, retry), reference);
+}
+
+#[test]
+fn create_now_follows_an_ask_rule_like_an_automation_that_asks() {
+    let reference = through(true, create_now);
+    assert_eq!(reference.incomes, 1);
+    assert_eq!(through(false, create_now), reference);
 }

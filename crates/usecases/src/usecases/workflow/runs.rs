@@ -26,7 +26,7 @@ use crate::service::Session;
 use crate::time::{Clock, FixedClock, secs_or_now, unix_secs};
 use crate::usecases::money::portfolio::recompute_holdings;
 use crate::usecases::money::transactions::prepare_transaction_at;
-use crate::usecases::planning::automation_rules::{firing_graph, run_template};
+use crate::usecases::planning::automation_rules::{run_graph, run_template};
 use crate::usecases::planning::distribution::apply_distribution_at;
 use crate::usecases::planning::notifications::notice;
 use crate::usecases::sync::peer_sync;
@@ -103,6 +103,7 @@ fn insert_checked(
     now: i64,
 ) -> std::result::Result<Vec<Transaction>, InsertRefusal> {
     let backup = vault.doc.clone();
+    let noticed = vault.run_notices.len();
     let flow = (txs.len() > 1).then(|| uuid::Uuid::new_v4().to_string());
     let mut saved = Vec::with_capacity(txs.len());
     for mut tx in txs {
@@ -113,6 +114,7 @@ fn insert_checked(
             Ok(booked) => saved.push(booked),
             Err(refusal) => {
                 vault.doc = backup;
+                vault.run_notices.truncate(noticed);
                 return Err(refusal);
             }
         }
@@ -174,6 +176,7 @@ pub(crate) fn book_manual_run(
     now: i64,
 ) -> Result<Transaction> {
     let backup = vault.doc.clone();
+    vault.run_notices.clear();
     let booked = match book_one(vault, tx, now) {
         Ok(booked) => booked,
         Err(refusal) => {
@@ -184,11 +187,14 @@ pub(crate) fn book_manual_run(
                 InsertRefusal::Invalid(error) => error,
             };
             vault.doc = backup;
+            vault.run_notices.clear();
             return Err(error);
         }
     };
     vault.doc.workflow_runs.push(record);
     commit_applied(vault)?;
+    let noticed = std::mem::take(&mut vault.run_notices);
+    crate::usecases::planning::notifications::log_notices(vault, noticed)?;
     Ok(booked)
 }
 
@@ -321,7 +327,13 @@ pub(crate) fn keep_run(
     pass: &mut WorkflowPass,
 ) -> Result<()> {
     let ru = peer_sync::notice_in_russian(vault);
-    vault.transact(|tx| write_run(tx, report, pass, ru))
+    let noticed = std::mem::take(&mut vault.run_notices);
+    vault.transact(|tx| write_run(tx, report, pass, ru))?;
+    // What a failed or refused run noticed never happened.
+    if matches!(report.run.outcome, RunOutcome::Done) {
+        pass.notices.extend(noticed);
+    }
+    Ok(())
 }
 
 /// A run that never happened, in the journal with its reason, so nothing is
@@ -518,7 +530,7 @@ pub fn retry_workflow_run(
         return retry_queued_refusal(vault, batch, now);
     }
     let workflow = workflow_record(&vault.doc, &run.workflow_id)?;
-    let graph = Graph::parse(&workflow.graph)?;
+    let graph = run_graph(&vault.doc, &workflow)?;
     let trigger = graph
         .node(trigger_node)
         .cloned()
@@ -614,7 +626,7 @@ pub fn run_workflow_now(
     zone: &str,
 ) -> Result<RunReport> {
     let workflow = workflow_record(&vault.doc, id)?;
-    let graph = Graph::parse(&workflow.graph)?;
+    let graph = run_graph(&vault.doc, &workflow)?;
     if let Some(issue) = validate(&graph)
         .into_iter()
         .find(|issue| issue.level == crate::workflow::IssueLevel::Error)
@@ -916,10 +928,9 @@ fn fire_due_automations(
         let Some(spec) = workflow.automation.clone() else {
             continue;
         };
-        let Ok(graph) = Graph::parse(&workflow.graph) else {
+        let Ok(graph) = run_graph(&vault.doc, &workflow) else {
             continue;
         };
-        let graph = firing_graph(&vault.doc, &spec, graph);
         let Some(trigger) = graph.node(automation::TRIGGER).cloned() else {
             continue;
         };

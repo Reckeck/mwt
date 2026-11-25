@@ -119,9 +119,12 @@ fn settle_manual(
     spread
 }
 
-/// P5, P8: on a single-month period a spread the caller gave with that period is kept (so that
-/// validation refuses it); a manual spread is always kept, a spread beside a period a rule gave, or beside a period an edit
-/// moved to that month, is dropped.
+/// P5, P8: what a spread becomes on a single-month period, which cannot hold one.
+/// - Keep a spread the caller gave with that period, unchanged since the last save, so that
+///   validation refuses it (an `even` / `by_days` one is wrong there; the user hears so).
+/// - Keep a `manual` spread whose period is unchanged; validation refuses it too.
+/// - Drop every other spread: a period a rule gave, or one an edit moved to a single month
+///   (the edit is not at fault), carries no spread.
 fn keep_on_one_month(
     spread: Spread,
     period: &OpPeriod,
@@ -132,11 +135,16 @@ fn keep_on_one_month(
     (period_unchanged && (period_given || spread.mode == SpreadMode::Manual)).then_some(spread)
 }
 
-/// The spread to store (P6, P8): a single-month period drops it (a spread given with an explicit
-/// period is kept for validation to refuse, unless
-/// changed the period, or a rule gave it), `even` and `by_days` are
-/// derived afresh in `places` minor digits, a `manual` one is kept unless it went stale.
-/// `period_given` is false when a rule gave the period. A spread with no readable period is returned as is; validation refuses it.
+/// The spread to store (P6, P8), per case:
+/// - no spread, or a period that cannot be read: nothing to settle; a spread with an unreadable
+///   period is returned as is and validation refuses it;
+/// - a single-month period: see `keep_on_one_month` (refuse a spread given with the period, drop
+///   one a rule or an edit brought, keep a manual one for validation to refuse);
+/// - a period over several months: `even` and `by_days` are derived afresh in `places` minor
+///   digits (never refused); a `manual` one is kept, and loses its shares when its amount or
+///   period moved (it is then refused until new shares come).
+///
+/// `period_given` is false when a rule gave the period.
 pub fn settle_spread(
     period: Option<&OpPeriod>,
     spread: Option<Spread>,
