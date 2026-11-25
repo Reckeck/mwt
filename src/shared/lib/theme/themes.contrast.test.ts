@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { checkPairs } from './contrast'
 import { CONTRAST_PAIRS } from './contrast-pairs'
 import { builtinThemes } from './registry'
+import { assertCompleteTheme } from './tokens'
 
 /**
  * Spec Q15 / TC3: the Default themes keep today's colours, so these four chart pairs stay below 3:1
@@ -38,4 +39,10 @@ describe('built-in themes meet contrast (TC1-TC3)', () => {
       expect(failing.some((pair) => pair.foreground === entry.token)).toBe(true)
     },
   )
+})
+
+describe('built-in themes are complete', () => {
+  it.each(builtinThemes.map((theme) => [theme.id, theme] as const))('%s has every token', (_id, theme) => {
+    expect(() => assertCompleteTheme(theme)).not.toThrow()
+  })
 })
