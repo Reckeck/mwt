@@ -1,18 +1,24 @@
 use std::collections::HashSet;
 
 use crate::error::{Error, Result};
+use crate::model::notify::{NoticeCategory, notice};
 use crate::model::planning::{AutomationOutcome, AutomationRun, AutomationSpec};
 use crate::model::store::Holding;
+use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
 use crate::planning::automation_plan::runs_in;
 use crate::planning::automations::{
     AutomationDraft, AutomationSimulation, SimulatedBalance, SimulatedRun,
 };
+use crate::service::Session;
 use crate::time::unix_secs;
+use crate::usecases::money::transactions::CreationRules;
+use crate::usecases::planning::templates::{RuleRows, held_quantity, resolve_rule_rows};
 use crate::workflow::automation::{self as graph_of, automation_graph};
 use crate::workflow::exec::{StepStatus, TraceStep};
 use crate::workflow::model::{GraphVersion, MAX_GRAPH_VERSIONS, RunOutcome, Workflow, WorkflowRun};
 use crate::{Amount, calendar};
+use mwt_model::{DistributionRow, OperationTemplate};
 
 /// Run history over the document, for the command that holds the vault.
 pub fn automation_runs(doc: &VaultDoc, automation_id: Option<&str>) -> Vec<AutomationRun> {
@@ -200,5 +206,105 @@ pub(crate) fn manual_run_record(
         }],
         dry_run: false,
         planned_date: None,
+    }
+}
+
+/// What a run takes from the operation template of its automation (spec op-period T5, D5, D12):
+/// the period rule and the distribution rule. The booking itself stays the embedded draft.
+pub(crate) struct RunTemplate {
+    template: OperationTemplate,
+    /// The embedded draft's amount: what the rule expects the payout to be.
+    expected: Amount,
+    workflow_name: String,
+    run_id: String,
+}
+
+/// The template a booked operation of an automation run answers to; `None` for an operation of
+/// another origin or of an automation without a (live) template: those behave as before.
+pub(crate) fn run_template(doc: &VaultDoc, tx: &Transaction) -> Option<RunTemplate> {
+    let TxOrigin::Workflow {
+        workflow_id,
+        run_id,
+        ..
+    } = &tx.meta().origin
+    else {
+        return None;
+    };
+    let workflow = doc
+        .workflows
+        .iter()
+        .find(|workflow| &workflow.id == workflow_id)?;
+    let spec = workflow.automation.as_ref()?;
+    let template_id = spec.operation_template_id.as_deref()?;
+    let template = doc
+        .operation_templates
+        .iter()
+        .find(|template| template.id == template_id)?;
+    Some(RunTemplate {
+        template: template.clone(),
+        expected: graph_of::template_amount(&spec.template),
+        workflow_name: workflow.name.clone(),
+        run_id: run_id.clone(),
+    })
+}
+
+impl RunTemplate {
+    /// The period of the run comes from the template's rule, else the category's (D3).
+    pub(crate) fn creation_rules(&self) -> CreationRules {
+        CreationRules {
+            template_rule: self.template.period_rule,
+            no_period_rule: false,
+        }
+    }
+
+    /// The distribution rows of an income, resolved against the card as it is before the rows
+    /// (D8). `ask` and a rule with nothing to move leave the income whole; `over` too, with the
+    /// notice of a rejected run (Q11). A refused rule is an error, nothing is booked.
+    pub(crate) fn rows(
+        &self,
+        vault: &mut Session,
+        tx: &Transaction,
+    ) -> Result<Option<Vec<DistributionRow>>> {
+        let (Some(rule), Transaction::Topup(topup)) = (&self.template.distribution, tx) else {
+            return Ok(None);
+        };
+        let held = held_quantity(vault, topup);
+        Ok(match resolve_rule_rows(rule, topup, self.expected, held)? {
+            RuleRows::Ask => None,
+            RuleRows::Rows(rows) => rows,
+            RuleRows::Over(over) => {
+                self.notice_over(vault, tx, over);
+                None
+            }
+        })
+    }
+
+    /// The income is booked alone; the notice says the distribution did not happen.
+    fn notice_over(&self, vault: &mut Session, tx: &Transaction, over: Amount) {
+        let date = tx.meta().timestamp.get(..10).unwrap_or_default();
+        let name = &self.workflow_name;
+        let (title, body) = if vault.notice_ru {
+            (
+                format!("«{name}» {date}: распределение не выполнено"),
+                format!(
+                    "Правило просит на {over} больше, чем пришло; доход записан без распределения"
+                ),
+            )
+        } else {
+            (
+                format!("“{name}” on {date}: not distributed"),
+                format!("The rule asks {over} more than came; the income is booked undistributed"),
+            )
+        };
+        let record = notice(
+            NoticeCategory::Automation,
+            format!("automation-rejected:{}", self.run_id),
+            &title,
+            body,
+            Some(crate::routes::AUTOMATIONS.to_string()),
+            tx.meta().timestamp.clone(),
+        );
+        let fresh = crate::planning::notifications::fresh_notices(&vault.doc, vec![record]);
+        crate::planning::notifications::append_notices(&mut vault.doc.notification_log, &fresh);
     }
 }

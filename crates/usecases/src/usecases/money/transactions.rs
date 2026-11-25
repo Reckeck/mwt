@@ -129,7 +129,7 @@ pub(crate) fn add_transaction_distributed(
 
 /// What a new operation gets before it is prepared, on every creation path: categories settled
 /// (the category rule of D3 reads them), the period by rule, the spread derived (P6).
-fn apply_creation_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
+pub(crate) fn apply_creation_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
     Session::normalize_categories(tx);
     crate::money::validate::apply_categorization_rules(&vault.doc, tx);
     let period_given = tx.meta().period.is_some();
@@ -152,13 +152,8 @@ fn apply_period_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRul
     if spreadable(tx).is_none() || tx.meta().period.is_some() {
         return;
     }
-    let zone = vault
-        .doc
-        .settings
-        .schedule_timezone
-        .as_deref()
-        .unwrap_or("UTC");
-    let Some(money_date) = crate::calendar::Calendar::new(zone).date_of_iso(&tx.meta().timestamp)
+    let Some(money_date) =
+        crate::money::interest::calendar_of(&vault.doc).date_of_iso(&tx.meta().timestamp)
     else {
         return;
     };

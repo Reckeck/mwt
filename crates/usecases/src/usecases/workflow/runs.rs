@@ -24,6 +24,10 @@ use crate::planning::flows::flows_between;
 use crate::planning::schedule::{fresh_moments, processed_dates};
 use crate::service::Session;
 use crate::time::{Clock, FixedClock, secs_or_now, unix_secs};
+use crate::usecases::money::portfolio::recompute_holdings;
+use crate::usecases::money::transactions::{apply_creation_rules, prepare_transaction_at};
+use crate::usecases::planning::automation_rules::run_template;
+use crate::usecases::planning::distribution::apply_distribution_unsaved;
 use crate::usecases::planning::notifications::notice;
 use crate::usecases::sync::peer_sync;
 use crate::workflow::catalog::node_def;
@@ -104,27 +108,57 @@ fn insert_checked(
         if let Some(flow) = &flow {
             tx.meta_mut().flow_id = Some(flow.clone());
         }
-        let secs = secs_or_now(&tx.meta().timestamp);
-        let result = match crate::planning::automations::funds_shortfall(&vault.doc, &tx, secs) {
-            Some(reason) => Err(InsertRefusal::Short(Box::new(reason))),
-            // The run's clock, not the wall one: an emulated run days
-            // ahead dates its operations days ahead too.
-            None => crate::usecases::money::transactions::prepare_transaction_at(
-                vault,
-                &mut tx,
-                now.max(secs) * 1000,
-            )
-            .map_err(|err| InsertRefusal::Invalid(err.to_string())),
-        };
-        if let Err(refusal) = result {
-            vault.doc = backup;
-            return Err(refusal);
+        match book_one(vault, tx, now) {
+            Ok(booked) => saved.push(booked),
+            Err(refusal) => {
+                vault.doc = backup;
+                return Err(refusal);
+            }
         }
-        vault.doc.transactions.push(tx.clone());
-        crate::usecases::money::portfolio::recompute_holdings(vault);
-        saved.push(tx);
     }
     Ok(saved)
+}
+
+/// One operation of a run: funds checked, prepared, stored. An income of an automation with an
+/// operation template also takes the template's period rule and distribution in the same write
+/// (spec op-period T22, D5, D12).
+fn book_one(
+    vault: &mut Session,
+    mut tx: Transaction,
+    now: i64,
+) -> std::result::Result<Transaction, InsertRefusal> {
+    let template = run_template(&vault.doc, &tx);
+    if let Some(template) = &template {
+        apply_creation_rules(vault, &mut tx, &template.creation_rules());
+    }
+    let secs = secs_or_now(&tx.meta().timestamp);
+    if let Some(reason) = crate::planning::automations::funds_shortfall(&vault.doc, &tx, secs) {
+        return Err(InsertRefusal::Short(Box::new(reason)));
+    }
+    // The run's clock, not the wall one: an emulated run days ahead dates its
+    // operations days ahead too.
+    prepare_transaction_at(vault, &mut tx, now.max(secs) * 1000)
+        .map_err(|err| InsertRefusal::Invalid(err.to_string()))?;
+    let rows = match &template {
+        Some(template) => template
+            .rows(vault, &tx)
+            .map_err(|err| InsertRefusal::Invalid(err.to_string()))?,
+        None => None,
+    };
+    vault.doc.transactions.push(tx.clone());
+    recompute_holdings(vault);
+    let Some(rows) = rows else {
+        return Ok(tx);
+    };
+    apply_distribution_unsaved(vault, &tx.meta().id, &rows)
+        .map_err(|err| InsertRefusal::Invalid(err.to_string()))?;
+    Ok(vault
+        .doc
+        .transactions
+        .iter()
+        .find(|stored| stored.meta().id == tx.meta().id)
+        .cloned()
+        .unwrap_or(tx))
 }
 
 // -- lookups that cross areas ----------------------------------------------------

@@ -139,7 +139,15 @@ pub fn create_from_template(
         (Some(rule), Transaction::Topup(topup)) => {
             let expected = template.amount.unwrap_or(topup.amount);
             let held = held_quantity(vault, topup);
-            rows_of_rule(rule, topup, expected, held)?
+            match resolve_rule_rows(rule, topup, expected, held)? {
+                RuleRows::Ask => (None, true),
+                RuleRows::Over(over) => {
+                    return Err(Error::InvalidInput(format!(
+                        "DISTRIBUTION_OVER_ALLOCATED: the rows ask {over} more than the income"
+                    )));
+                }
+                RuleRows::Rows(rows) => (rows, false),
+            }
         }
         _ => (None, false),
     };
@@ -197,7 +205,7 @@ fn transaction_of(template: &OperationTemplate, input: &QuickAdd) -> Result<Tran
 }
 
 /// What the card holds once the payout is booked, before any row (the rule takes the rows off).
-fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
+pub(crate) fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
     let held = vault
         .doc
         .holdings
@@ -209,15 +217,24 @@ fn held_quantity(vault: &Session, topup: &TopupTx) -> Amount {
     held + topup.amount
 }
 
-/// T14: the rule against the actual payout. `None` rows with `ask` — the user confirms later; a
-/// rule that asks more than the payout is refused, so nothing is written. Rows cut to zero are
-/// dropped; with none left the income is saved undistributed.
-fn rows_of_rule(
+/// What a distribution rule makes of an actual payout (T14, D9).
+pub(crate) enum RuleRows {
+    /// The user confirms later: the income is saved undistributed.
+    Ask,
+    /// The rows ask more than the payout (Q11).
+    Over(Amount),
+    /// Rows that move money; none left means the income stays whole on the card.
+    Rows(Option<Vec<DistributionRow>>),
+}
+
+/// T14: the rule against the actual payout. Rows cut to zero are dropped; with none left the
+/// income is saved undistributed.
+pub(crate) fn resolve_rule_rows(
     rule: &DistributionRule,
     topup: &TopupTx,
     expected: Amount,
     card_balance_before_rows: Amount,
-) -> Result<(Option<Vec<DistributionRow>>, bool)> {
+) -> Result<RuleRows> {
     let places = topup.asset.minor_places();
     let resolved = resolve_distribution(
         rule,
@@ -227,12 +244,10 @@ fn rows_of_rule(
         places,
     )?;
     if resolved.ask {
-        return Ok((None, true));
+        return Ok(RuleRows::Ask);
     }
     if let Some(over) = resolved.over {
-        return Err(Error::InvalidInput(format!(
-            "DISTRIBUTION_OVER_ALLOCATED: the rows ask {over} more than the income"
-        )));
+        return Ok(RuleRows::Over(over));
     }
     // A row the floor cut to nothing leaves its money on the card (D10); V1 allows positive parts only.
     let rows: Vec<DistributionRow> = resolved
@@ -263,5 +278,5 @@ fn rows_of_rule(
     let moves_money = rows
         .iter()
         .any(|row| !matches!(row.kind, DistKind::Remainder));
-    Ok((moves_money.then_some(rows), false))
+    Ok(RuleRows::Rows(moves_money.then_some(rows)))
 }
