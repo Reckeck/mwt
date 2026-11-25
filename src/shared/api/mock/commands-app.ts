@@ -162,6 +162,13 @@ export const appSettingsOutsideCommands: MockCommands = {
   update_app_settings: ({ body }) => {
     const input = body as UpdateAppSettingsInput
     if (input.theme) mockAppSettings.theme = input.theme
+    // An empty string clears an id back to Default, as the core does.
+    if (input.theme_id !== null && input.theme_id !== undefined)
+      mockAppSettings.theme_id = input.theme_id.trim() || null
+    if (input.theme_light_id !== null && input.theme_light_id !== undefined)
+      mockAppSettings.theme_light_id = input.theme_light_id.trim() || null
+    if (input.theme_dark_id !== null && input.theme_dark_id !== undefined)
+      mockAppSettings.theme_dark_id = input.theme_dark_id.trim() || null
     if (input.locale) mockAppSettings.locale = input.locale
     if (input.base_currency) {
       mockAppSettings.base_currency = input.base_currency
