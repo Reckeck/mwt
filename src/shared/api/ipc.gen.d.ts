@@ -5956,6 +5956,15 @@ type ReceivedPart = { store_id: string, amount: Amount,
 timestamp?: string, };
 
 /**
+ * One receiving part of an income that arrived in parts (spec S1).
+ */
+type ReceivedPartInput = { store_id: string, amount: Amount, 
+/**
+ * The part's own date; `None` = the income's `timestamp`.
+ */
+timestamp?: string, };
+
+/**
  * A recently opened vault file.
  */
 type RecentVault = { path: string, last_opened: string, exists: boolean, 
@@ -7918,7 +7927,11 @@ type TransactionDraft = { "topup": TopupTx } | { "payment": PaymentTx } | { "tra
 /**
  * What the form sends for any kind of transaction.
  */
-type TransactionInput = { "type": "topup", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, from: AccountRef | null, details: KindDetails, } | { "type": "payment", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, to: AccountRef | null, details: KindDetails, } | { "type": "transfer", common: TxCommonInput, from: AccountRef, to: AccountRef, asset: AssetIdent, amount: Amount, fee: FeeInput | null, network: Chain | null, tx_hash: string | null, debt: DebtEffect | null, } | { "type": "convert", common: TxCommonInput, from: ConvertSideInput, to: ConvertSideInput, fee: FeeInput | null, rate_override: Amount | null, } | { "type": "trade_spot", common: TxCommonInput, store_id: string, sold: TradeSideInput, bought: TradeSideInput, fee: FeeInput | null, liquidity: Liquidity | null, order_id: string | null, } | { "type": "trade_futures", common: TxCommonInput, store_id: string, 
+type TransactionInput = { "type": "topup", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, from: AccountRef | null, details: KindDetails, 
+/**
+ * «Arrived in parts» (spec S1): empty = a single-store income.
+ */
+parts?: Array<ReceivedPartInput>, } | { "type": "payment", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, to: AccountRef | null, details: KindDetails, } | { "type": "transfer", common: TxCommonInput, from: AccountRef, to: AccountRef, asset: AssetIdent, amount: Amount, fee: FeeInput | null, network: Chain | null, tx_hash: string | null, debt: DebtEffect | null, } | { "type": "convert", common: TxCommonInput, from: ConvertSideInput, to: ConvertSideInput, fee: FeeInput | null, rate_override: Amount | null, } | { "type": "trade_spot", common: TxCommonInput, store_id: string, sold: TradeSideInput, bought: TradeSideInput, fee: FeeInput | null, liquidity: Liquidity | null, order_id: string | null, } | { "type": "trade_futures", common: TxCommonInput, store_id: string, 
 /**
  * Exchange the contract trades on, e.g. `bybit`.
  */
@@ -8054,7 +8067,19 @@ price_currency: string | null,
 /**
  * The property the operation belongs to (plan G4); empty — none.
  */
-property_id?: string, };
+property_id?: string, 
+/**
+ * What the operation is «for» (spec P1); none lets a rule decide (D3).
+ */
+period?: OpPeriod, 
+/**
+ * How an operation over several months is cut into months (spec P5).
+ */
+spread?: Spread, 
+/**
+ * «Really no period»: a new operation without a period takes no rule (spec D3).
+ */
+no_period_rule?: boolean, };
 
 /**
  * A single field suggestion for the trade form.
