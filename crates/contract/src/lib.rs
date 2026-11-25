@@ -29,9 +29,11 @@ use mwt_model::{
     AssetRef, Binding, Custody, ExchangeProvider, LiabilityTerms, PropertyInfo, Purpose, StoreKind,
     SubType,
 };
+use mwt_model::{DistKind, DistributionPart, DistributionRow, EnvelopeMove, OnOtherAmount};
 use mwt_planning::agenda::PriceAlertDraft;
 use mwt_planning::automations::AutomationDraft;
 use mwt_planning::budget::BudgetDraft;
+use mwt_planning::distribution::ResolvedDistribution;
 use mwt_planning::goals::GoalDraft;
 
 pub use mwt_household::shared_events::inputs::{
@@ -950,6 +952,189 @@ pub struct MonthEffect {
 pub struct PeriodEffect {
     /// Oldest first; months the change leaves at zero on both sides are left out.
     pub months: Vec<MonthEffect>,
+}
+
+// -- income distribution (spec op-period I8-I12) ----------------------------
+
+/// The income a distribution call is about: a draft not saved yet, or a stored one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum IncomeSource {
+    /// A draft of an income (a `topup`); saved together with its distribution.
+    Draft { transaction: Box<TransactionInput> },
+    /// A stored income.
+    Stored { id: String },
+}
+
+/// `preview_distribution`: the rows against the income (spec I8).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PreviewDistributionInput {
+    pub income: IncomeSource,
+    pub rows: Vec<DistributionRow>,
+    /// Least balance left on the card after the rows (spec D10).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub keep_on_card_min: Option<Amount>,
+}
+
+/// `distribute_income`: save the income (a draft) or take a stored one, and distribute it (spec I9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributeIncomeInput {
+    pub income: IncomeSource,
+    pub rows: Vec<DistributionRow>,
+}
+
+/// `update_distribution`: «Изменить раскладку» of a stored income (spec I10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct UpdateDistributionInput {
+    pub income_id: String,
+    pub rows: Vec<DistributionRow>,
+}
+
+/// `confirm_distribution`: the answer to an automation run that asks (spec I12).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ConfirmDistributionInput {
+    pub run_id: String,
+    pub amount: Amount,
+    /// How to distribute the confirmed amount; the rule's own way when omitted.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub mode: Option<OnOtherAmount>,
+}
+
+/// One row with the amount it resolved to.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ResolvedDistributionRow {
+    pub row: DistributionRow,
+    pub amount: Amount,
+}
+
+/// A row cut by the floor on the card (spec D10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributionCut {
+    pub row_index: u32,
+    pub by: Amount,
+}
+
+/// What a distribution would book (spec I8, I11): the rows resolved, nothing written.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributionPreview {
+    /// The payout the rows were resolved against.
+    pub amount: Amount,
+    /// The next planned moment of a rule's payout (RFC3339); a rule preview only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub planned_at: Option<String>,
+    /// The period the template's rule gives the payout; a rule preview only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period: Option<OpPeriod>,
+    /// Every row in order, the remainder included; empty on `over` and `ask`.
+    pub rows: Vec<ResolvedDistributionRow>,
+    /// What the remainder row took.
+    pub remainder: Amount,
+    /// By how much the fixed and percent rows exceed the payout: nothing would be booked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub over: Option<Amount>,
+    /// The rule asks for a confirmation instead of distributing (spec D9).
+    pub ask: bool,
+    pub cut: Vec<DistributionCut>,
+}
+
+impl DistributionPreview {
+    /// The rows of `resolved` for a payout of `amount`.
+    pub fn of(
+        amount: Amount,
+        planned_at: Option<String>,
+        period: Option<OpPeriod>,
+        resolved: ResolvedDistribution,
+    ) -> Self {
+        Self {
+            amount,
+            planned_at,
+            period,
+            rows: resolved
+                .rows
+                .into_iter()
+                .map(|resolved| ResolvedDistributionRow {
+                    row: resolved.row,
+                    amount: resolved.amount,
+                })
+                .collect(),
+            remainder: resolved.remainder,
+            over: resolved.over,
+            ask: resolved.ask,
+            cut: resolved
+                .cut
+                .into_iter()
+                .map(|(index, by)| DistributionCut {
+                    row_index: u32::try_from(index).unwrap_or(u32::MAX),
+                    by,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// An envelope move a distribution made (spec I9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct EnvelopeMoveRef {
+    pub envelope_id: String,
+    pub move_id: String,
+    pub amount: Amount,
+}
+
+/// An income distributed with the records it made (spec I9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributedIncome {
+    pub income: Transaction,
+    pub transfers: Vec<Transaction>,
+    pub envelope_moves: Vec<EnvelopeMoveRef>,
+}
+
+/// One stored part with the record it produced (spec I10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct IncomePart {
+    pub part: DistributionPart,
+    /// The transfer of a store part; `None` when the part has none or the record is gone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub transfer: Option<Transaction>,
+    /// The entry of an envelope or goal part.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub envelope_move: Option<EnvelopeMove>,
+}
+
+/// The stored distribution of an income, top to bottom (spec I10, S10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct IncomeTree {
+    pub income: Transaction,
+    /// Empty when the income does not distribute.
+    pub parts: Vec<IncomePart>,
+}
+
+impl IncomeTree {
+    /// The marker «разложено на N»: the parts without the remainder (spec S10).
+    pub fn distributed_count(&self) -> usize {
+        self.parts
+            .iter()
+            .filter(|entry| !matches!(entry.part.kind, DistKind::Remainder))
+            .count()
+    }
 }
 
 /// Which transaction kinds a wallet of one kind accepts, split the way the
@@ -3272,5 +3457,76 @@ mod period_input_tests {
         };
         assert_eq!(topup.parts.len(), 1);
         assert_eq!(topup.parts[0].timestamp, None);
+    }
+}
+
+#[cfg(test)]
+mod distribution_dto_tests {
+    use super::*;
+    use mwt_model::PartStatus;
+    use mwt_planning::distribution::ResolvedRow;
+
+    fn amount(raw: &str) -> Amount {
+        Amount::parse(raw).unwrap()
+    }
+
+    #[test]
+    fn a_resolved_rule_becomes_the_preview_rows() {
+        let row = DistributionRow {
+            kind: DistKind::Remainder,
+            target: mwt_model::DistTarget::None,
+        };
+        let resolved = ResolvedDistribution {
+            rows: vec![ResolvedRow {
+                row: row.clone(),
+                amount: amount("70"),
+            }],
+            remainder: amount("70"),
+            cut: vec![(0, amount("5"))],
+            ..ResolvedDistribution::default()
+        };
+        let preview = DistributionPreview::of(amount("100"), None, None, resolved);
+        assert_eq!(preview.rows[0].row, row);
+        assert_eq!(preview.rows[0].amount, amount("70"));
+        assert_eq!(preview.cut[0].row_index, 0);
+        assert_eq!(preview.cut[0].by, amount("5"));
+        assert!(!preview.ask);
+    }
+
+    #[test]
+    fn the_marker_counts_the_parts_without_the_remainder() {
+        let part = |kind| IncomePart {
+            part: DistributionPart {
+                kind,
+                target: mwt_model::DistTarget::None,
+                amount: amount("1"),
+                status: PartStatus::Done,
+                effect: None,
+            },
+            transfer: None,
+            envelope_move: None,
+        };
+        let income = TransactionInput::Topup {
+            common: TxCommonInput::default(),
+            store_id: "card".into(),
+            asset: AssetIdent::default(),
+            amount: amount("3"),
+            fee: None,
+            from: None,
+            details: KindDetails::default(),
+            parts: Vec::new(),
+        }
+        .to_transaction();
+        let tree = IncomeTree {
+            income,
+            parts: vec![
+                part(DistKind::Sum {
+                    amount: amount("1"),
+                }),
+                part(DistKind::Percent { pct: amount("5") }),
+                part(DistKind::Remainder),
+            ],
+        };
+        assert_eq!(tree.distributed_count(), 2);
     }
 }

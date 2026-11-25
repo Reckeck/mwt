@@ -31,12 +31,12 @@ use mwt_planning::{
     goals as goal_reads, upcoming as upcoming_reads,
 };
 use mwt_usecases::ipc_contract::{
-    AdjustPointsInput, AssetIdent, AutomationInput, BudgetInput, ConfirmEstimatedInput,
-    CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PeriodEffect, PriceAlertInput,
-    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput,
-    SnoozeReminderInput, UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput,
-    UpdateMeterReadingInput, UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput,
-    UtilityInput,
+    AdjustPointsInput, AssetIdent, AutomationInput, BudgetInput, ConfirmDistributionInput,
+    ConfirmEstimatedInput, CreateLoyaltyProgramInput, DistributionPreview, GoalInput,
+    MeterReadingInput, PeriodEffect, PriceAlertInput, ReminderInput, SetDepositTermsInput,
+    SetLoyaltyInfoInput, SimulateAutomationsInput, SnoozeReminderInput, UpdateAutomationInput,
+    UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput, UpdatePriceAlertInput,
+    UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
 use mwt_usecases::service::Session;
 use mwt_usecases::usecases::household::{loyalty, utilities};
@@ -294,6 +294,49 @@ pub async fn preview_period_change(
 ) -> Result<PeriodEffect, IpcError> {
     with_vault(&state, |vault| {
         period_preview::preview_period_change(vault, &id, period, spread)
+    })
+}
+
+// -- distribution rule (spec op-period I11, I12) -----------------------------------
+
+/// The rows of the automation's next payout under its template's rule, for the given or the
+/// expected amount. Writes nothing.
+#[tauri::command]
+pub async fn preview_distribution_rule(
+    automation_id: String,
+    amount: Option<Amount>,
+    state: State<'_, AppState>,
+) -> Result<DistributionPreview, IpcError> {
+    with_vault(&state, |vault| {
+        let preview =
+            automations::preview_distribution_rule(vault, &automation_id, amount, now_secs())?;
+        Ok(DistributionPreview::of(
+            preview.amount,
+            Some(preview.planned_at),
+            preview.period,
+            preview.resolved,
+        ))
+    })
+}
+
+/// The answer «yes» to the confirmation of an automation run that asks: the income is booked at
+/// the confirmed amount and distributed by the rule. Returns the income as stored.
+#[tauri::command]
+pub async fn confirm_distribution(
+    input: ConfirmDistributionInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Transaction, IpcError> {
+    let zone = current_zone(&app);
+    with_vault_mut(&state, |vault| {
+        automations::confirm_distribution(
+            vault,
+            &input.run_id,
+            input.amount,
+            input.mode,
+            now_secs(),
+            &zone,
+        )
     })
 }
 
@@ -860,4 +903,4 @@ pub async fn get_utility_payment_draft(
     })
 }
 
-ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, resolve_period_rule, preview_spread, preview_period_change, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);
+ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, resolve_period_rule, preview_spread, preview_period_change, preview_distribution_rule, confirm_distribution, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);
