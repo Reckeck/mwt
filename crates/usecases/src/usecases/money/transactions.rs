@@ -132,8 +132,9 @@ pub(crate) fn add_transaction_distributed(
 fn apply_creation_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRules) {
     Session::normalize_categories(tx);
     crate::money::validate::apply_categorization_rules(&vault.doc, tx);
+    let period_given = tx.meta().period.is_some();
     apply_period_rules(vault, tx, rules);
-    settle_tx_spread(tx, None);
+    settle_tx_spread(tx, period_given, None);
 }
 
 /// The amount a period spreads and the minor digits it is cut to; none for a kind with no period.
@@ -179,8 +180,8 @@ fn apply_period_rules(vault: &Session, tx: &mut Transaction, rules: &CreationRul
 }
 
 /// P6, P8: keep the stored shares in step with the amount and the period; `before` is the
-/// record as stored when this is an edit.
-fn settle_tx_spread(tx: &mut Transaction, before: Option<&Transaction>) {
+/// record as stored when this is an edit; `period_given` is false when a rule gave the period.
+fn settle_tx_spread(tx: &mut Transaction, period_given: bool, before: Option<&Transaction>) {
     let Some((amount, places)) = spreadable(tx) else {
         return;
     };
@@ -197,6 +198,7 @@ fn settle_tx_spread(tx: &mut Transaction, before: Option<&Transaction>) {
         meta.spread.take(),
         amount,
         places,
+        period_given,
         stored.as_ref(),
     );
 }
@@ -413,7 +415,7 @@ fn edit(
     let mut tx = patched(&stored, id, patch);
     keep_income_links(&stored, &mut tx)?;
     let redistribute = rows_for_edited_income(&stored, &mut tx);
-    settle_tx_spread(&mut tx, Some(&stored));
+    settle_tx_spread(&mut tx, true, Some(&stored));
     prepare_transaction(vault, &mut tx)?;
     let event_edit = if follow_events {
         crate::household::shared_events::ledger::plan_tx_edit(&vault.doc, id, &tx)?

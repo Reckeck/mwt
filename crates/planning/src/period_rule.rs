@@ -119,26 +119,30 @@ fn settle_manual(
     spread
 }
 
-/// P5, P8: on a single-month period a derived spread is dropped; a manual one is kept (so that
-/// validation refuses it) unless an edit moved the operation to that period.
+/// P5, P8: on a single-month period a spread the caller gave with that period is kept (so that
+/// validation refuses it); a spread beside a period a rule gave, or beside a period an edit
+/// moved to that month, is dropped.
 fn keep_on_one_month(
     spread: Spread,
     period: &OpPeriod,
+    period_given: bool,
     before: Option<&SpreadBefore<'_>>,
 ) -> Option<Spread> {
     let period_unchanged = before.is_none_or(|stored| stored.period == Some(period));
-    (spread.mode == SpreadMode::Manual && period_unchanged).then_some(spread)
+    (period_given && period_unchanged).then_some(spread)
 }
 
-/// The spread to store (P6, P8): a single-month period drops it (a manual one only when an edit
-/// changed the period), `even` and `by_days` are
+/// The spread to store (P6, P8): a single-month period drops it (a spread given with an explicit
+/// period is kept for validation to refuse, unless
+/// changed the period, or a rule gave it), `even` and `by_days` are
 /// derived afresh in `places` minor digits, a `manual` one is kept unless it went stale.
-/// A spread with no readable period is returned as is; validation refuses it.
+/// `period_given` is false when a rule gave the period. A spread with no readable period is returned as is; validation refuses it.
 pub fn settle_spread(
     period: Option<&OpPeriod>,
     spread: Option<Spread>,
     amount: Amount,
     places: u32,
+    period_given: bool,
     before: Option<&SpreadBefore<'_>>,
 ) -> Option<Spread> {
     let spread = spread?;
@@ -150,7 +154,7 @@ pub fn settle_spread(
     };
     let months = months_touched(start, end);
     if months.len() < 2 {
-        return keep_on_one_month(spread, period, before);
+        return keep_on_one_month(spread, period, period_given, before);
     }
     let shares = match spread.mode {
         SpreadMode::Even => even_shares(amount, months.len(), places),
@@ -234,6 +238,7 @@ mod tests {
             Some(spread(SpreadMode::Even, &[])),
             amount("100.00"),
             2,
+            true,
             None,
         );
         assert_eq!(
@@ -250,16 +255,34 @@ mod tests {
     }
 
     #[test]
-    fn p8_single_month_period_drops_the_spread() {
+    fn p5_p8_a_rule_period_of_one_month_drops_a_derived_spread() {
         let month = period(PeriodKind::Month, "2026-10-01", "2026-10-31");
         let settled = settle_spread(
             Some(&month),
             Some(spread(SpreadMode::Even, &[])),
             amount("10"),
             2,
+            false,
             None,
         );
         assert_eq!(settled, None);
+    }
+
+    #[test]
+    fn p5_a_given_even_or_by_days_spread_on_one_month_is_kept_for_validation() {
+        let month = period(PeriodKind::Month, "2026-10-01", "2026-10-31");
+        for mode in [SpreadMode::Even, SpreadMode::ByDays] {
+            let given = spread(mode, &[]);
+            let settled = settle_spread(
+                Some(&month),
+                Some(given.clone()),
+                amount("10"),
+                2,
+                true,
+                None,
+            );
+            assert_eq!(settled, Some(given));
+        }
     }
 
     #[test]
@@ -268,7 +291,14 @@ mod tests {
         let other = period(PeriodKind::Month, "2026-09-01", "2026-09-30");
         let manual = spread(SpreadMode::Manual, &[("2026-10", "10")]);
         let settle = |before: Option<&SpreadBefore<'_>>| {
-            settle_spread(Some(&month), Some(manual.clone()), amount("10"), 2, before)
+            settle_spread(
+                Some(&month),
+                Some(manual.clone()),
+                amount("10"),
+                2,
+                true,
+                before,
+            )
         };
         assert_eq!(settle(None), Some(manual.clone()));
         let unchanged = SpreadBefore {

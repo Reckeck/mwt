@@ -323,6 +323,43 @@ fn p5_edit_adding_a_manual_spread_on_an_unchanged_one_month_period_is_refused() 
     assert!(matches!(refused, Err(crate::error::Error::InvalidInput(_))));
 }
 
+/// P5: an explicit `even` or `by_days` spread on a one-month period is refused at creation and
+/// on an edit that leaves the period unchanged; the vault stays as it was.
+#[test]
+fn p5_explicit_derived_spread_on_a_one_month_period_is_refused() {
+    let (_dir, mut vault, card) = vault_with_card();
+    for mode in [SpreadMode::Even, SpreadMode::ByDays] {
+        let tx = with_spread(salary(&card, "90"), november(), mode, &[]);
+        let before = vault.doc.transactions.len();
+        let refused = add_transaction(&mut vault, tx);
+        assert!(matches!(refused, Err(crate::error::Error::InvalidInput(_))));
+        assert_eq!(vault.doc.transactions.len(), before);
+    }
+    let mut plain = salary(&card, "90");
+    plain.meta_mut().period = Some(november());
+    let saved = add_transaction(&mut vault, plain).unwrap();
+    let id = saved.meta().id.clone();
+    let edited = with_spread(saved, november(), SpreadMode::Even, &[]);
+    let refused = update_transaction(&mut vault, &id, edited);
+    assert!(matches!(refused, Err(crate::error::Error::InvalidInput(_))));
+    assert_eq!(vault.doc.transactions.last().unwrap().meta().spread, None);
+}
+
+/// P5: a one-month period from a rule saves without the derived spread.
+#[test]
+fn p5_rule_period_of_one_month_saves_without_the_derived_spread() {
+    let (_dir, mut vault, card) = vault_with_card();
+    rule_on_salary(&mut vault, Some(PeriodRule::PrevMonth));
+    let mut tx = salary(&card, "90");
+    tx.meta_mut().spread = Some(Spread {
+        mode: SpreadMode::Even,
+        shares: vec![],
+    });
+    let saved = add_transaction(&mut vault, tx).unwrap();
+    assert!(saved.meta().period.is_some());
+    assert_eq!(spread_of(&saved), None);
+}
+
 /// P8: an edit moving a manual spread to a one-month period drops it.
 #[test]
 fn p8_edit_moving_a_manual_spread_to_a_one_month_period_drops_it() {
