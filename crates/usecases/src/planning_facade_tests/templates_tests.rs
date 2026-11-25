@@ -292,3 +292,129 @@ fn t2_repair_drops_dangling_references() {
     );
     assert!(kept.categories.is_empty());
 }
+
+mod quick_add {
+    use super::*;
+    use crate::usecases::money::transactions::add_transaction;
+    use crate::usecases::planning::templates::{QuickAdd, create_from_template};
+    use mwt_model::{AssetRef, Transaction};
+
+    fn rub() -> AssetRef {
+        AssetRef::fiat("RUB", "Russian Ruble")
+    }
+
+    fn envelope_on(vault: &mut Session, card: &str, name: &str) -> String {
+        let draft = crate::planning::envelopes::EnvelopeDraft {
+            store_id: card.into(),
+            name: name.into(),
+            asset: rub(),
+            target: None,
+            goal_id: None,
+        };
+        crate::usecases::household::envelopes::create_envelope(vault, draft)
+            .unwrap()
+            .id
+    }
+
+    /// The A2 rule: 20000 to the deposit, 5% and 3000 to two envelopes, the rest stays.
+    fn salary_template(vault: &mut Session, card: &str, deposit: &str) -> String {
+        let vacation = envelope_on(vault, card, "Vacation");
+        let gifts = envelope_on(vault, card, "Gifts");
+        let mut input = draft("Zarplata", TemplateKind::Income);
+        input.store_id = Some(card.into());
+        input.asset = Some(rub());
+        input.amount = Some(amount("120000"));
+        input.categories = vec!["salary".into()];
+        input.distribution = Some(rule(vec![
+            row(
+                DistKind::Sum {
+                    amount: amount("20000"),
+                },
+                DistTarget::Store { id: deposit.into() },
+            ),
+            row(
+                DistKind::Percent { pct: amount("5") },
+                DistTarget::Envelope { id: vacation },
+            ),
+            row(
+                DistKind::Sum {
+                    amount: amount("3000"),
+                },
+                DistTarget::Envelope { id: gifts },
+            ),
+            remainder(),
+        ]));
+        create_operation_template(vault, input).unwrap().id
+    }
+
+    fn setup_two() -> (tempfile::TempDir, Session, String, String) {
+        let (dir, mut vault, card) = vault_with_card();
+        let deposit = store(&mut vault, "Cushion", StoreKind::Bank, None);
+        (dir, vault, card, deposit)
+    }
+
+    fn on_5_nov() -> QuickAdd {
+        QuickAdd {
+            timestamp: Some("2026-11-05T10:00:00Z".into()),
+            ..QuickAdd::default()
+        }
+    }
+
+    #[test]
+    fn a4b_quick_add_sets_the_period_and_distributes_in_one_write() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        let added = create_from_template(&mut vault, &id, on_5_nov()).unwrap();
+        assert!(!added.ask);
+        let Transaction::Topup(topup) = &added.transaction else {
+            panic!("an income")
+        };
+        let period = topup.meta.period.as_ref().expect("a period");
+        assert_eq!(period.start, "2026-10-16");
+        assert_eq!(period.end, "2026-10-31");
+        let parts = topup.distribution.as_ref().unwrap();
+        let amounts: Vec<_> = parts.iter().map(|part| part.amount).collect();
+        assert_eq!(
+            amounts,
+            ["20000", "6000", "3000", "91000"].map(amount).to_vec()
+        );
+        let transfers = vault
+            .doc
+            .transactions
+            .iter()
+            .filter(|tx| matches!(tx, Transaction::Transfer(_)))
+            .count();
+        assert_eq!(transfers, 1);
+        assert_eq!(holding_of(&vault, &deposit, &rub()), amount("20000"));
+    }
+
+    #[test]
+    fn an_over_allocating_rule_writes_nothing() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let id = salary_template(&mut vault, &card, &deposit);
+        let before = vault.doc.transactions.len();
+        let input = QuickAdd {
+            amount: Some(amount("10000")),
+            ..on_5_nov()
+        };
+        // ShrinkRemainder keeps the 20000 sum: it exceeds the 10000 payout.
+        assert!(create_from_template(&mut vault, &id, input).is_err());
+        assert_eq!(vault.doc.transactions.len(), before);
+    }
+
+    #[test]
+    fn an_edited_input_keeps_its_own_period() {
+        let (_dir, mut vault, card, deposit) = setup_two();
+        let _ = salary_template(&mut vault, &card, &deposit);
+        let mut tx = crate::service::test_support::income_of(&card, rub(), "5", "0.01", "x");
+        at(&mut tx, "2026-11-05T10:00:00Z");
+        let period = mwt_model::OpPeriod {
+            kind: mwt_model::PeriodKind::Month,
+            start: "2026-09-01".into(),
+            end: "2026-09-30".into(),
+        };
+        tx.meta_mut().period = Some(period.clone());
+        let saved = add_transaction(&mut vault, tx).unwrap();
+        assert_eq!(saved.meta().period, Some(period));
+    }
+}

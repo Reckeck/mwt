@@ -83,15 +83,28 @@ pub struct CreationRules {
 /// comes from the template's rule, else the rule of the main category, and is stored (D3, D4).
 pub fn add_transaction_ruled(
     vault: &mut Session,
+    tx: Transaction,
+    property_id: Option<&str>,
+    rules: &CreationRules,
+) -> Result<Transaction> {
+    add_transaction_distributed(vault, tx, property_id, rules, None)
+}
+
+/// [`add_transaction_ruled`] for an income whose distribution rows the caller resolved (a quick-add
+/// from a template, T21): `rows` win over a list carried by `tx`; income and effects commit once.
+pub(crate) fn add_transaction_distributed(
+    vault: &mut Session,
     mut tx: Transaction,
     property_id: Option<&str>,
     rules: &CreationRules,
+    resolved_rows: Option<Vec<DistributionRow>>,
 ) -> Result<Transaction> {
     refuse_forged_income_ref(&tx)?;
     apply_period_rules(vault, &mut tx, rules);
     settle_tx_spread(&mut tx, None);
     check_property_link(vault, property_id)?;
-    let rows = take_distribution_rows(&mut tx);
+    let carried = take_distribution_rows(&mut tx);
+    let rows = resolved_rows.or(carried);
     prepare_transaction(vault, &mut tx)?;
     ensure_fresh_id(&vault.doc, &mut tx);
     let backup = vault.doc.clone();
