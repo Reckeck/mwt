@@ -15,6 +15,7 @@ use crate::money::rebase::{pick, rebased, three_way};
 use crate::money::tree::find_store;
 use crate::service::Session;
 
+use crate::usecases::household::categories::PeriodRuleChange;
 use crate::usecases::planning::automations::automation;
 
 /// With `input.base` set, replace the form's fields by the merge of the
@@ -72,6 +73,7 @@ pub fn rebase_category_input(
     doc: &VaultDoc,
     mut input: UpdateCategoryInput,
 ) -> Result<UpdateCategoryInput> {
+    PeriodRuleChange::parse(input.period_rule, input.clear_period_rule)?;
     let (Some(base), Some(current)) = (
         input.base.take(),
         doc.categories.iter().find(|item| item.key == input.key),
@@ -94,7 +96,14 @@ pub fn rebase_category_input(
     input.passive = input
         .passive
         .and_then(|flag| pick(&base.passive, &Some(flag), &current.passive));
-    input.period_rule = pick(&base.period_rule, &input.period_rule, &current.period_rule);
+    // An absent rule is «not touched» (the base), a clear is «touched to none».
+    let edited = if input.clear_period_rule {
+        None
+    } else {
+        input.period_rule.or(base.period_rule)
+    };
+    input.period_rule = pick(&base.period_rule, &edited, &current.period_rule);
+    input.clear_period_rule = input.period_rule.is_none();
     Ok(input)
 }
 

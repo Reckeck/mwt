@@ -6,7 +6,7 @@ use mwt_money::categories::categorization_rules;
 use mwt_usecases::ipc_contract::{
     CreateCategoryInput, CreateRuleInput, UpdateCategoryInput, UpdateRuleInput,
 };
-use mwt_usecases::usecases::household::categories;
+use mwt_usecases::usecases::household::categories::{self, PeriodRuleChange};
 use mwt_usecases::usecases::money::rebase::rebase_category_input;
 
 use crate::commands::AppState;
@@ -48,7 +48,7 @@ pub async fn update_category(
             input.name.as_deref(),
             input.group,
             (input.essential, input.passive),
-            input.period_rule,
+            PeriodRuleChange::parse(input.period_rule, input.clear_period_rule)?,
         )
     })
 }

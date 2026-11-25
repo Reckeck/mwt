@@ -70,17 +70,43 @@ pub fn update_category(
     })
 }
 
-/// [`update_category`] that also sets the period rule as given; `None` clears it.
+/// What an edit does to the stored period rule of a category.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeriodRuleChange {
+    Keep,
+    Clear,
+    Set(PeriodRule),
+}
+
+impl PeriodRuleChange {
+    /// Read the two input fields; a rule together with a clear is refused.
+    pub fn parse(period_rule: Option<PeriodRule>, clear: bool) -> Result<Self> {
+        match (period_rule, clear) {
+            (Some(_), true) => Err(Error::InvalidInput(
+                "period_rule and clear_period_rule cannot be sent together".into(),
+            )),
+            (Some(rule), false) => Ok(Self::Set(rule)),
+            (None, true) => Ok(Self::Clear),
+            (None, false) => Ok(Self::Keep),
+        }
+    }
+}
+
+/// [`update_category`] that also changes the period rule as asked.
 pub fn update_category_ruled(
     vault: &mut Session,
     key: &str,
     name: Option<&str>,
     group: CategoryGroup,
     flags: (Option<bool>, Option<bool>),
-    period_rule: Option<PeriodRule>,
+    change: PeriodRuleChange,
 ) -> Result<Category> {
     let mut category = plan_update_category(&vault.doc, key, name, group, flags.0, flags.1)?;
-    category.period_rule = period_rule;
+    match change {
+        PeriodRuleChange::Keep => {}
+        PeriodRuleChange::Clear => category.period_rule = None,
+        PeriodRuleChange::Set(rule) => category.period_rule = Some(rule),
+    }
     vault.transact(|tx| {
         replace_category(tx, category.clone())?;
         Ok(category)

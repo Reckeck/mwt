@@ -7,7 +7,7 @@ use crate::model::category::CategoryGroup;
 use crate::money::categories::*;
 use crate::service::Session;
 use crate::service::test_support::*;
-use crate::usecases::household::categories as scenarios;
+use crate::usecases::household::categories::{self as scenarios, PeriodRuleChange};
 
 #[test]
 fn a_new_vault_has_the_default_categories() {
@@ -321,7 +321,7 @@ fn a_category_takes_and_clears_a_period_rule() {
         Some("Bonus"),
         CategoryGroup::Income,
         (None, None),
-        Some(PeriodRule::ThisMonth),
+        PeriodRuleChange::Set(PeriodRule::ThisMonth),
     )
     .unwrap();
     assert_eq!(kept.period_rule, Some(PeriodRule::ThisMonth));
@@ -331,8 +331,92 @@ fn a_category_takes_and_clears_a_period_rule() {
         Some("Bonus"),
         CategoryGroup::Income,
         (None, None),
-        None,
+        PeriodRuleChange::Clear,
     )
     .unwrap();
     assert_eq!(cleared.period_rule, None);
+}
+
+#[test]
+fn an_edit_without_a_period_rule_keeps_it_and_the_d3_period_still_applies() {
+    use crate::ipc_contract::UpdateCategoryInput;
+    use crate::usecases::money::rebase::rebase_category_input;
+    use mwt_model::PeriodRule;
+    let (_dir, mut vault) = setup();
+    let cash = vault.doc.stores[0].id.clone();
+    let made = scenarios::create_category_ruled(
+        &mut vault,
+        Some("salary2"),
+        "Pay",
+        CategoryGroup::Income,
+        Some(PeriodRule::PrevHalfSecond),
+    )
+    .unwrap();
+    let input = UpdateCategoryInput {
+        key: made.key.clone(),
+        name: Some("Pay renamed".into()),
+        group: CategoryGroup::Income,
+        base: Some(made.clone()),
+        ..UpdateCategoryInput::default()
+    };
+    let input = rebase_category_input(&vault.doc, input).unwrap();
+    let renamed = scenarios::update_category_ruled(
+        &mut vault,
+        &input.key,
+        input.name.as_deref(),
+        input.group,
+        (input.essential, input.passive),
+        PeriodRuleChange::parse(input.period_rule, input.clear_period_rule).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(renamed.period_rule, Some(PeriodRule::PrevHalfSecond));
+    let mut tx = income(&cash, "100", "pay");
+    at(&mut tx, "2026-11-05T10:00:00Z");
+    if let crate::model::transaction::Transaction::Topup(topup) = &mut tx {
+        topup.meta.categories = vec![made.key.clone()];
+    }
+    let saved = crate::usecases::money::transactions::add_transaction(&mut vault, tx).unwrap();
+    let period = saved.meta().period.clone().expect("D3 period");
+    assert_eq!(period.start.to_string(), "2026-10-16");
+    assert_eq!(period.end.to_string(), "2026-10-31");
+}
+
+#[test]
+fn clear_period_rule_clears_set_replaces_and_both_are_refused() {
+    use mwt_model::PeriodRule;
+    assert_eq!(
+        PeriodRuleChange::parse(None, true).unwrap(),
+        PeriodRuleChange::Clear
+    );
+    assert_eq!(
+        PeriodRuleChange::parse(Some(PeriodRule::PrevMonth), false).unwrap(),
+        PeriodRuleChange::Set(PeriodRule::PrevMonth)
+    );
+    assert_eq!(
+        PeriodRuleChange::parse(None, false).unwrap(),
+        PeriodRuleChange::Keep
+    );
+    assert!(matches!(
+        PeriodRuleChange::parse(Some(PeriodRule::PrevMonth), true),
+        Err(Error::InvalidInput(_))
+    ));
+    let (_dir, mut vault) = setup();
+    let made = scenarios::create_category_ruled(
+        &mut vault,
+        None,
+        "Bonus",
+        CategoryGroup::Income,
+        Some(PeriodRule::PrevMonth),
+    )
+    .unwrap();
+    let kept = scenarios::update_category_ruled(
+        &mut vault,
+        &made.key,
+        Some("Bonus"),
+        CategoryGroup::Income,
+        (None, None),
+        PeriodRuleChange::Keep,
+    )
+    .unwrap();
+    assert_eq!(kept.period_rule, Some(PeriodRule::PrevMonth));
 }

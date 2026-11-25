@@ -8632,9 +8632,14 @@ essential: boolean | null,
  */
 passive: boolean | null, 
 /**
- * The period rule of the category; `None` clears it.
+ * The period rule of the category; `None` keeps the stored one (clear it with
+ * `clear_period_rule`).
  */
 period_rule?: PeriodRule, 
+/**
+ * Remove the stored period rule; refused together with `period_rule`.
+ */
+clear_period_rule?: boolean, 
 /**
  * The version the form loaded. When set, only the fields the user changed against it are
  * applied onto the current document (an edit never overwrites a remote change to another

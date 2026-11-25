@@ -1530,10 +1530,15 @@ pub struct UpdateCategoryInput {
     /// Passive income flag for `Income`; `None` keeps it.
     #[serde(default)]
     pub passive: Option<bool>,
-    /// The period rule of the category; `None` clears it.
+    /// The period rule of the category; `None` keeps the stored one (clear it with
+    /// `clear_period_rule`).
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub period_rule: Option<mwt_model::PeriodRule>,
+    /// Remove the stored period rule; refused together with `period_rule`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub clear_period_rule: bool,
     /// The version the form loaded. When set, only the fields the user changed against it are
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.

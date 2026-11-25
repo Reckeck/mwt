@@ -318,7 +318,7 @@ A future passes `venue` and `symbol`, the contract is built on the backend.
 |---|---|---|
 | `list_categories` | — | `Vec<Category>` |
 | `create_category` | `CreateCategoryInput { key?, name, group }` | `Category` (the key is derived from the name and made unique) |
-| `update_category` | `UpdateCategoryInput { key, name?, group, essential?, passive? }` | `Category` (an empty name — the built-in label; `essential: null` / `passive: null` leave the mandatory-spend / passive-income flag as is) |
+| `update_category` | `UpdateCategoryInput { key, name?, group, essential?, passive?, period_rule?, clear_period_rule?, base? }` | `Category` (an empty name — the built-in label; `essential: null` / `passive: null` leave the mandatory-spend / passive-income flag as is; an absent `period_rule` keeps the stored rule, `period_rule` replaces it, `clear_period_rule: true` removes it, both together are `INVALID_INPUT`) |
 | `archive_category` | `key, archived` | `()` |
 | `delete_category` | `key` | `()` — only an unused one |
 | `list_categorization_rules` | — | `Vec<CategorizationRule>` in order of application |
