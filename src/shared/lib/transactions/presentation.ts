@@ -26,6 +26,6 @@ export function amountClass(signed: string): string {
 
 /** Colour for a whole transaction, from the kinds that only ever move money one way. */
 export function txAmountClass(kind: TxKind): string {
-  if (kind === 'topup') return 'text-success'
-  return kind === 'payment' ? 'text-destructive' : ''
+  if (kind === 'topup') return 'text-money-income'
+  return kind === 'payment' ? 'text-money-expense' : ''
 }

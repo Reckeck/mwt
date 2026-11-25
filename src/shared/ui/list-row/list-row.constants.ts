@@ -6,5 +6,5 @@ import type { ListRowTone } from './list-row.types'
 export const LIST_ROW_TONE_CLASS: Record<ListRowTone, string> = {
   ink: MONEY_FLOW_CLASS.expense,
   positive: MONEY_FLOW_CLASS.income,
-  negative: 'text-destructive',
+  negative: 'text-money-expense',
 }

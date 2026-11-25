@@ -4,7 +4,7 @@ export type MoneyFlow = 'expense' | 'income' | 'move'
 /** Text colour per flow: expense is ink, income is the positive green, a move is muted. */
 export const MONEY_FLOW_CLASS: Record<MoneyFlow, string> = {
   expense: 'text-foreground',
-  income: 'text-success',
+  income: 'text-money-income',
   move: 'text-muted-foreground',
 }
 

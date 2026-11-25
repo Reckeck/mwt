@@ -23,7 +23,7 @@ describe('Money flow colours (D7)', () => {
   it('income is positive with a plus', () => {
     const { text, classes } = render('income', '40')
     expect(text).toMatch(/^\+/)
-    expect(classes).toContain('text-success')
+    expect(classes).toContain('text-money-income')
   })
 
   it('transfer or exchange is muted without a sign', () => {
