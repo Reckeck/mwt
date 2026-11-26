@@ -117,9 +117,7 @@ describe('evaluateAmountExpr digit cap', () => {
     const result = evaluateAmountExpr(`${'1'.repeat(19)}/10`)
     expect(result.ok).toBe(false)
   })
-})
 
-describe('evaluateAmountExpr digit cap', () => {
   it('reports an operand past the cap as tooLong, not syntax', () => {
     expect(evaluateAmountExpr('9999999999999999999+1')).toEqual({ ok: false, code: 'tooLong' })
   })
