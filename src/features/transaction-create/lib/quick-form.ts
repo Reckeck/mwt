@@ -16,12 +16,16 @@ export interface QuickFormState {
   category: string
   /** Local `YYYY-MM-DDTHH:mm`; blank means now. */
   timestamp: string
+  /** The counterparty's contact id; blank means nobody. */
+  contactId: string
+  /** A free note. */
+  note: string
 }
 
 export type QuickField = 'amount' | 'storeId' | 'toStoreId' | 'category' | 'timestamp'
 
 export function emptyQuickForm(kind: QuickKind = 'payment', storeId = ''): QuickFormState {
-  return { kind, storeId, toStoreId: '', amount: '', category: '', timestamp: '' }
+  return { kind, storeId, toStoreId: '', amount: '', category: '', timestamp: '', contactId: '', note: '' }
 }
 
 /** What a field lacks, by the rules of the kind (rule 13: said under the field on save). */
@@ -41,7 +45,7 @@ export function quickErrors(form: QuickFormState): Record<QuickField, FieldError
   }
 }
 
-/** A series keeps the kind, the wallets, the category and the date; the amount starts blank. */
+/** A series keeps the kind, the wallets, the category, the counterparty and the date; the amount starts blank. */
 export function nextInSeries(form: QuickFormState): QuickFormState {
   return { ...form, amount: '' }
 }
@@ -50,10 +54,10 @@ export function nextInSeries(form: QuickFormState): QuickFormState {
 export function quickFormToInput(form: QuickFormState, asset: AssetRef): TransactionInput {
   const common: TxCommonInput = {
     timestamp: keepOriginalMoment(form.timestamp, null),
-    comment: '',
+    comment: form.note.trim(),
     categories: form.kind === 'transfer' || !form.category ? [] : [form.category],
     flow_id: null,
-    contact_id: null,
+    contact_id: form.contactId || null,
     price_usd: null,
     fx_override: null,
     price: null,

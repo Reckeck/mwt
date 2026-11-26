@@ -2,21 +2,23 @@
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { CategorySelect } from '@/features/category-select'
+import { ContactPicker } from '@/features/contact-select'
 import { useCategories } from '@/shared/api/queries'
 import { categoryOptions } from '@/shared/lib/categories'
 import type { FieldError } from '@/shared/lib/form'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormField } from '@/shared/ui/form-field'
-import { Select, SelectItem } from '@/shared/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
 import { QUICK_KINDS, type QuickField, type QuickFormState, type QuickKind } from '../../lib/quick-form'
 import { AccountRefPicker } from '../account-ref-picker'
 import { QuickAmount } from '../quick-amount'
+import { QuickNote } from '../quick-note'
 
 /**
  * The body of the quick add: the kind switch, the hero amount (keypad on a phone), the wallet,
- * the category and the date. It validates nothing itself: it shows what the owner passes in
+ * the category, the counterparty, the date and the note. It validates nothing itself: it shows what the owner passes in
  * `errors` (after a save was tried, rule 13).
  */
 const props = defineProps<{ errors: Partial<Record<QuickField, FieldError | undefined>> }>()
@@ -59,13 +61,19 @@ function pickKind(value: unknown) {
       <AccountRefPicker id="quick-to-store" v-model="form.toStoreId" :invalid="Boolean(props.errors.toStoreId)" />
     </FormField>
     <FormField v-else for="quick-category" :label="t('quickAdd.category')" required :error="props.errors.category ?? undefined">
-      <Select id="quick-category" v-model="form.category" :invalid="Boolean(props.errors.category)" :placeholder="t('quickAdd.pickCategory')">
-        <SelectItem v-for="option in options" :key="option.value" :value="option.value">{{ option.label }}</SelectItem>
-      </Select>
+      <CategorySelect v-model="form.category" :options="options" :invalid="Boolean(props.errors.category)" />
     </FormField>
 
     <FormField for="quick-date" :label="t('quickAdd.date')" :error="props.errors.timestamp ?? undefined">
-      <DateTimePicker id="quick-date" v-model="form.timestamp" mode="datetime" required :invalid="Boolean(props.errors.timestamp)" />
+      <DateTimePicker id="quick-date" chip v-model="form.timestamp" mode="datetime" required :invalid="Boolean(props.errors.timestamp)" />
+    </FormField>
+
+    <FormField v-if="form.kind !== 'transfer'" for="quick-contact" :label="t('quickAdd.contact')">
+      <ContactPicker id="quick-contact" v-model="form.contactId" />
+    </FormField>
+
+    <FormField for="quick-note" :label="t('quickAdd.note')">
+      <QuickNote id="quick-note" v-model="form.note" />
     </FormField>
   </div>
 </template>

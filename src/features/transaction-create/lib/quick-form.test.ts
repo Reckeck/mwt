@@ -54,3 +54,16 @@ describe('nextInSeries', () => {
     expect(nextInSeries(form)).toEqual({ ...form, amount: '' })
   })
 })
+
+describe('quickFormToInput counterparty and note', () => {
+  it('carries the contact and the trimmed note of an expense', () => {
+    const form = { ...emptyQuickForm('payment', 'a'), category: 'food', amount: '5', contactId: 'c1', note: ' lunch ' }
+    const input = quickFormToInput(form, rub)
+    expect(input.common.contact_id).toBe('c1')
+    expect(input.common.comment).toBe('lunch')
+  })
+
+  it('sends no contact when none is picked', () => {
+    expect(quickFormToInput({ ...emptyQuickForm('payment', 'a'), amount: '5' }, rub).common.contact_id).toBeNull()
+  })
+})
