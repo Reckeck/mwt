@@ -35,4 +35,25 @@ describe('reportContrast', () => {
     expect(() => reportContrast({ '--foreground': 'nonsense' })).not.toThrow()
     expect(() => reportContrast({})).not.toThrow()
   })
+
+  it.each([
+    ['named', 'white', 'whitesmoke'],
+    ['oklab', 'oklab(0.99 0 0)', 'oklab(0.97 0 0)'],
+    ['turn unit', 'oklch(0.99 0 0.5turn)', 'oklch(0.97 0 0.25turn)'],
+  ])('blocks a %s theme at about 1:1 instead of skipping it', (_label, background, foreground) => {
+    const report = reportContrast({ ...base(), '--background': background, '--foreground': foreground })
+    expect(report.errors).toHaveLength(1)
+    expect(report.errors[0].message).toContain('--foreground on --background')
+  })
+
+  it('reports an unreadable colour as a blocking error for foreground on background', () => {
+    const report = reportContrast({ ...base(), '--foreground': 'not-a-colour' })
+    expect(report.errors.some((error) => error.message.includes('--foreground on --background'))).toBe(true)
+  })
+
+  it('reports an unreadable colour as a warning for other pairs', () => {
+    const report = reportContrast({ ...base(), '--muted-foreground': 'not-a-colour' })
+    expect(report.errors).toEqual([])
+    expect(report.contrastWarning).toBe(true)
+  })
 })
