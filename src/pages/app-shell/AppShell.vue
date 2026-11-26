@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
+import { QuickAddDialog } from '@/widgets/quick-add'
 import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { UpdateNotice, useUpdateEvents } from '@/features/app-update'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
@@ -157,6 +158,7 @@ const pageClass = computed(() => {
     <MoneyCardHost />
     <EntityHost />
     <ConverterDialog />
+    <QuickAddDialog v-model:open="quickAddOpen" />
     <SyncPairingDialog />
     <SyncPlanDialog />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />
