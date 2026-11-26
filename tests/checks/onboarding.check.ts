@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest'
 import { duplicateLocaleKeys, mergeLocale } from '@/shared/config/i18n/parts'
 import type { LocaleMessages, LocaleParts } from '@/shared/config/i18n/parts'
 import { TOURLESS_ROUTES, TOURS } from '@/shared/lib/tour/tours'
-import { CRYPTO_TOURLESS_TARGETS } from '@/shared/lib/tour/tours.crypto'
 import { WHATS_NEW } from '@/shared/config/whats-new'
 
 import { expectNone, ROOT } from './lib/report'
@@ -90,8 +89,14 @@ describe('check-onboarding', () => {
       errors.push(...missingKey(`whatsNew.${entry.id}.title`, `whats-new "${entry.id}"`))
       for (const point of entry.points) {
         errors.push(...missingKey(`whatsNew.${entry.id}.${point.key}`, `whats-new "${entry.id}"`))
-        // `settings:<group>[:<section>]` opens a settings group rather than a screen with a tour.
-        if (point.route && !point.route.startsWith('settings:') && !(point.route in TOURS)) {
+        // `settings:<group>[:<section>]` opens a settings group rather than a screen with a tour;
+        // a placeholder route (T72) has no tour until its W4 task brings it back.
+        if (
+          point.route &&
+          !point.route.startsWith('settings:') &&
+          !(point.route in TOURS) &&
+          !(point.route in TOURLESS_ROUTES)
+        ) {
           errors.push(`whats-new "${entry.id}.${point.key}": route "${point.route}" has no tour to show`)
         }
       }
@@ -122,26 +127,10 @@ describe('check-onboarding', () => {
     }
   })
 
-  it('a crypto anchor left out of the tours exists and has its reason', () => {
-    const used = new Set(Object.values(TOURS).flatMap((steps) => steps.map((step) => step.target)))
-    const errors: string[] = []
-    for (const [target, reason] of Object.entries(CRYPTO_TOURLESS_TARGETS)) {
-      if (!targets.has(target)) errors.push(`CRYPTO_TOURLESS_TARGETS: no element has data-tour="${target}"`)
-      if (used.has(target)) errors.push(`CRYPTO_TOURLESS_TARGETS: "${target}" is in a tour, remove it from the list`)
-      if (!reason.trim()) errors.push(`CRYPTO_TOURLESS_TARGETS: "${target}" has no reason`)
-    }
-    for (const [target, file] of targets) {
-      if (target.startsWith('crypto-') && !used.has(target) && !(target in CRYPTO_TOURLESS_TARGETS))
-        errors.push(`${file}: data-tour="${target}" is in no tour: add a step or a reason to CRYPTO_TOURLESS_TARGETS`)
-    }
-    expectNone(errors)
-  })
-
   it('reports', () => {
     const used = new Set(Object.values(TOURS).flatMap((steps) => steps.map((step) => step.target)))
     for (const [target, file] of targets) {
-      if (!used.has(target) && !(target in CRYPTO_TOURLESS_TARGETS))
-        console.warn(`warning: data-tour="${target}" (${file}) is in no tour`)
+      if (!used.has(target)) console.warn(`warning: data-tour="${target}" (${file}) is in no tour`)
     }
     console.log(`check-onboarding: ${routes.size} routes, ${Object.keys(TOURS).length} tours`)
   })

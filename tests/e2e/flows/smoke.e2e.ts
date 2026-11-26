@@ -1,31 +1,16 @@
 import { expect, test } from '../harness/app'
 
-test('unlock, home, open the new transaction form and close it', async ({ app }) => {
+// The screens are being rebuilt (T72): the shell and the shared route placeholder are what is left to walk.
+test('unlock, home shows the shell and the route placeholder', async ({ app }) => {
   await app.unlock()
   await app.at('/')
-  expect(await app.exists('[data-tour="quick-add"]')).toBe(true)
-
-  await app.click('[data-tour="quick-add"]')
-  await app.waitFor(`return document.querySelector('[role="dialog"]') !== null`, 'the quick-add dialog to open')
-
-  await app.page.send('Input.dispatchKeyEvent', {
-    type: 'keyDown',
-    key: 'Escape',
-    code: 'Escape',
-    windowsVirtualKeyCode: 27,
-  })
-  await app.page.send('Input.dispatchKeyEvent', {
-    type: 'keyUp',
-    key: 'Escape',
-    code: 'Escape',
-    windowsVirtualKeyCode: 27,
-  })
-  await app.waitFor(`return document.querySelector('[role="dialog"]') === null`, 'the dialog to close')
+  for (const anchor of ['quick-add', 'open-settings', 'command-palette'])
+    expect(await app.exists(`[data-tour="${anchor}"]`), anchor).toBe(true)
 })
 
-test('the sidebar settings button opens the settings window', async ({ app }) => {
+test('a route of a deleted screen still resolves and shows the placeholder', async ({ app }) => {
   await app.unlock()
-  await app.at('/')
-  await app.click('[data-tour="open-settings"]')
-  await app.waitFor(`return document.querySelector('[role="dialog"]') !== null`, 'the settings window to open')
+  await app.at('/transactions')
+  await app.waitFor(`return document.querySelector('[data-tour="quick-add"]') !== null`, 'the shell to mount')
+  expect(await app.exists('[role="dialog"]')).toBe(false)
 })

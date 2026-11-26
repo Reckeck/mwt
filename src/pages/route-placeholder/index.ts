@@ -1,1 +1,1 @@
-export { default as RoutePlaceholder } from './RoutePlaceholder.vue'
+export { default as RoutePlaceholder } from './ui/RoutePlaceholder.vue'
