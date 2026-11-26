@@ -116,6 +116,14 @@ describe('A4b operation templates (T1-T5)', () => {
     expect(refused?.message).toBe('a template named unique a4b already exists')
   })
 
+  it('refuses a distribution on an expense template', async () => {
+    const { input } = await template('Expense A4b')
+    const refused = await refusal(() =>
+      mock('create_operation_template', { input: { ...input, name: 'Expense dist A4b', kind: 'expense' } }),
+    )
+    expect(refused?.message).toBe('only an income template can carry a distribution')
+  })
+
   it('refuses to delete a template an automation refers to', async () => {
     const { made } = await template('Used A4b')
     const user = { id: crypto.randomUUID(), name: 'Pay day', operation_template_id: made.id } as Automation

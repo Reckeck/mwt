@@ -32,6 +32,7 @@ export function checkTemplate(template: OperationTemplate): void {
   }
   const rule = template.distribution
   if (!rule) return
+  if (template.kind !== 'income') fail('only an income template can carry a distribution')
   checkRows(rule.rows, true)
   checkTargets(rule.rows)
 }
