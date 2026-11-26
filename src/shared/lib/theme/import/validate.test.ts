@@ -1,5 +1,7 @@
 // check-ui-ignore raw-color: theme fixtures are colour data fed to the parser, not UI styling
 import { describe, expect, it } from 'vitest'
+import { checkPairs } from '../contrast'
+import { TEXT_PAIRS } from '../contrast-pairs'
 import { defaultDark } from '../themes/default-dark'
 import { defaultLight } from '../themes/default-light'
 import { THEME_TOKENS } from '../tokens'
@@ -152,5 +154,15 @@ describe('validateTheme', () => {
     const result = validateTheme(`/* mode: dark */\n:root { ${body} }`)
     expect(result.errors).toEqual([])
     expect(result.warnings).toEqual([])
+  })
+
+  it('blocks a near-black foreground written as bare hsl() numbers', () => {
+    const result = validateTheme('/* mode: dark */ :root{--background:hsl(0 0 0);--foreground:hsl(0 0 1)}')
+    const pair = TEXT_PAIRS.filter(
+      (entry) => entry.foreground === '--foreground' && entry.background === '--background',
+    )
+    expect(pair).toHaveLength(1)
+    const failing = checkPairs(result.theme?.tokens ?? {}, pair)
+    expect(failing.map((entry) => entry.foreground)).toEqual(['--foreground'])
   })
 })

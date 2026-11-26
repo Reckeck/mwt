@@ -66,13 +66,13 @@ function parseAlpha(token: string | undefined, color: string): number {
 }
 
 /** Legacy comma syntax (3 or 4 parts) or modern space syntax (3 channels, optional `/ alpha`); any other shape is rejected. */
-function splitArguments(body: string): { channels: string[]; alpha: string | undefined } {
+function splitArguments(body: string): { channels: string[]; alpha: string | undefined; legacy: boolean } {
   if (body.includes(',')) {
     const parts = body.split(',').map((part) => part.trim())
     if (body.includes('/') || (parts.length !== 3 && parts.length !== 4) || parts.some((part) => part === '')) {
       throw new ColorParseError(body)
     }
-    return { channels: parts.slice(0, 3), alpha: parts[3] }
+    return { channels: parts.slice(0, 3), alpha: parts[3], legacy: true }
   }
   const slashParts = body.split('/').map((part) => part.trim())
   if (slashParts.length > 2) throw new ColorParseError(body)
@@ -81,7 +81,13 @@ function splitArguments(body: string): { channels: string[]; alpha: string | und
   if (channels.length !== 3 || (alpha !== undefined && (alpha === '' || /\s/.test(alpha)))) {
     throw new ColorParseError(body)
   }
-  return { channels, alpha }
+  return { channels, alpha, legacy: false }
+}
+
+/** hsl() saturation or lightness: a percentage; in the modern space syntax a bare number is a percentage too (CSS Color 4), in legacy commas it is invalid. */
+function parseHslShare(token: string, color: string, legacy: boolean): number {
+  if (legacy && !token.endsWith('%')) throw new ColorParseError(color)
+  return clamp01(token.endsWith('%') ? parseNumber(token, color) : parseNumber(token, color) / 100)
 }
 
 function hslToRgb(hue: number, saturation: number, lightness: number): [number, number, number] {
@@ -123,7 +129,7 @@ function oklchToRgb(lightness: number, chroma: number, hue: number): [number, nu
 }
 
 function parseFunction(color: string, name: string, body: string): Rgba {
-  const { channels, alpha } = splitArguments(body)
+  const { channels, alpha, legacy } = splitArguments(body)
   if (channels.length !== 3) throw new ColorParseError(color)
   const kind = name.toLowerCase()
   if (kind.startsWith('rgb')) {
@@ -134,8 +140,8 @@ function parseFunction(color: string, name: string, body: string): Rgba {
     const hue = parseHue(channels[0], color)
     const [red, green, blue] = hslToRgb(
       hue,
-      clamp01(parseNumber(channels[1], color)),
-      clamp01(parseNumber(channels[2], color)),
+      parseHslShare(channels[1], color, legacy),
+      parseHslShare(channels[2], color, legacy),
     )
     return { red, green, blue, alpha: parseAlpha(alpha, color) }
   }
