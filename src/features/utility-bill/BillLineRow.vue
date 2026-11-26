@@ -41,8 +41,11 @@ function onReading(value: string | number, zone: string | null) {
   void priceRow(props.row)
 }
 const FIELD = 'h-8 min-w-0 flex-1 [&_input]:px-2 [&_input]:text-right'
-const AMOUNT =
-  '-mt-1.5 h-8 w-32 shrink-0 max-md:w-24 max-md:[&_input]:ps-0 border-transparent shadow-none hover:border-input focus-within:border-input [&_input]:pe-1 [&_input]:text-right [&_input]:font-medium'
+const AMOUNT = [
+  '-mt-1.5 h-8 w-32 shrink-0 max-md:w-24 max-md:[&_input]:ps-0',
+  'border-transparent shadow-none hover:border-input focus-within:border-input',
+  '[&_input]:pe-1 [&_input]:text-right [&_input]:font-medium',
+].join(' ')
 </script>
 
 <template>

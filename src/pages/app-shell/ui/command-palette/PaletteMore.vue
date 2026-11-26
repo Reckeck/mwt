@@ -15,7 +15,7 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { NAV_ITEMS } from '../../app-shell.constants'
+import { NAV_SECTIONS } from '../../lib/nav-sections'
 import { usePaletteIndex } from './use-palette-index'
 
 /**
@@ -39,12 +39,9 @@ const wallets = computed(() =>
     .filter((node) => !node.store.archived)
     .map((node) => walletRow(node, t, settings.baseCurrency)),
 )
-const index = usePaletteIndex(computed(() => NAV_ITEMS.map((item) => item.name)))
-/** Settings and sub-tabs: a heading and its entries each. */
-const groups = computed(() => [
-  { key: 'settings', heading: t('palette.settings'), items: index.settings.value },
-  { key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value },
-])
+const index = usePaletteIndex(computed(() => NAV_SECTIONS.map((section) => section.root)))
+/** Sub-tabs: a heading and its entries. */
+const groups = computed(() => [{ key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value }])
 </script>
 
 <template>

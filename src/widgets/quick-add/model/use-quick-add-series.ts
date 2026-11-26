@@ -1,4 +1,4 @@
-import { nextTick, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 
@@ -6,28 +6,25 @@ import { call } from '@/shared/api/ipc'
 import { useCategories } from '@/shared/api/queries'
 import { notify } from '@/shared/lib/notify'
 import { LEDGER_KEYS, PLANNING_KEYS } from '@/shared/lib/planning'
-import { openTxDetails } from '@/shared/lib/tx-details'
 import { txId } from '@/shared/lib/transactions'
+import { openTxDetails } from '@/shared/lib/tx-details'
 
 import { savedText } from '../lib/saved-text'
 
-const FORM_ID = 'transaction-form'
-
 /**
- * Enter and Ctrl Enter in the short form (OpForm-1 · 4). Enter saves and
- * closes, the toast offers `Undo`. Ctrl Enter saves and leaves the form
- * open on the same wallet and date for the next one, counting the series; its
- * toast offers `Open` and `Undo`.
+ * What happens after a save. `Add` closes the form and the toast offers `Undo`; `Save and add
+ * another` (Ctrl Enter) leaves the form open on the same wallet, category and date, counting
+ * the series; its toast offers `Open` and `Undo`.
  */
-export function useQuickAddSeries(close: () => void) {
+export function useQuickAddSeries(handlers: { close: () => void; next: () => unknown }) {
   const { t } = useI18n()
   const queryClient = useQueryClient()
   const categories = useCategories()
 
   /** Operations saved in this series; the title says the next one's number. */
   const series = ref(0)
-  /** Whether the save under way came from Ctrl Enter. */
-  let more = false
+  /** Whether the save under way asked for another one. */
+  let another = false
 
   const undo = useMutation({
     mutationFn: (id: string) => call('delete_transaction', { id }),
@@ -37,37 +34,32 @@ export function useQuickAddSeries(close: () => void) {
     meta: { success: 'toast.undone', error: 'tx.deleteFailed' },
   })
 
-  /** Ctrl Enter: the same submit as the button, so the checks and errors are the same too. */
-  function saveMore() {
-    more = true
-    const form = document.getElementById(FORM_ID)
-    if (form instanceof HTMLFormElement) form.requestSubmit()
-  }
-  /** Enter or `Add`: a plain save that closes the form. */
-  function saveOnce() {
-    more = false
+  /** Say which button the coming save came from. */
+  function intend(more: boolean) {
+    another = more
   }
 
   function saved(tx: Transaction) {
     const text = savedText(tx, categories.data.value, t)
-    if (!more) {
-      notify.success(text, { action: { label: t('actions.undo'), onClick: () => undo.mutate(txId(tx)) } })
-      close()
+    const cancel = { label: t('actions.undo'), onClick: () => undo.mutate(txId(tx)) }
+    if (!another) {
+      notify.success(text, { action: cancel })
+      handlers.close()
       return
     }
     series.value += 1
     notify.success(text, {
       description: t('quickAdd.kept'),
       action: { label: t('actions.open'), onClick: () => openTxDetails(tx) },
-      cancel: { label: t('actions.undo'), onClick: () => undo.mutate(txId(tx)) },
+      cancel,
     })
-    void nextTick(() => document.getElementById('tx-amount')?.focus())
+    handlers.next()
   }
 
   function reset() {
     series.value = 0
-    more = false
+    another = false
   }
 
-  return { series, saveMore, saveOnce, saved, reset }
+  return { series, intend, saved, reset }
 }

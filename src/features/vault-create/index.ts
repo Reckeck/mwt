@@ -1,2 +1,2 @@
-export { default as VaultCreateDialog } from './VaultCreateDialog.vue'
-export * from './useCreateVault'
+export { default as VaultCreateDialog } from './ui/VaultCreateDialog.vue'
+export * from './model/useCreateVault'

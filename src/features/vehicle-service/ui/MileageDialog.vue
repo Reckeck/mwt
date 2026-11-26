@@ -2,11 +2,12 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
+import { firstError, required, useFormValidation } from '@/shared/lib/form'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 
+import { kmError } from '../lib/mileage'
 import { useMileageUpdate } from '../model/use-vehicle'
 
 /** The odometer read today: the service by mileage is reminded from it. */
@@ -17,7 +18,7 @@ const { t } = useI18n()
 const km = ref('')
 watch(open, () => (km.value = String(props.store.property?.car?.mileage_km ?? '')), { immediate: true })
 
-const form = useFormValidation(() => ({ km: firstError(required(km.value), integerInRange(km.value, 0, 5_000_000)) }), {
+const form = useFormValidation(() => ({ km: firstError(required(km.value), kmError(km.value)) }), {
   resetOn: open,
 })
 const save = useMileageUpdate()

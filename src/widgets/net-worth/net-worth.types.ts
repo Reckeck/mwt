@@ -1,4 +1,8 @@
-export interface NetWorthCardProps {
-  /** The dashboard's period or the widget's own; the analytics screen leaves the month. */
-  period?: DashPeriod
+/** How far back the capital line goes; the labels are `money.wealth.spans.*`. */
+export type NetWorthSpan = 'last3' | 'last6' | 'last12' | 'all'
+
+export interface NetWorthProps {
+  points: NetworthPoint[]
+  /** Currency of the report (lower-case code). */
+  currency: string
 }

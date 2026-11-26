@@ -1,0 +1,16 @@
+{
+  "money.invest.title": "Инвестиции",
+  "money.invest.accounts": "Инвестиционные счета",
+  "money.invest.defiOpen": "Открыть позиции DeFi",
+  "cryptoTrack.positions.kind.pool": "пул ликвидности",
+  "cryptoTrack.positions.kind.lending": "заём и вклад",
+  "cryptoTrack.positions.kind.staking": "стейкинг",
+  "cryptoTrack.addresses.title": "Отслеживаемые адреса",
+  "cryptoTrack.addresses.settings": "Настройки сети",
+  "cryptoTrack.chart.title": "Цена",
+  "cryptoTrack.chart.symbol": "Монета",
+  "cryptoTrack.chart.step": "Шаг",
+  "cryptoTrack.chart.steps.hour": "Час",
+  "cryptoTrack.chart.steps.day": "День",
+  "cryptoTrack.chart.empty": "Данных о цене пока нет"
+}

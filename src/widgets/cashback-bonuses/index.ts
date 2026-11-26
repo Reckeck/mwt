@@ -1,1 +1,1 @@
-export { default as CashbackBonuses } from './CashbackBonuses.vue'
+export { default as CashbackBonuses } from './ui/CashbackBonuses.vue'

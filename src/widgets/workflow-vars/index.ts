@@ -1,1 +1,1 @@
-export { default as WorkflowVars } from './WorkflowVars.vue'
+export { default as WorkflowVars } from './ui/WorkflowVars.vue'

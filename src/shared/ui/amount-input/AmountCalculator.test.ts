@@ -1,0 +1,111 @@
+import { mount, type VueWrapper } from '@vue/test-utils'
+import { afterEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
+
+import AmountCalculator from './AmountCalculator.vue'
+
+function key(name: string) {
+  const button = document.querySelector<HTMLButtonElement>(`[data-calc-key="${name}"]`)
+  if (!button) throw new Error(`no key ${name}`)
+  return button
+}
+const text = (selector: string) => document.querySelector(selector)?.textContent?.trim()
+
+let mounted: VueWrapper | undefined
+
+async function open(initial = '') {
+  const wrapper = mount(AmountCalculator, {
+    props: { open: true, text: initial, decimalMark: ',', decimals: 2 },
+    attachTo: document.body,
+  })
+  mounted = wrapper
+  await nextTick()
+  await nextTick()
+  return wrapper
+}
+
+describe('AmountCalculator', () => {
+  afterEach(() => {
+    // Before the DOM goes: unmounting later would look for nodes that are no longer there.
+    mounted?.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('builds an expression and hands it back on «Готово»', async () => {
+    const wrapper = await open()
+    for (const name of ['1', '2', '0', '0', '+', '3', '5', '0', '×', '2']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-expr]')).toBe('1200+350×2')
+    expect(text('[data-keypad-result]')).toMatch(/^= 1\s?900$/)
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')?.[0]).toEqual(['1200+350×2'])
+    expect(wrapper.emitted('update:open')?.[0]).toEqual([false])
+  })
+
+  it('starts from the field text and erases', async () => {
+    await open('1 900')
+    expect(text('[data-keypad-expr]')).toBe('1900')
+    key('back').click()
+    await nextTick()
+    expect(text('[data-keypad-expr]')).toBe('190')
+    key('C').click()
+    await nextTick()
+    expect(text('[data-keypad-expr]')).toBe('0')
+  })
+
+  it('says «division by zero» and does not finish a broken expression', async () => {
+    const wrapper = await open()
+    for (const name of ['5', '÷', '0']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Деление на ноль')
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')).toBeUndefined()
+  })
+
+  it('«=» replaces the expression with its result', async () => {
+    await open()
+    for (const name of ['2', '+', '2']) {
+      key(name).click()
+      await nextTick()
+    }
+    key('=').click()
+    await nextTick()
+    expect(text('[data-keypad-expr]')).toBe('4')
+  })
+
+  it('says «too long» for a result past the digit cap and refuses Done', async () => {
+    const wrapper = await open('999999999999999999')
+    for (const name of ['×', '1', '0']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')).toBeUndefined()
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+  })
+
+  it('says «too long» for a plain number past the digit cap and refuses Done', async () => {
+    const wrapper = await open()
+    for (let count = 0; count < 19; count += 1) {
+      key('9').click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+    document.querySelector<HTMLButtonElement>('[data-calc-done]')?.click()
+    expect(wrapper.emitted('done')).toBeUndefined()
+  })
+
+  it('says «too long» for an operand past the cap inside an expression', async () => {
+    await open('9999999999999999999')
+    for (const name of ['+', '1']) {
+      key(name).click()
+      await nextTick()
+    }
+    expect(text('[data-keypad-result]')).toBe('Результат слишком длинный')
+  })
+})

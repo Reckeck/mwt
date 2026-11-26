@@ -7,6 +7,3 @@
  */
 
 export const CRYPTO_ACCOUNTS_KEY = ['crypto', 'accounts'] as const
-
-/** What the move to level 3 would retire from the totals (spec E11): one read-only answer, shared by the wizard and the tests. */
-export const CRYPTO_TRANSITION_KEY = ['crypto', 'transition'] as const

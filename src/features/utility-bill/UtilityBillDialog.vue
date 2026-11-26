@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
 import { Money } from '@/entities/currency'
-import { StoreNodeSelect } from '@/entities/store'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -83,7 +83,7 @@ watch(
         include: true,
         reading: line.reading ?? '',
         zoneReadings: Object.fromEntries(line.zones.map((zone) => [zone.zone, zone.reading ?? ''])),
-        amount: line.amount ? Number(line.amount).toFixed(2) : '',
+        amount: line.amount ? String(Math.round(Number(line.amount) * 100) / 100) : '',
       }
       // Already paid this month, or paid by an automation: left out unless ticked again.
       row.include = Number(line.paid) === 0 && !automated(row)
@@ -171,14 +171,7 @@ const pay = useMutation({
           </p>
         </FormField>
         <FormField for="bill-store" :label="t('utilityBill.store')" :required="needsStore" :error="form.error('store')">
-          <StoreNodeSelect
-            id="bill-store"
-            v-model="storeId"
-            :nodes="payable"
-            flat
-            :placeholder="t('utilityBill.pickStore')"
-            :invalid="Boolean(form.error('store'))"
-          />
+          <ComboStoreNodeSelect id="bill-store" v-model="storeId" :nodes="payable" :placeholder="t('utilityBill.pickStore')" />
         </FormField>
       </div>
 

@@ -1,59 +1,40 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Link2, X } from 'lucide-vue-next'
+import { X } from 'lucide-vue-next'
 
-import { useIsPhone } from '@/shared/lib/phone'
+import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
+import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
-import { ROW_CHIP_KEYS, useFilterChips } from '../../lib/filter-chips'
+import { useFilterChips } from '../../lib/filter-chips'
 
-/**
- * The set filters as chips, each takes itself off. A phone (Ops-1, `With files ×`): every one of them
- * in a line under the search, and `Reset` after them. A computer: only those without a field in the
- * row (several kinds from a report, `With a fee`, a chain); the rest are in the row or under `More filters`.
- */
-const props = withDefaults(defineProps<{ fixedScope?: boolean }>(), { fixedScope: false })
+/** Every set filter but the search as a chip that takes itself off. */
 const filter = defineModel<TxFilter>({ required: true })
-const emit = defineEmits<{ reset: [] }>()
 
 const { t } = useI18n()
-const phone = useIsPhone()
 const chipsOf = useFilterChips()
-const chips = computed(() => {
-  const all = chipsOf(filter.value, props.fixedScope)
-  if (phone.value) return all
-  // One kind is the row's `Kind` field.
-  return all.filter((chip) => ROW_CHIP_KEYS.includes(chip.key) && (chip.key !== 'kinds' || filter.value.kinds.length > 1))
-})
 </script>
 
 <template>
-  <div v-if="phone && chips.length" class="flex flex-wrap items-center gap-2" data-filter-chips>
-    <Button
-      v-for="chip in chips"
-      :key="chip.key"
-      class="touch-min max-w-full"
-      :aria-label="t('filter.chipRemove', { name: chip.label })"
-      @click="filter = { ...filter, ...chip.clear }"
-    >
-      <span class="truncate">{{ chip.label }}</span>
-      <X class="size-4" aria-hidden="true" />
-    </Button>
-    <Button variant="link" class="touch-min px-3" data-filter-chips-reset @click="emit('reset')">{{ t('period.reset') }}</Button>
-  </div>
-  <template v-else-if="!phone">
-    <Button
-      v-for="chip in chips"
-      :key="chip.key"
-      variant="secondary"
-      class="shrink-0"
-      :title="chip.key === 'flow' ? t('filter.clearFlow') : undefined"
-      @click="filter = { ...filter, ...chip.clear }"
-    >
-      <Link2 v-if="chip.key === 'flow'" class="size-4" />
-      {{ chip.label }}
-      <X class="size-3.5" />
-    </Button>
-  </template>
+  <ul v-if="chipsOf(filter).length" class="flex flex-wrap items-center gap-2" data-filter-chips>
+    <li v-for="chip in chipsOf(filter)" :key="chip.key">
+      <Badge variant="neutral" class="gap-1 pe-1" data-filter-chip>
+        <span class="max-w-48 truncate">{{ chip.label }}</span>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          class="rounded-full hover:bg-border"
+          :aria-label="t('filter.chipRemove', { name: chip.label })"
+          @click="filter = { ...filter, ...chip.clear }"
+        >
+          <X class="size-3" />
+        </Button>
+      </Badge>
+    </li>
+    <li v-if="chipsOf(filter).length > 1">
+      <Button variant="link" size="sm" class="h-auto p-0 text-xs text-muted-foreground" @click="filter = emptyTxFilter({ text: filter.text })">
+        {{ t('period.reset') }}
+      </Button>
+    </li>
+  </ul>
 </template>

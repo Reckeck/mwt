@@ -2,13 +2,14 @@
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { integerInRange, required, useFormValidation } from '@/shared/lib/form'
+import { required, useFormValidation } from '@/shared/lib/form'
 import { localDate } from '@/shared/lib/planning'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 
+import { kmError } from '../lib/mileage'
 import { useServiceDone } from '../model/use-vehicle'
 
 /** A service done: the next one moves by the car's intervals. */
@@ -28,7 +29,7 @@ watch(
 )
 
 const form = useFormValidation(
-  () => ({ date: required(date.value), km: integerInRange(km.value, 0, 5_000_000) }),
+  () => ({ date: required(date.value), km: kmError(km.value) }),
   { resetOn: open },
 )
 const save = useServiceDone()

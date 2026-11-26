@@ -1,1 +1,1 @@
-export { default as GoalList } from './GoalList.vue'
+export { default as GoalList } from './ui/GoalList.vue'

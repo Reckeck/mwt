@@ -9,9 +9,45 @@
 //   { wait: ms }       { eval: 'page code, returns anything' }
 // `login: false` — no login: the shot starts from a reloaded, locked app (mock state and LocalStorage reset), route as given.
 // `desktop` / `phone` steps run only there (`{ desktop: [...] }`, `{ phone: [...] }`).
+import { readdirSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-import { login, mounted, setTheme } from '../../tests/e2e/layout/lib/scenario.mjs'
+import { login, mounted } from '../../tests/e2e/layout/lib/scenario.mjs'
+
+/** Built-in theme ids: the files in src/shared/lib/theme/themes are named by id. */
+export const THEME_IDS = readdirSync(new URL('../../src/shared/lib/theme/themes', import.meta.url))
+  .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+  .map((file) => file.slice(0, -3))
+  .sort()
+
+const THEME_ALIASES = { light: 'default-light', dark: 'default-dark' }
+
+/**
+ * The themes of `--theme <id|all>`: `light` / `dark` are Default light / dark, `all` every built-in.
+ * Unknown values throw with the valid ids listed. Labels (what file names carry) are the value as given.
+ */
+export function resolveThemes(value) {
+  if (!value) return ['light', 'dark']
+  if (value === 'all') return THEME_IDS
+  const wanted = value.split(',')
+  const unknown = wanted.filter((label) => !THEME_IDS.includes(THEME_ALIASES[label] ?? label))
+  if (unknown.length) {
+    throw new Error(`unknown theme '${unknown.join("', '")}'; valid: all, light, dark, ${THEME_IDS.join(', ')}`)
+  }
+  return wanted
+}
+
+/** Pick a theme through the app's own setting: its id and mode, no per-mode pair. */
+export async function setTheme(page, label) {
+  const id = THEME_ALIASES[label] ?? label
+  await page.eval(`${APP}
+    const { getTheme } = await import('/src/shared/lib/theme/registry.ts')
+    const mode = getTheme('${id}')?.mode
+    if (!mode) throw new Error('unknown theme ${id}')
+    await gp.$pinia._s.get('settings').updateApp({ theme: mode, theme_id: '${id}', theme_light_id: '', theme_dark_id: '' })
+    return true`)
+  await page.sleep(300)
+}
 
 /** Page code: wait for the app to mount (a Vite reload may be under way), then `gp` is its global properties. */
 export const GP = `
@@ -35,6 +71,55 @@ const FIND = `
     return el
   }`
 
+/**
+ * The phone's system-bar insets, set (or removed) one property at a time: never `cssText`,
+ * which would erase the inline tokens of the picked theme.
+ */
+export async function setInsets(page, touch) {
+  await page.eval(`const style = document.documentElement.style
+    if (${touch}) {
+      style.setProperty('--native-inset-top', '47px')
+      style.setProperty('--native-inset-bottom', '34px')
+    } else {
+      style.removeProperty('--native-inset-top')
+      style.removeProperty('--native-inset-bottom')
+    }
+    return true`)
+}
+
+const normalizeColour = (value) => String(value ?? '').trim().toLowerCase()
+
+/**
+ * Compare what the page shows with the theme picked: `expected` and `actual` are
+ * `{ mode, background, moneyIncome }`. Returns null on a match, else a message with both values.
+ */
+export function compareTheme(expected, actual) {
+  const problems = []
+  if (expected.mode !== actual.mode) problems.push(`data-theme expected ${expected.mode}, got ${actual.mode}`)
+  for (const [key, token] of [['background', '--background'], ['moneyIncome', '--money-income']]) {
+    if (normalizeColour(expected[key]) !== normalizeColour(actual[key])) {
+      problems.push(`${token} expected ${expected[key]}, got ${actual[key]}`)
+    }
+  }
+  return problems.length ? `theme not applied: ${problems.join('; ')}` : null
+}
+
+/** Throws (so the shot is listed as failed) when the root does not show the colours of `label`. */
+export async function checkTheme(page, label) {
+  const id = THEME_ALIASES[label] ?? label
+  const { expected, actual } = await page.eval(`${APP}
+    const { getTheme } = await import('/src/shared/lib/theme/registry.ts')
+    const theme = getTheme('${id}')
+    const root = document.documentElement
+    const read = (token) => getComputedStyle(root).getPropertyValue(token)
+    return {
+      expected: { mode: theme.mode, background: theme.tokens['--background'], moneyIncome: theme.tokens['--money-income'] },
+      actual: { mode: root.getAttribute('data-theme'), background: read('--background'), moneyIncome: read('--money-income') },
+    }`)
+  const problem = compareTheme(expected, actual)
+  if (problem) throw new Error(problem)
+}
+
 /** A reloaded app, locked, in `theme`: the start of a `login: false` shot. */
 export async function freshStart(page, url, theme, touch) {
   await page.eval(`try { localStorage.clear(); sessionStorage.clear() } catch {} return true`)
@@ -50,7 +135,7 @@ export async function freshStart(page, url, theme, touch) {
   // One that started before the mark landed (it waits 1.2 s after the screen mounts) is closed.
   await page.sleep(1600)
   await page.eval(`document.querySelector('.driver-popover-close-btn')?.click(); return true`)
-  await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+  await setInsets(page, touch)
   await page.eval(`const { setLocalePreference } = await import('/src/shared/lib/locale.ts'); await setLocalePreference('ru'); return true`)
   await setTheme(page, theme)
 }
@@ -140,7 +225,7 @@ export async function ensureReady(page, theme, touch) {
   const locked = await page.eval(`${APP} return gp.$pinia._s.get('vault').locked !== false`)
   if (!locked) return
   await login(page)
-  await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+  await setInsets(page, touch)
   await setTheme(page, theme)
 }
 

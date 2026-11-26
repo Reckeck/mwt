@@ -1,1 +1,1 @@
-export { default as DataSourceList } from './DataSourceList.vue'
+export { default as DataSourceList } from './ui/DataSourceList.vue'

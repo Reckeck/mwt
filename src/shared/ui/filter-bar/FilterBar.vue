@@ -88,7 +88,7 @@ function apply() {
     <slot name="below" />
 
     <!-- A computer: the folded filters open under the row, not over the list. -->
-    <div v-if="!phone && open && $slots.more" class="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-xs" data-filter-panel>
+    <div v-if="!phone && open && $slots.more" class="grid gap-3 rounded-lg border border-border bg-card p-4" data-filter-panel>
       <div class="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @4xl:grid-cols-4">
         <slot name="more" />
       </div>

@@ -5,16 +5,12 @@ import { useEventListener } from '@vueuse/core'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { ContactEditDialog, useContactCreation } from '@/features/contact-edit'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
 import { QuickAddDialog } from '@/widgets/quick-add'
 import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { UpdateNotice, useUpdateEvents } from '@/features/app-update'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
-import { SettingsShell } from '@/widgets/settings-shell'
-import { TourOffer } from '@/widgets/tour-offer'
-import { WhatsNewDialog } from '@/widgets/whats-new'
 import { MoneyCardHost, MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
 import { registerDefaultBack } from '@/shared/lib/drill'
@@ -23,12 +19,12 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
-import { provideContactCreator } from '@/shared/lib/contact-create'
 import { provideTxGlances } from '@/shared/lib/tx-glances'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { NAV_ITEMS } from './app-shell.constants'
+import { BOTTOM_FAB_CLEARANCE_CLASS } from './lib/bottom-fab'
+import { NAV_SECTIONS } from './lib/nav-sections'
 import { useBackButton } from './model/use-back-button'
 import { useBackendNotices } from './model/use-backend-notices'
 import { useCacheEvents } from './model/use-cache-events'
@@ -53,9 +49,6 @@ import { useStoreTree } from '@/shared/api/queries'
  */
 // Every list of operations below makes a wallet's name and `Auto` a glance.
 provideTxGlances({ wallet: WalletGlance, automation: AutomationGlance })
-// A contact typed into any picker is made in one form hosted here, over whatever is open.
-const contactCreation = useContactCreation()
-provideContactCreator(contactCreation.create)
 const { t } = useI18n()
 const route = useRoute()
 const settingsStore = useSettingsStore()
@@ -69,8 +62,8 @@ useSyncEvents()
 useUpdateEvents()
 useBackButton()
 
-const { summary, isOnline } = useConnectivity()
-const { tour, routeTour, offer } = useTourAutostart()
+const { isOnline } = useConnectivity()
+const { tour, routeTour } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
 
 /** On a wallet page the bar names the wallet; elsewhere the screen. */
@@ -93,7 +86,7 @@ onScopeDispose(
   })),
 )
 /** Alt 1…5: a section without the search (Paths 1 · 7). */
-for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void router.push({ name: NAV_ITEMS[index]?.name ?? 'dashboard' }))
+for (const [index, id] of SECTION_HOTKEYS.entries()) useHotkey(id, () => void router.push({ name: NAV_SECTIONS[index]?.root ?? 'dashboard' }))
 
 /** The shell's child page and its params: a section's own sub-routes do not change it. */
 const pageKey = computed(() => `${route.matched[1]?.path ?? route.path}?${JSON.stringify(route.params)}`)
@@ -115,8 +108,10 @@ const bottomNav = computed(() => phone.value && !fullscreen.value && !typing.val
 const pageClass = computed(() => {
   // The sandbox bar above takes the status bar's inset itself.
   if (fullscreen.value) return ['overflow-hidden p-0 pb-safe', !vault.sandbox && 'pt-safe']
-  if (bottomNav.value) return 'overflow-y-auto p-3'
-  return 'overflow-y-auto p-3 pb-[calc(0.75rem+var(--safe-bottom))] md:p-4 md:pb-[calc(1rem+var(--safe-bottom))]'
+  // Side insets keep a landscape cutout off the content; the gutter is stable (no double scrollbar).
+  const sides = 'pl-[calc(0.75rem+var(--safe-left))] pr-[calc(0.75rem+var(--safe-right))] md:pl-[calc(1rem+var(--safe-left))] md:pr-[calc(1rem+var(--safe-right))]'
+  if (bottomNav.value) return ['overflow-y-auto pt-3', BOTTOM_FAB_CLEARANCE_CLASS, sides]
+  return ['overflow-y-auto pt-3 pb-[calc(0.75rem+var(--safe-bottom))] md:pt-4 md:pb-[calc(1rem+var(--safe-bottom))]', sides]
 })
 </script>
 
@@ -129,12 +124,10 @@ const pageClass = computed(() => {
       <AppHeader
         v-if="!fullscreen"
         :title="pageTitle"
-        :summary="summary.data.value"
         :online="headerOnline"
         :has-tour="tour.hasTour(routeTour)"
         :tour-steps="tour.stepCount(routeTour)"
         :covered="vault.sandbox"
-        @quick-add="quickAddOpen = true"
         @start-tour="tour.start(routeTour)"
         @all-tours="openSettings('help')"
       >
@@ -151,29 +144,21 @@ const pageClass = computed(() => {
             <UpdateNotice />
           </div>
         </div>
-        <TourOffer v-if="offer" :id="offer" @close="offer = null" />
         <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
              page (its widgets keep local state per wallet), while a sub-tab of a section
              (/transactions → /transactions/calendar) keeps the section mounted (rule 17). -->
-        <div class="mx-auto w-full" :class="route.meta.fullscreen ? 'h-full' : 'min-h-full max-w-page'">
+        <div class="mx-auto w-full" :class="route.meta.fullscreen ? 'h-full' : 'min-h-full max-w-(--container-page)'">
           <RouterView :key="pageKey" />
         </div>
       </div>
-      <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" @lock="lock" @open-settings="openSettings()" />
+      <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" />
     </SidebarInset>
 
-    <SettingsShell />
     <MoneyTooltipHost />
     <MoneyCardHost />
-    <QuickAddDialog v-model:open="quickAddOpen" />
     <EntityHost />
     <ConverterDialog />
-    <ContactEditDialog
-      v-model:open="contactCreation.open.value"
-      :initial-name="contactCreation.name.value"
-      @saved="contactCreation.saved"
-    />
-    <WhatsNewDialog />
+    <QuickAddDialog v-model:open="quickAddOpen" />
     <SyncPairingDialog />
     <SyncPlanDialog />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />

@@ -2,69 +2,46 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { useMoneyChartTooltip } from '@/entities/currency'
+import { Money } from '@/entities/currency'
+import { wealthRows } from '@/entities/report'
+import { chartColors } from '@/shared/lib/chart-theme'
+import { Chart } from '@/shared/lib/echarts'
+import { cn } from '@/shared/lib/utils'
 import { Card } from '@/shared/ui/card'
-import { Chart, type ChartOption } from '@/shared/lib/echarts'
-import { chartAxisColor } from '@/shared/lib/echarts-theme'
-import { useSettingsStore } from '@/shared/store/settings'
-import { useTheme } from '@/shared/lib/theme'
 
+import { GROUP_STYLE } from './allocation-pie.constants'
 import type { AllocationPieProps } from './allocation-pie.types'
+import { allocationOption } from './lib/allocation-option'
 
-/** Slices a pie keeps; the rest are one «Other» slice, or the labels collide. */
-const MAX_SLICES = 7
-
-/** Where the money is, as a ring: by asset on a wallet, by network or wallet on the dashboard. */
-const props = withDefaults(defineProps<AllocationPieProps>(), { title: '', bare: false, currency: undefined })
+/** What capital is made of: a donut by group and the groups under it with their sum and share, debts last. */
+const props = defineProps<AllocationPieProps>()
 const { t } = useI18n()
-const { resolved } = useTheme()
-const axisColor = chartAxisColor(resolved)
-const settings = useSettingsStore()
-const moneyTooltip = useMoneyChartTooltip(computed(() => props.currency ?? settings.baseCurrency))
 
-const data = computed(() => {
-  const sorted = props.slices
-    .map((slice) => ({ name: slice.label, value: Number(slice.value) }))
-    .filter((slice) => slice.value > 0)
-    .sort((left, right) => right.value - left.value)
-  if (sorted.length <= MAX_SLICES) return sorted
-  const rest = sorted.slice(MAX_SLICES - 1).reduce((sum, slice) => sum + slice.value, 0)
-  return [...sorted.slice(0, MAX_SLICES - 1), { name: t('charts.other'), value: rest }]
-})
-
-const option = computed<ChartOption>(() => ({
-  backgroundColor: 'transparent',
-  tooltip: {
-    trigger: 'item',
-    // The slice's name as the title, its sum with the other currencies under it (the shared tooltip), then the share.
-    formatter: (params) => {
-      const item = params as unknown as { name: string; value: number; percent: number }
-      return `${moneyTooltip.value({ ...item, seriesName: '' })}<div style="opacity:.7">${item.percent}%</div>`
-    },
-  },
-  series: [
-    {
-      name: props.title || t('charts.distribution'),
-      type: 'pie',
-      radius: ['45%', '72%'],
-      center: ['50%', '50%'],
-      avoidLabelOverlap: true,
-      itemStyle: { borderRadius: 6, borderColor: 'transparent', borderWidth: 2 },
-      label: { color: axisColor.value, formatter: '{b}\n{d}%' },
-      data: data.value,
-    },
-  ],
-}))
+const rows = computed(() => wealthRows(props.points.at(-1)))
+const option = computed(() =>
+  allocationOption(chartColors(), {
+    rows: rows.value,
+    currency: props.currency,
+    label: (row) => t(`money.wealth.group.${row.group}`),
+  }),
+)
 </script>
 
 <template>
-  <!-- The chart fills its box: vue-echarts forces height: 100% on its own element,
-       so a height class on <Chart> is ignored and the canvas ends up 0px tall. -->
-  <div v-if="props.bare" class="h-56 w-full"><Chart :option="option" autoresize /></div>
-  <Card v-else>
-    <template #header>
-      <h3 class="heading-card">{{ props.title || t('charts.distribution') }}</h3>
-    </template>
-    <div class="h-64 w-full"><Chart :option="option" autoresize /></div>
+  <Card v-if="rows.length" class="grid gap-4 p-4 md:p-6" data-tour="wealth-table" data-allocation>
+    <h3 class="heading-card">{{ t('money.wealth.of') }}</h3>
+    <div class="grid items-center gap-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+      <Chart :option="option" class="mx-auto h-40 w-full max-w-48" role="img" :aria-label="t('money.wealth.of')" />
+      <ul class="grid gap-2">
+        <li v-for="row in rows" :key="row.group" class="flex items-center gap-2 text-sm" data-allocation-row>
+          <span aria-hidden="true" :class="cn('size-2 shrink-0 rounded-full', GROUP_STYLE[row.group].swatch)" />
+          <span class="min-w-0 flex-1 truncate">{{ t(`money.wealth.group.${row.group}`) }}</span>
+          <span class="tabular-nums">
+            <Money :amount="row.value" :currency="props.currency" :colored="row.value < 0" />
+          </span>
+          <span class="w-10 text-right text-muted-foreground tabular-nums">{{ row.share === null ? '' : `${row.share} %` }}</span>
+        </li>
+      </ul>
+    </div>
   </Card>
 </template>

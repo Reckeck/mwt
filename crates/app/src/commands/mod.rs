@@ -33,6 +33,7 @@ pub mod updates;
 pub mod vault_backups;
 pub mod vault_link;
 pub mod vault_recents;
+pub mod window;
 pub mod workflows;
 
 use std::path::PathBuf;

@@ -1,40 +1,37 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { Money } from '@/entities/currency'
-import { Badge } from '@/shared/ui/badge'
-import { formatPct } from '@/shared/lib/format'
+import { pageEntityKey } from '@/shared/lib/entity-link'
 import { storeIcon } from '@/shared/lib/store-icons'
-import { cn } from '@/shared/lib/utils'
+import { ListRow } from '@/shared/ui/list-row'
 
-import { bindingBadge } from '../../model/wallet-catalog'
 import type { StoreRowLinkProps } from './store-row-link.types'
 
-/** One sub-account as a row that opens it: icon, name, binding, share and value. */
-const props = withDefaults(defineProps<StoreRowLinkProps>(), { depth: 1, share: null, decimals: undefined })
+/** An account as a list row that opens its page: icon, name, its kind (and sub-accounts) under it, the sum at the end (the `#value` slot, a `<Money>`). */
+const props = defineProps<StoreRowLinkProps>()
+defineSlots<{ value?(): unknown }>()
 const { t } = useI18n()
+
+const target = computed(() => ({ name: 'wallet', params: { id: props.node.store.id } }))
+const subtitle = computed(() => {
+  const kind = t(`stores.kind.${props.node.store.kind}`)
+  const count = props.node.children.length
+  return count ? `${kind} · ${t('stores.subAccounts')}: ${count}` : kind
+})
+const tone = computed(() => (Number(props.node.subtree_base) < 0 ? 'negative' : 'ink'))
 </script>
 
 <template>
   <RouterLink
-    :to="{ name: 'wallet', params: { id: props.store.id } }"
-    :data-entity="`store:${props.store.id}`"
-    :class="
-      cn(
-        '-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-accent',
-        props.depth > 1 && 'pl-7',
-        props.store.archived && 'opacity-60',
-      )
-    "
+    :to="target"
+    :data-entity="pageEntityKey(target)"
+    class="block rounded-md px-1 outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-fine:hover:bg-muted/50"
+    data-store-row
   >
-    <component :is="storeIcon(props.store)" class="store-tint size-4 shrink-0" :style="{ '--store-color': props.store.color }" />
-    <span class="min-w-0 flex-1 truncate">{{ props.store.name }}</span>
-    <Badge v-if="props.store.archived" variant="outline">{{ t('stores.archived') }}</Badge>
-    <Badge v-else-if="bindingBadge(props.store)" variant="outline">{{ bindingBadge(props.store) }}</Badge>
-    <span v-if="props.share !== null" class="shrink-0 text-xs tabular-nums text-muted-foreground">
-      {{ formatPct(props.share * 100, { decimals: 0 }) }}
-    </span>
-    <Money class="shrink-0 tabular-nums" :amount="props.amount" :currency="props.currency" :decimals="props.decimals" />
+    <ListRow :title="props.node.store.name" :subtitle="subtitle" :icon="storeIcon(props.node.store)" :tone="tone">
+      <template #value><slot name="value" /></template>
+    </ListRow>
   </RouterLink>
 </template>

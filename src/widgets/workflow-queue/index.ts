@@ -1,1 +1,1 @@
-export { default as WorkflowQueue } from './WorkflowQueue.vue'
+export { default as WorkflowQueue } from './ui/WorkflowQueue.vue'

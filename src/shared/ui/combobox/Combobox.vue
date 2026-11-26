@@ -131,7 +131,7 @@ function onBackspace() {
     @update:model-value="onPick"
   >
     <ComboboxAnchor
-      class="flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm transition-colors focus-within:ring-1 focus-within:ring-ring data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+      class="flex min-h-10 w-full flex-wrap items-center gap-1 rounded-md border border-strong bg-card px-2 py-1 text-sm transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-background data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
     >
       <template v-if="props.multiple">
         <span
@@ -172,7 +172,7 @@ function onBackspace() {
     <ComboboxPortal>
       <ComboboxContent
         position="popper"
-        class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-44 overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
+        class="z-[60] w-[var(--reka-combobox-trigger-width)] min-w-44 overflow-hidden rounded-sm border border-border bg-popover text-popover-foreground shadow-lg"
         :side-offset="4"
       >
         <ComboboxViewport class="max-h-64 overflow-y-auto p-1">

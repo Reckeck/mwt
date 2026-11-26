@@ -141,6 +141,14 @@ describe('AmountInput', () => {
     expect(model()).toBe('1')
   })
 
+  it('refuses a result past the digit cap instead of cutting it', async () => {
+    const { input, type, hint, model } = setup({}, '1')
+    await type('999999999999999999*10')
+    expect(hint().text()).toBe('Результат слишком длинный')
+    await input.trigger('keydown', { key: 'Enter' })
+    expect(model()).toBe('1')
+  })
+
   it('rounds a result to the field decimals', async () => {
     const { input, type, model } = setup({ decimals: 2 })
     await type('2/3')
@@ -159,5 +167,43 @@ describe('AmountInput', () => {
     const { wrapper, input } = setup()
     await wrapper.setProps({ modelValue: '12345.67' })
     expect((input.element as HTMLInputElement).value).toMatch(/^12\u202f345[.,]67$/)
+  })
+
+  it('rejects a paste past 18 integer digits and keeps the old value', async () => {
+    const { input, type, model } = setup()
+    await type('1234')
+    await type('9'.repeat(5000))
+    expect(model()).toBe('1234')
+    expect((input.element as HTMLInputElement).value).toMatch(/^1\u202f234$/)
+    await type('9'.repeat(18))
+    expect(model()).toBe('9'.repeat(18))
+  })
+
+  it('says «too long» when a number past the cap is typed, and clears it on the next valid input', async () => {
+    const { type, hint } = setup({}, '1')
+    await type('9'.repeat(19))
+    expect(hint().text()).toBe('Результат слишком длинный')
+    await type('12')
+    expect(hint().exists()).toBe(false)
+  })
+
+  it('shows an outside value past the cap in full', async () => {
+    const { wrapper, input } = setup()
+    const long = '1'.repeat(25)
+    await wrapper.setProps({ modelValue: long })
+    expect((input.element as HTMLInputElement).value.replace(/\D/g, '')).toBe(long)
+  })
+
+  it('shows an outside value past the cap grouped, and lets Backspace shorten it', async () => {
+    const { wrapper, input, type, hint, model } = setup()
+    await wrapper.setProps({ modelValue: `${'1'.repeat(25)}.5` })
+    const field = input.element as HTMLInputElement
+    expect(field.value).toMatch(/^1\u202f111\u202f111\u202f111\u202f111\u202f111\u202f111\u202f111\u202f111[.,]5$/)
+    await type(`${'1'.repeat(24)}.5`)
+    expect(field.value.replace(/\D/g, '')).toBe(`${'1'.repeat(24)}5`)
+    expect(model()).toBe(`${'1'.repeat(24)}.5`)
+    expect(hint().text()).toBe('Результат слишком длинный')
+    await type(`${'1'.repeat(25)}.5`)
+    expect(model()).toBe(`${'1'.repeat(24)}.5`)
   })
 })

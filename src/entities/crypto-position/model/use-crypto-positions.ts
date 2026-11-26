@@ -1,14 +1,13 @@
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
-import { call } from '@/shared/api/ipc'
+import { call } from '@/shared/api'
 
-import { CRYPTO_POSITIONS_KEY } from './keys'
+export const CRYPTO_POSITIONS_KEY = ['crypto', 'positions']
 
-/** Every DeFi position of every followed address, open and closed: the list filters, the engine computes. */
-export function useCryptoPositions() {
-  return useQuery({
-    queryKey: [...CRYPTO_POSITIONS_KEY, 'list'],
+/** The DeFi positions of every followed address (`crypto_list_positions`). */
+export const useCryptoPositions = () =>
+  useQuery({
+    queryKey: CRYPTO_POSITIONS_KEY,
     queryFn: () => call<CryptoPositionView[]>('crypto_list_positions'),
     placeholderData: keepPreviousData,
   })
-}

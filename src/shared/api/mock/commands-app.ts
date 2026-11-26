@@ -156,12 +156,25 @@ function normalizeCodes(raw: string[]): string[] {
 export const appSettingsOutsideCommands: MockCommands = {
   // `?platform=android` in the address previews the phone build in the browser.
   app_platform: (_call) => resolve(new URLSearchParams(location.search).get('platform') ?? 'linux'),
+  // Same rule as the backend: only `#rrggbb` is accepted; the browser has no window to paint.
+  set_window_background: ({ args }) => {
+    if (!/^#[0-9a-f]{6}$/i.test(String(args?.rgb)))
+      throw `invalid colour ${JSON.stringify(args?.rgb)}, expected #rrggbb`
+    return resolve(null)
+  },
   get_app_settings: (_call) => {
     return resolve(mockAppSettings)
   },
   update_app_settings: ({ body }) => {
     const input = body as UpdateAppSettingsInput
     if (input.theme) mockAppSettings.theme = input.theme
+    // An empty string clears an id back to Default, as the core does.
+    if (input.theme_id !== null && input.theme_id !== undefined)
+      mockAppSettings.theme_id = input.theme_id.trim() || null
+    if (input.theme_light_id !== null && input.theme_light_id !== undefined)
+      mockAppSettings.theme_light_id = input.theme_light_id.trim() || null
+    if (input.theme_dark_id !== null && input.theme_dark_id !== undefined)
+      mockAppSettings.theme_dark_id = input.theme_dark_id.trim() || null
     if (input.locale) mockAppSettings.locale = input.locale
     if (input.base_currency) {
       mockAppSettings.base_currency = input.base_currency

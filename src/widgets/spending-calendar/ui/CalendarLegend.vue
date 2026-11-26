@@ -4,14 +4,10 @@ import { useI18n } from 'vue-i18n'
 
 import { Money } from '@/entities/currency'
 
-/** Under the grid: the month's totals and what the pale sums and the orange dot mean. */
-const props = defineProps<{
-  currency: string
-  income: number
-  spent: number
-  perDay: string | null
-  overDays: number
-}>()
+import { HEAT_CLASSES } from '../spending-calendar.constants'
+
+/** Under the grid: the month's totals, the heat scale and the link to the month balance. */
+const props = defineProps<{ currency: string; income: number; spent: number; perDay: string | null }>()
 const { t } = useI18n()
 </script>
 
@@ -23,12 +19,10 @@ const { t } = useI18n()
     </span>
     <span>−<Money :amount="String(props.spent)" :decimals="0" :currency="props.currency" /> {{ t('calendar.legend.spent') }}</span>
     <span v-if="props.perDay !== null">
-      <span class="opacity-55"><Money :amount="props.perDay" :decimals="0" :currency="props.currency" :convert="false" /></span>
-      — {{ t('calendar.legend.perDay') }}
+      <Money :amount="props.perDay" :decimals="0" :currency="props.currency" :convert="false" /> — {{ t('calendar.legend.perDay') }}
     </span>
-    <span class="inline-flex items-center gap-1">
-      <span class="size-1.5 rounded-full bg-warning" aria-hidden="true" />
-      {{ props.overDays ? t('calendar.legend.over', { count: props.overDays }) : t('calendar.legend.overNone') }}
+    <span class="inline-flex items-center gap-0.5" aria-hidden="true">
+      <span v-for="(heat, index) in HEAT_CLASSES" :key="index" class="size-3 rounded-sm border border-border" :class="heat" />
     </span>
     <RouterLink :to="{ name: 'money-month' }" class="ml-auto text-primary hover:underline">{{ t('calendar.legend.month') }}</RouterLink>
   </div>

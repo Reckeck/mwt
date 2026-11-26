@@ -7,7 +7,7 @@ import { notify } from '@/shared/lib/notify'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
 
-import { TOURS, WORKFLOW_EDITOR_EMPTY } from './tours'
+import { TOURS } from './tours'
 
 /** The tour on screen: one at a time, gone when the page changes. */
 let active: Driver | null = null
@@ -36,9 +36,7 @@ export function useTour() {
   }
 
   function start(id: string): boolean {
-    // A new workflow with nothing on the canvas gets the short tour.
-    const empty = id === 'workflow-new' && document.querySelector('[data-tour="workflow-add-first"]') !== null
-    const steps = (empty ? WORKFLOW_EDITOR_EMPTY : (TOURS[id] ?? []))
+    const steps = (TOURS[id] ?? [])
       .map((step) => ({ step, element: document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`) }))
       .filter(
         (entry): entry is { step: (typeof entry)['step']; element: HTMLElement } =>

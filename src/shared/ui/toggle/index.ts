@@ -1,6 +1,8 @@
 import type { VariantProps } from 'class-variance-authority'
 import { cva } from 'class-variance-authority'
 
+import { CHIP_CLASSES } from '@/shared/ui/button/chip-classes'
+
 export { default as Toggle } from './Toggle.vue'
 
 export const toggleVariants = cva(
@@ -9,10 +11,12 @@ export const toggleVariants = cva(
     variants: {
       variant: {
         default: 'bg-transparent',
-        outline: 'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',
+        outline: 'border border-input bg-transparent hover:bg-accent hover:text-accent-foreground',
+        /** A pill like `Button` `chip`: border, ink when picked; a count or «×» sits inside. */
+        chip: CHIP_CLASSES,
         /** Inside a muted track (`ToggleGroup` with `spacing` ≥ 1): the picked one is a raised chip. */
         segmented:
-          'bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground data-[state=on]:shadow-sm',
+          'bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground data-[state=on]:bg-background data-[state=on]:text-foreground',
       },
       size: {
         default: 'h-9 px-2 min-w-9',

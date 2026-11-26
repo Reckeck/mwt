@@ -1,1 +1,1 @@
-export { default as PriceAlertList } from './PriceAlertList.vue'
+export { default as PriceAlertList } from './ui/PriceAlertList.vue'

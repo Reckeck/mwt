@@ -2,13 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
-import { Money, MoneyPhrase } from '@/entities/currency'
+import { Money } from '@/entities/currency'
 
 import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { useMonthPace } from '@/shared/api/queries'
 import { comparisonDelta } from '@/shared/lib/comparison'
-import { composeSums } from '@/shared/lib/money-parts'
+import { composeSums, isSum } from '@/shared/lib/money-parts'
 import { MetricTile } from '@/shared/ui/metric-tile'
 import { SectionState } from '@/shared/ui/section-state'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
@@ -95,7 +95,10 @@ const rows = computed(() => {
           {{ t('monthSummary.notExecuted', { count: data.not_executed }) }}
         </p>
         <p v-if="size !== 's' && (Number(data.budget_in) || Number(data.budget_out))" class="text-xs text-muted-foreground">
-          <MoneyPhrase :parts="moves" />
+          <template v-for="(part, index) in moves" :key="index">
+            <Money v-if="isSum(part)" :amount="part.amount" :currency="part.currency" :decimals="part.decimals" />
+            <template v-else>{{ part.text }}</template>
+          </template>
         </p>
       </div>
     </SectionState>

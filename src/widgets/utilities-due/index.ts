@@ -1,1 +1,1 @@
-export { default as UtilitiesDue } from './UtilitiesDue.vue'
+export { default as UtilitiesDue } from './ui/UtilitiesDue.vue'

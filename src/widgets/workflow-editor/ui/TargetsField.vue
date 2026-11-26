@@ -3,7 +3,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Trash2 } from 'lucide-vue-next'
 
-import { AccountRefPicker } from '@/features/transaction-create'
+import { StoreNodeSelect } from '@/entities/store'
+import { useStoreTree } from '@/shared/api/queries'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { Button } from '@/shared/ui/button'
 import { Input } from '@/shared/ui/input'
 
@@ -17,6 +19,9 @@ const props = defineProps<{ value: unknown; percent: boolean }>()
 const emit = defineEmits<{ update: [value: Target[]] }>()
 
 const { t } = useI18n()
+const tree = useStoreTree()
+const nodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
+const storeOf = (account: AccountRef | null) => (account && 'store' in account ? account.store : '')
 const rows = computed<Target[]>(() => (Array.isArray(props.value) ? (props.value as Target[]) : []))
 const total = computed(() => rows.value.reduce((sum, row) => sum + (Number(String(row.share).replace(',', '.')) || 0), 0))
 
@@ -31,11 +36,11 @@ function change(index: number, patch: Partial<Target>) {
 <template>
   <div class="grid gap-2">
     <div v-for="(row, index) in rows" :key="index" class="grid grid-cols-[minmax(0,1fr)_5rem_2rem] items-center gap-2">
-      <AccountRefPicker
-        :model-value="row.account"
-        :contacts="false"
-        :raw="false"
-        @update:model-value="(account) => change(index, { account })"
+      <StoreNodeSelect
+        :model-value="storeOf(row.account)"
+        :nodes="nodes"
+        :placeholder="t('workflow.field.pickStore')"
+        @update:model-value="(store) => change(index, { account: store ? { store } : null })"
       />
       <Input
         :model-value="row.share"

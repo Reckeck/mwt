@@ -3,9 +3,10 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-vue-next'
 
-import { SIGN_TONE_CLASS, formatPct, signTone } from '@/shared/lib/format'
+import { formatPct, signTone } from '@/shared/lib/format'
 import { Button } from '@/shared/ui/button'
-import { Sparkline } from '@/shared/ui/sparkline'
+import { Delta } from '@/shared/ui/delta'
+import { Sparkline, type SparklineTone } from '@/shared/ui/sparkline'
 import { useWidgetSize } from '@/shared/ui/widget-frame'
 
 import type { MetricTileProps } from './metric-tile.types'
@@ -30,10 +31,9 @@ const level = computed(() => props.size ?? cellSize.value)
 
 const direction = computed(() => signTone(props.deltaPct))
 /** Green when the change goes the good way; a flat or unknown change stays neutral. */
-const toneClass = computed(() => {
-  if (direction.value === 'neutral') return 'text-muted-foreground'
-  const good = (direction.value === 'positive') === (props.goodWhen === 'up')
-  return SIGN_TONE_CLASS[good ? 'positive' : 'negative']
+const sparkTone = computed<SparklineTone>(() => {
+  if (direction.value === 'neutral') return 'actual'
+  return (direction.value === 'positive') === (props.goodWhen === 'up') ? 'income' : 'over'
 })
 </script>
 
@@ -49,20 +49,18 @@ const toneClass = computed(() => {
       <slot />
     </component>
     <!-- The change row is always there, so a value without a base does not shift what follows. -->
-    <p class="flex min-w-0 items-center gap-1 text-xs" :class="toneClass">
+    <p class="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
       <template v-if="props.deltaPct !== null">
         <TrendingUp v-if="direction === 'positive'" class="size-3.5 shrink-0" aria-hidden="true" />
         <TrendingDown v-else-if="direction === 'negative'" class="size-3.5 shrink-0" aria-hidden="true" />
         <span class="truncate tabular-nums">
           <slot name="delta" />
-          {{ formatPct(props.deltaPct, { signed: true, decimals: 1 }) }}
+          <Delta :value="props.deltaPct" :text="formatPct(Math.abs(Number(props.deltaPct)), { decimals: 1 })" :inverse="props.goodWhen === 'down'" />
         </span>
       </template>
       <span v-if="props.baseLabel" class="truncate text-muted-foreground">{{ props.baseLabel }}</span>
     </p>
-    <div v-if="level !== 's' && props.series.length > 1" :class="direction === 'neutral' ? 'text-primary' : toneClass">
-      <Sparkline :values="props.series" />
-    </div>
+    <Sparkline v-if="level !== 's' && props.series.length > 1" :values="props.series" :tone="sparkTone" :label="props.label" />
     <p v-if="level !== 's' && props.insight" class="line-clamp-2 text-xs text-muted-foreground">{{ props.insight }}</p>
     <slot name="detail" :level="level" />
     <Button v-if="level !== 's' && props.action" variant="link" size="sm" class="h-auto self-start p-0" as-child>

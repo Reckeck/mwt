@@ -117,6 +117,7 @@ pub fn run() {
                 commands::vault_backups::vault_backups_commands,
                 commands::vault_link::vault_link_commands,
                 commands::vault_recents::vault_recents_commands,
+                commands::window::window_commands,
                 commands::workflows::workflows_commands,
                 ipc::commands::generate_handler,
             ];

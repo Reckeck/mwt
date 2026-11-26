@@ -15,7 +15,7 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { matchesHotkey } from '@/shared/lib/hotkeys'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import { GOAL_INCOME_CATEGORY, GOAL_SAVE_PCT } from './goal-edit.constants'
+import { GOAL_INCOME_CATEGORY, GOAL_RETURN_MAX, GOAL_SAVE_PCT } from './goal-edit.constants'
 import type { GoalDialogProps, GoalField } from './goal-edit.types'
 import { fieldsOfGoal, goalInputOf, goalInputOfFields, type GoalFields } from './lib/goal-fields'
 import GoalWhatStep from './ui/GoalWhatStep.vue'
@@ -144,7 +144,7 @@ const whereRules = () => ({
   // The core takes 0..100 % a year; the form says so before it does.
   expectedReturn: firstError(
     nonNegativeAmount(expectedReturn.value),
-    Number(parseDecimal(expectedReturn.value) ?? 0) > 100 ? t('validation.range', { min: 0, max: 100 }) : null,
+    Number(parseDecimal(expectedReturn.value) ?? 0) > GOAL_RETURN_MAX ? t('validation.range', { min: 0, max: GOAL_RETURN_MAX }) : null,
   ),
 })
 const form = useFormValidation<GoalField>(() => ({ ...whatRules(), ...whereRules() }), { resetOn: [open] })

@@ -1,1 +1,1 @@
-export * from './ui/category-select'
+export { default as CategorySelect } from './ui/CategorySelect.vue'

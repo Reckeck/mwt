@@ -1,1 +1,1 @@
-export { default as UtilityRemindersButton } from './UtilityRemindersButton.vue'
+export { default as UtilityRemindersButton } from './ui/UtilityRemindersButton.vue'

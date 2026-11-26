@@ -2,7 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { Money } from '@/entities/currency'
-import { StoreNodeSelect } from '@/entities/store'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import type { FormValidation } from '@/shared/lib/form'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { FormField } from '@/shared/ui/form-field'
@@ -12,10 +12,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
 import { BUDGET_PERIODS, BUDGET_TARGETS, type BudgetTargetKind } from '../budget-edit.constants'
 import type { BudgetField, BudgetSpending } from '../budget-edit.types'
+import BudgetCategorySelect from './BudgetCategorySelect.vue'
 
 /** Step 1 (Money 1 · 3): what the limit watches and per what period. */
 const props = defineProps<{ form: FormValidation<BudgetField>; nodes: StoreTreeNode[]; spending: BudgetSpending | null }>()
 const kind = defineModel<BudgetTargetKind>('kind', { required: true })
+const category = defineModel<string>('category', { required: true })
 const storeId = defineModel<string>('storeId', { required: true })
 const period = defineModel<BudgetPeriod>('period', { required: true })
 
@@ -25,8 +27,7 @@ const { t } = useI18n()
 <template>
   <div class="grid gap-4">
     <FormField v-if="kind === 'category'" for="budget-category" :label="t('budget.on')" required :error="props.form.error('category')">
-      <!-- The dialog puts the category picker here: a feature takes another feature only at its root. -->
-      <slot name="category" />
+      <BudgetCategorySelect v-model="category" />
       <p v-if="props.spending" class="text-xs text-muted-foreground">
         <i18n-t keypath="budget.fromSpending">
           <template #spent><Money :amount="props.spending.spent" :currency="props.spending.currency" :decimals="0" /></template>
@@ -35,7 +36,7 @@ const { t } = useI18n()
       </p>
     </FormField>
     <FormField v-else-if="kind === 'store'" for="budget-store" :label="t('budget.on')" required :error="props.form.error('store')">
-      <StoreNodeSelect id="budget-store" v-model="storeId" :nodes="props.nodes" :empty-label="t('budget.pickStore')" />
+      <ComboStoreNodeSelect id="budget-store" v-model="storeId" :nodes="props.nodes" :placeholder="t('budget.pickStore')" />
     </FormField>
 
     <div class="grid gap-1.5">

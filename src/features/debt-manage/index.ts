@@ -1,2 +1,2 @@
-export { default as DebtTermsPopover } from './ui/DebtTermsPopover.vue'
-export * from './debt-manage.types'
+export { default as DebtSwitch } from './ui/DebtSwitch.vue'
+export { hasContactSide, quickDebtEffect } from './lib/debt-effect'

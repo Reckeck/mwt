@@ -2,9 +2,10 @@
 // at desktop and phone widths, in both themes, on the mock scenarios
 // (src/shared/api/mock/scenario.ts). Not a gate — check-layout is the gate.
 //
-//   node scripts/shots.mjs <set> [--width 1280,390] [--theme dark] [--only <shot,…>] [--canvas]
+//   node scripts/shots.mjs <set> [--width 1280,390] [--theme <id|all>] [--only <shot,…>] [--canvas]
 //   mise run shots -- <set>
 //
+// --theme takes a built-in theme id or `all`; `light` / `dark` are Default light / dark.
 // Sets live in scripts/shots/sets.mjs. A shot with `canvas` is also put side by side
 // with that frame of the design canvas: the rendered Full-*.dc.html.html boards in
 // CANVAS_DIR (default .cache/canvas).
@@ -14,9 +15,9 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { findChromium, launch } from '../tests/e2e/harness/cdp.mjs'
-import { login, mounted, setTheme } from '../tests/e2e/layout/lib/scenario.mjs'
+import { login, mounted } from '../tests/e2e/layout/lib/scenario.mjs'
 import { freePort, startVite } from './shots/serve.mjs'
-import { canvasShot, ensureReady, freshStart, pairShot, runSteps, settle } from './shots/steps.mjs'
+import { canvasShot, checkTheme, ensureReady, freshStart, pairShot, resolveThemes, runSteps, setInsets, setTheme, settle } from './shots/steps.mjs'
 import { SETS } from './shots/sets.mjs'
 
 const root = new URL('..', import.meta.url).pathname
@@ -37,7 +38,13 @@ const DESKTOP = [[1920, 1080], [1440, 900], [1280, 800], [1100, 800], [1024, 640
 const PHONE = [[390, 844], [360, 740]]
 const widths = option('width')?.split(',').map(Number)
 const pick = (sizes) => sizes.filter(([width]) => !widths || widths.includes(width))
-const themes = option('theme') ? [option('theme')] : ['light', 'dark']
+let themes
+try {
+  themes = resolveThemes(option('theme'))
+} catch (error) {
+  console.error(`shots: ${error.message}`)
+  process.exit(1)
+}
 const only = option('only')
 const canvasOnly = args.includes('--canvas')
 const canvasDir = process.env.CANVAS_DIR ?? join(root, '.cache/canvas')
@@ -80,7 +87,7 @@ try {
           await setTheme(page, theme)
           for (const [width, height] of sizes) {
             await page.viewport(width, height, touch)
-            await page.eval(`document.documentElement.style.cssText = '${touch ? '--native-inset-top:47px;--native-inset-bottom:34px' : ''}'; return true`)
+            await setInsets(page, touch)
             for (const shot of list) {
               const file = join(out, `${shot.name}-${scenario}-${theme}-${width}.png`)
               try {
@@ -88,6 +95,7 @@ try {
                 if (!fresh) await ensureReady(page, theme, touch)
                 await runSteps(page, shot, touch)
                 await settle(page, scenario)
+                await checkTheme(page, theme)
                 await page.shot(file)
                 written.push(file)
               } catch (error) {
@@ -103,7 +111,7 @@ try {
   // The design canvas next to the app, at the canvas frame's own size.
   if (canvasDir && existsSync(canvasDir)) {
     for (const shot of shots.filter((item) => item.canvas)) {
-      for (const theme of themes) {
+      for (const theme of themes.filter((label) => ['light', 'dark'].includes(label))) {
         for (const [kind, width] of [['d', 1280], ['p', 390]]) {
           const app = join(out, `${shot.name}-${(shot.scenarios ?? ['year'])[0]}-${theme}-${width}.png`)
           if (!canvasOnly && !existsSync(app)) continue

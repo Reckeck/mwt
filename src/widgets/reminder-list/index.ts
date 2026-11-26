@@ -1,1 +1,1 @@
-export { default as ReminderList } from './ReminderList.vue'
+export { default as ReminderList } from './ui/ReminderList.vue'

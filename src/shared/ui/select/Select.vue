@@ -43,7 +43,7 @@ function pick(next: unknown) {
       :aria-invalid="props.invalid || (attrs['aria-invalid'] as boolean | undefined) || undefined"
       :class="
         cn(
-          'touch-hit flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-1 text-left text-sm whitespace-nowrap shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[placeholder]:text-muted-foreground aria-invalid:border-destructive [&>span]:truncate',
+          'touch-hit flex h-10 w-full items-center justify-between gap-2 rounded-md border border-strong bg-card px-3 py-1 text-left text-sm whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:bg-muted disabled:opacity-50 data-[placeholder]:text-muted-foreground aria-invalid:border-destructive aria-invalid:focus-visible:ring-destructive [&>span]:truncate',
           props.invalid && 'border-destructive',
           attrs.class as string,
         )
@@ -61,7 +61,7 @@ function pick(next: unknown) {
         :side-offset="4"
         :class="
           cn(
-            'relative z-50 max-h-(--reka-select-content-available-height) overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2',
+            'relative z-50 max-h-(--reka-select-content-available-height) overflow-hidden rounded-sm border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2',
             props.contentWidth === 'trigger' ? 'min-w-(--reka-select-trigger-width)' : 'min-w-20',
           )
         "

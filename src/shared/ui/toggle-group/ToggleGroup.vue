@@ -8,7 +8,10 @@ import { ToggleGroupRoot, useForwardPropsEmits } from "reka-ui"
 import { provide } from "vue"
 import { cn } from '@/shared/lib/utils'
 
-type ToggleGroupVariants = VariantProps<typeof toggleVariants>
+/** `range` is the range switch (1M/3M/1Y/All): `segmented` in a pill track. */
+type ToggleGroupVariants = Omit<VariantProps<typeof toggleVariants>, 'variant'> & {
+  variant?: NonNullable<VariantProps<typeof toggleVariants>['variant']> | 'range'
+}
 
 const props = withDefaults(defineProps<ToggleGroupRootProps & {
   class?: HTMLAttributes["class"]
@@ -44,8 +47,9 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
     v-bind="forwarded"
     :class="
       cn(
-        'group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs',
+        'group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md',
         'data-[variant=segmented]:rounded-lg data-[variant=segmented]:bg-muted data-[variant=segmented]:p-1',
+        'data-[variant=range]:rounded-full data-[variant=range]:bg-muted data-[variant=range]:p-[3px]',
         props.class,
       )
     "

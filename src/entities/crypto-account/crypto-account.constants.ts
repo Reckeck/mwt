@@ -1,5 +1,5 @@
 /** The networks an address can be followed on: the ones the module reads (spec E6). Proper names, not translated. */
-export const CONNECTABLE_NETWORKS: { chain: Chain; label: string }[] = [
+const CONNECTABLE_NETWORKS: { chain: Chain; label: string }[] = [
   { chain: 'ethereum', label: 'Ethereum' },
   { chain: 'arbitrum', label: 'Arbitrum' },
   { chain: 'optimism', label: 'Optimism' },

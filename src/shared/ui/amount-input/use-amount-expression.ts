@@ -31,13 +31,14 @@ export function useAmountExpression(context: Context) {
     const result = evaluateAmountExpr(expr.value, { decimals })
     if (!result.ok) {
       // Half-typed text («1200+») is not an error until the user tries to finish it.
-      if (result.code === 'divByZero' || attempted.value) {
-        return { kind: 'error', code: result.code === 'divByZero' ? 'divByZero' : 'syntax' }
-      }
+      if (result.code === 'divByZero' || result.code === 'tooLong') return { kind: 'error', code: result.code }
+      if (attempted.value) return { kind: 'error', code: 'syntax' }
       return null
     }
     if (!allowNegative && result.value.startsWith('-')) return { kind: 'error', code: 'negative' }
-    return { kind: 'result', text: normalizeAmount(result.value, { decimals, allowNegative, decimalMark }).display }
+    const next = normalizeAmount(result.value, { decimals, allowNegative, decimalMark })
+    if (next.overflow) return { kind: 'error', code: 'tooLong' }
+    return { kind: 'result', text: next.display }
   })
 
   function onFocus() {
@@ -66,6 +67,8 @@ export function useAmountExpression(context: Context) {
     const result = evaluateAmountExpr(text, { decimals })
     if (!result.ok || (!allowNegative && result.value.startsWith('-'))) return false
     const next = normalizeAmount(result.value, { decimals, allowNegative, decimalMark })
+    // A result past the digit cap would be cut to a wrong amount: refuse it, the hint says why.
+    if (next.overflow) return false
     context.display.value = next.display
     context.setModel(next.canonical)
     context.emitExpression({ expr: compactExpr(text), result: next.canonical })

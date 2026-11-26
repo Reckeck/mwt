@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { CategorySelect } from '@/features/category-select'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
@@ -189,16 +188,13 @@ function submit(event: Event) {
       <BudgetTargetStep
         v-if="step === 1 || onePage"
         v-model:kind="targetKind"
+        v-model:category="category"
         v-model:store-id="storeId"
         v-model:period="period"
         :form="form"
         :nodes="liveNodes"
         :spending="!onePage && props.category && category === props.category ? props.spending : null"
-      >
-        <template #category>
-          <CategorySelect id="budget-category" v-model="category" :groups="['daily', 'fixed']" :placeholder="t('budget.pickCategory')" />
-        </template>
-      </BudgetTargetStep>
+      />
       <BudgetAmountStep
         v-if="step === 2 || onePage"
         v-model:limit="limit"

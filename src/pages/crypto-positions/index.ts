@@ -1,1 +1,1 @@
-export { default as CryptoPositions } from './ui/CryptoPositions.vue'
+export { default as CryptoPositionsPage } from './ui/CryptoPositionsPage.vue'

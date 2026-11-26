@@ -1,1 +1,1 @@
-export { default as BudgetSettings } from './BudgetSettings.vue'
+export { default as BudgetSettings } from './ui/BudgetSettings.vue'

@@ -3,7 +3,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 
-import { TransactionForm, formFromTransaction, formToInput } from '@/features/transaction-create'
 import { StoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
@@ -22,6 +21,9 @@ import { useAutomationFields } from './model/use-automation-fields'
 import { AutomationScheduleFields } from './ui/automation-schedule-fields'
 import { useStoreTree } from '@/shared/api/queries'
 import { SwitchRow } from '@/shared/ui/switch-row'
+import { useSettingsStore } from '@/shared/store/settings'
+import { TemplateFields } from './ui/template-fields'
+import { templateAssetOf, templateDraftOf, templateKindOf, templateToInput } from './lib/template-input'
 
 const props = withDefaults(defineProps<AutomationDialogProps>(), { automation: null, storeId: '', preset: null })
 const open = defineModel<boolean>('open', { required: true })
@@ -30,6 +32,7 @@ const emit = defineEmits<{ saved: [automation: Automation] }>()
 const { t } = useI18n()
 const queryClient = useQueryClient()
 
+const settings = useSettingsStore()
 const tree = useStoreTree()
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 
@@ -95,9 +98,10 @@ const edit = useEditBase({ open, entity: () => props.automation, live: liveAutom
 const baseInput = () => {
   const base = edit.base.value
   if (!base) return null
-  const tx = formFromTransaction(base.template as unknown as Transaction, storeId.value)
-  if (base.property_id) tx.propertyId = base.property_id
-  return automationBaseOf(base, formToInput(tx))
+  const stored = base.template as unknown as Transaction
+  if (templateKindOf(stored) === null) return null
+  const tx = templateToInput(templateDraftOf(stored), storeId.value, templateAssetOf(stored), settings.baseCurrency, base.property_id ?? '')
+  return automationBaseOf(base, tx)
 }
 /**
  * `Refresh` merges the schedule fields; the operation template is replaced by the other device's
@@ -120,7 +124,7 @@ const initialTx = computed(() =>
     : null,
 )
 
-const form = ref<InstanceType<typeof TransactionForm> | null>(null)
+const form = ref<InstanceType<typeof TemplateFields> | null>(null)
 const fields = useFormValidation(
   () => ({
     name: required(name.value),
@@ -204,7 +208,7 @@ const save = useMutation({
         </FormField>
       </div>
 
-      <TransactionForm
+      <TemplateFields
         v-if="open && storeId"
         :key="`${storeId}:${templateKey}`"
         ref="form"
@@ -212,7 +216,6 @@ const save = useMutation({
         :transaction="template"
         :initial="initialTx"
         :property-id="propertyId"
-        template
         @submit="trySave()"
       />
 

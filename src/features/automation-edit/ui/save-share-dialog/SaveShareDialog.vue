@@ -35,6 +35,8 @@ const goalId = ref('')
 
 const nodes = computed(() => withoutLoyalty(tree.data.value ?? []))
 const flat = computed(() => flattenStoreTree(nodes.value))
+/** Every live wallet, sub-accounts too. */
+const pickable = computed(() => flat.value.filter((node) => !node.store.archived))
 /** Goals that have a wallet to put the share in. */
 const targets = computed(() => (goals.data.value ?? []).filter((goal) => goal.active && goal.scope.store_ids.length > 0))
 /** The usual salary, for `From salary 1,575 $ → 157.50 $ a month`. */
@@ -102,7 +104,7 @@ const save = useMutation({
       </FormField>
       <div class="grid items-start gap-4 sm:grid-cols-2">
         <FormField for="save-share-source" :label="t('saveShare.source')" required :error="form.error('source')">
-          <StoreNodeSelect id="save-share-source" v-model="source" :nodes="nodes" class="w-full" />
+          <StoreNodeSelect id="save-share-source" v-model="source" :nodes="pickable" class="w-full" />
         </FormField>
         <FormField for="save-share-goal" :label="t('saveShare.goal')" required :hint="targets.length ? undefined : t('saveShare.noGoals')" :error="form.error('goal')">
           <Select id="save-share-goal" v-model="goalId" :disabled="!targets.length">

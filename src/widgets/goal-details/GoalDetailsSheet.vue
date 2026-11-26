@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Pencil, Plus } from 'lucide-vue-next'
+import { Pause, Pencil, Play, Plus } from 'lucide-vue-next'
 
 import { MoneyPhrase } from '@/entities/currency'
-import { AttachmentsBlock } from '@/features/attachment-edit'
 import { GoalDelete } from '@/features/goal-delete'
-import { GoalDialog } from '@/features/goal-edit'
-import { TransactionCreateDialog } from '@/features/transaction-create'
+import { GoalDialog, GoalTopUpDialog, useGoalPause } from '@/features/goal-edit'
 import { Button } from '@/shared/ui/button'
 import { ProgressBar } from '@/shared/ui/progress-bar'
 import { EntityBack } from '@/shared/ui/entity-link'
@@ -22,8 +20,8 @@ import GoalFacts from './ui/GoalFacts.vue'
 
 /**
  * The goal's card (New-Goal 3): saved of the target, where and by when, what
- * fills it, the forecast and the deposits; its files and links; `Top up`
- * writes a transfer into its wallet.
+ * fills it, the forecast and the deposits. `Top up` puts a sum aside in its wallet,
+ * `Pause` takes the goal out of the plan until it is resumed.
  */
 const props = withDefaults(defineProps<GoalDetailsSheetProps>(), { groups: () => [] })
 const open = defineModel<boolean>('open', { required: true })
@@ -53,17 +51,13 @@ const summary = computed(() => {
   }
 })
 
-const cardBody = ref<HTMLElement | null>(null)
-const owner = computed<EntityRef>(() => ({ kind: 'goal', id: props.goalId ?? '' }))
-const ownerLabel = computed(() => (entry.value ? t('goalCard.dropOwner', { name: entry.value.goal.name }) : ''))
-
 const editOpen = ref(false)
 function closeAll() {
   editOpen.value = false
   open.value = false
 }
 const topUpOpen = ref(false)
-const counterpart = computed<AccountRef | null>(() => (details.store.value ? { store: details.store.value } : null))
+const pause = useGoalPause()
 </script>
 
 <template>
@@ -72,7 +66,7 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
       :data-entity-card="props.goalId ? `goal:${props.goalId}` : undefined"
     >
       <EntityBack class="mx-2 mt-2" />
-      <div v-if="entry && summary" ref="cardBody" class="relative flex min-h-0 flex-1 flex-col">
+      <div v-if="entry && summary" class="relative flex min-h-0 flex-1 flex-col">
         <div class="grid flex-1 content-start gap-5 overflow-y-auto pt-2 pb-6">
           <SheetHeader class="gap-0.5 pe-12">
             <SheetTitle class="text-lg">{{ entry.goal.name }}</SheetTitle>
@@ -80,7 +74,8 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
           </SheetHeader>
 
           <div class="grid gap-5 px-4">
-            <div class="grid gap-2" data-goal-progress>
+            <p v-if="!entry.goal.active" class="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground" data-goal-paused>{{ t('goalCard.pausedHint') }}</p>
+            <div class="grid gap-2 rounded-xl border border-border bg-card p-4" data-goal-progress>
               <p class="text-base font-medium tabular-nums"><MoneyPhrase :parts="summary.saved" /></p>
               <ProgressBar :value="summary.pct" :label="summary.leftText" />
               <p class="text-sm text-muted-foreground tabular-nums"><MoneyPhrase :parts="summary.left" /></p>
@@ -90,23 +85,26 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
               <template #wallet="slotProps"><slot name="wallet" v-bind="slotProps" /></template>
             </GoalFacts>
 
-            <AttachmentsBlock :owner="owner" :owner-label="ownerLabel" :drop-target="cardBody" :active="open && !editOpen" />
           </div>
         </div>
 
-        <footer class="flex items-center gap-2 border-t px-4 pt-3 pb-[max(0.75rem,var(--safe-bottom,0px))]" data-goal-card-actions>
+        <footer class="flex flex-wrap items-center gap-2 border-t px-4 pt-3 pb-[max(0.75rem,var(--safe-bottom,0px))]" data-goal-card-actions>
           <GoalDelete
             :progress="entry"
             :wallet="details.storeName.value"
             :filler="details.filler.value?.label ?? null"
-            class="max-sm:min-w-0 max-sm:flex-1"
+            class="max-sm:flex-1"
             @deleted="open = false"
           />
-          <Button variant="outline" class="max-sm:min-w-0 max-sm:flex-1 sm:ms-auto" :disabled="!details.source.value" data-goal-top-up @click="topUpOpen = true">
+          <Button variant="ghost" class="max-sm:flex-1 sm:ms-auto" :disabled="pause.isPending.value" data-goal-pause @click="pause.mutate(entry.goal)">
+            <component :is="entry.goal.active ? Pause : Play" class="size-4 shrink-0" />
+            {{ entry.goal.active ? t('goalCard.pause') : t('goalCard.resume') }}
+          </Button>
+          <Button variant="outline" class="max-sm:flex-1" :disabled="!details.store.value || !entry.goal.active" data-goal-top-up @click="topUpOpen = true">
             <Plus class="size-4 shrink-0" />
             {{ t('goalCard.topUp') }}
           </Button>
-          <Button class="max-sm:min-w-0 max-sm:flex-1" data-goal-edit @click="editOpen = true">
+          <Button class="max-sm:flex-1" data-goal-edit @click="editOpen = true">
             <Pencil class="size-4 shrink-0" />
             {{ t('actions.edit') }}
           </Button>
@@ -115,7 +113,6 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
         <GoalDialog v-model:open="editOpen" :goal="entry.goal" :saved="entry.saved">
           <template #extras>
             <GoalEditFiller :filler="details.filler.value" />
-            <AttachmentsBlock :owner="owner" :owner-label="ownerLabel" :active="editOpen" />
           </template>
           <template #actions>
             <GoalDelete
@@ -128,12 +125,7 @@ const counterpart = computed<AccountRef | null>(() => (details.store.value ? { s
             />
           </template>
         </GoalDialog>
-        <TransactionCreateDialog
-          v-if="topUpOpen && details.source.value"
-          v-model:open="topUpOpen"
-          :store-id="details.source.value"
-          :counterpart="counterpart"
-        />
+        <GoalTopUpDialog v-if="details.store.value" v-model:open="topUpOpen" :goal="entry.goal" :store-id="details.store.value" />
       </div>
     </SheetContent>
   </Sheet>

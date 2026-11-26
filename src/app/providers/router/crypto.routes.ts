@@ -12,7 +12,7 @@ export const cryptoRoutes: RouteRecordRaw = {
       // What the followed addresses hold inside protocols (spec D0; the list itself is D6).
       path: 'positions',
       name: 'crypto-positions',
-      component: () => import('@/pages/crypto-positions').then((page) => page.CryptoPositions),
+      component: () => import('@/pages/crypto-positions').then((page) => page.CryptoPositionsPage),
       meta: { i18n: 'cryptoTrack.positions.title' },
     },
   ],

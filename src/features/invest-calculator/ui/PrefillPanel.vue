@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/vue-query'
 import { ChevronDown, RefreshCw } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
-import { StoreNodeSelect } from '@/entities/store'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { formatDate } from '@/shared/lib/format'
@@ -99,12 +99,12 @@ function pickMonths(value: unknown) {
           {{ t('invest.prefilledAt', { date: formatDate(props.calc.prefilledAt.value) }) }}
         </p>
         <FormField for="calc-prefill-stores" :label="t('invest.prefillStores')" :hint="t('invest.prefillStoresHint')">
-          <StoreNodeSelect
+          <ComboStoreNodeSelect
             id="calc-prefill-stores"
-            v-model:ids="storeIds"
+            v-model="storeIds"
             multiple
-            flat
             :nodes="liveNodes"
+            :placeholder="t('invest.prefillNoStores')"
             :empty-label="t('invest.prefillNoStores')"
           />
         </FormField>

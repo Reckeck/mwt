@@ -1,3 +1,5 @@
+import type { MoneyFlow } from '@/shared/lib/money-flow'
+
 export interface MoneyProps {
   amount: string | number | null | undefined
   /** Lowercase code; the base currency when omitted. */
@@ -6,6 +8,8 @@ export interface MoneyProps {
   signed?: boolean
   /** Green up, red down, neutral for zero; implies `signed`, so colour is never the only cue. */
   colored?: boolean
+  /** The colour rule of D7: expense ink with a minus, income green with a plus, a move muted without a sign. Wins over `signed`/`colored`. */
+  flow?: MoneyFlow
   compact?: boolean
   /** Show the conversion tooltip on hover; on by default for the base currency, fiat and favourites. */
   convert?: boolean

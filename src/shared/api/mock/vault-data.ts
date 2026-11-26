@@ -73,6 +73,9 @@ export const mockFlatInflation = (): Record<string, string> => ({
 /** Mirrors what `app_settings.json` would hold. */
 export const mockAppSettings: AppSettings = {
   theme: 'dark',
+  theme_id: null,
+  theme_light_id: null,
+  theme_dark_id: null,
   locale: 'auto',
   base_currency: 'usd',
   // A fresh install: the create and open forms ask for the base currency.

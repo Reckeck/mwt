@@ -1,1 +1,1 @@
-export { default as WorkflowList } from './WorkflowList.vue'
+export { default as WorkflowList } from './ui/WorkflowList.vue'

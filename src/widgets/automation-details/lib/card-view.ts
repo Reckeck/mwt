@@ -78,6 +78,17 @@ export function statusTone(status: JournalStatus): RunTone {
   return 'mut'
 }
 
+/** The text colour of each tone: green done, amber needs you, red broke. */
+export const RUN_TONE_CLASS: Record<RunTone, string> = {
+  pos: 'text-success',
+  wrn: 'text-warning',
+  neg: 'text-destructive',
+  mut: 'text-muted-foreground',
+}
+
+/** The colour class of a run's outcome word. */
+export const runToneClass = (status: JournalStatus): string => RUN_TONE_CLASS[statusTone(status)]
+
 /** `157.50 $ → Cash`, `1,575 $ from Tinkoff`, or the run's note. */
 export function runMoney(entry: JournalEntry, names: Names): SumPart[] {
   const { money } = entry

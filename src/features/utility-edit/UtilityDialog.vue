@@ -2,15 +2,17 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { StoreNodeSelect } from '@/entities/store'
-import { CategorySelect } from '@/features/category-select'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
+import { Combobox } from '@/shared/ui/combobox'
 import { Dialog } from '@/shared/ui/dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { Label } from '@/shared/ui/label'
 import { SyncChangedBanner } from '@/shared/ui/sync-changed-banner'
 import { WizardSteps } from '@/shared/ui/wizard-steps'
+import { useCategories } from '@/shared/api/queries'
+import { categoryLabel } from '@/shared/lib/categories'
 
 import { useSaveUtility } from './model/use-save-utility'
 import { provideUtilityForm } from './model/use-utility-form'
@@ -32,6 +34,13 @@ const state = provideUtilityForm(props, open)
 const { editing, step, name, kind, propertyName, storeId, category, nodes, form, changedElsewhere, refreshFromOtherDevice } =
   state
 const save = useSaveUtility(props, state, () => (open.value = false))
+
+const categories = useCategories()
+const categoryOptions = computed(() =>
+  (categories.data.value ?? [])
+    .filter((entry) => entry.group === 'fixed')
+    .map((entry) => ({ value: entry.key, label: categoryLabel(entry, t) })),
+)
 
 const secondTitle = computed(() => t(`utilityEdit.step.${kind.value}`))
 const title = computed(() => {
@@ -64,11 +73,11 @@ function submit(event?: Event) {
         <div class="grid gap-3 @lg:grid-cols-2">
           <div class="grid content-start gap-1.5">
             <Label for="utility-store">{{ t('utilityEdit.store') }}</Label>
-            <StoreNodeSelect id="utility-store" v-model="storeId" :nodes="nodes" :empty-label="t('utilities.anyStore')" />
+            <ComboStoreNodeSelect id="utility-store" v-model="storeId" :nodes="nodes" :empty-label="t('utilities.anyStore')" :placeholder="t('utilities.anyStore')" />
           </div>
           <div class="grid content-start gap-1.5">
             <Label for="utility-category">{{ t('utilities.category') }}</Label>
-            <CategorySelect id="utility-category" v-model="category" :groups="['fixed']" />
+            <Combobox id="utility-category" v-model="category" :options="categoryOptions" :placeholder="t('utilities.category')" />
           </div>
         </div>
       </template>

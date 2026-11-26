@@ -6,8 +6,7 @@ import { useStoreTree } from '@/shared/api/queries'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 
 /**
- * The goal's progress, the automation that fills it and the wallet `Top up`
- * sends from: the first everyday wallet outside the goal.
+ * The goal's progress, its wallet and the automation that fills it.
  */
 export function useGoalDetails(
   goalId: MaybeRefOrGetter<string | null>,
@@ -21,11 +20,15 @@ export function useGoalDetails(
   })
   const entry = computed(() => progress.data.value?.find((item) => item.goal.id === toValue(goalId)) ?? null)
   const store = computed(() => entry.value?.goal.scope.store_ids[0] ?? null)
+  const tree = useStoreTree()
+  /** The card's relation label when it opened from an address, else the wallet's name from the tree. */
   const storeName = computed(
     () =>
       toValue(groups)
         ?.find((group) => group.kind === 'stores')
-        ?.items.find((item) => item.target.id === store.value)?.label ?? '',
+        ?.items.find((item) => item.target.id === store.value)?.label ??
+      flattenStoreTree(tree.data.value ?? []).find((node) => node.store.id === store.value)?.store.name ??
+      '',
   )
 
   const filler = computed(() => {
@@ -39,14 +42,5 @@ export function useGoalDetails(
     return null
   })
 
-  const tree = useStoreTree()
-  const source = computed(() => {
-    const own = new Set(entry.value?.goal.scope.store_ids ?? [])
-    const nodes = flattenStoreTree(tree.data.value ?? []).filter(
-      (node) => !node.store.archived && !own.has(node.store.id),
-    )
-    return (nodes.find((node) => node.store.purpose === 'everyday') ?? nodes[0])?.store.id ?? ''
-  })
-
-  return { progress, entry, store, storeName, filler, source }
+  return { progress, entry, store, storeName, filler }
 }

@@ -21,7 +21,7 @@ const { t } = useI18n()
   <div class="grid gap-1.5" data-slot="readonly-field">
     <span class="text-sm font-medium leading-none">{{ props.label }}</span>
     <div
-      :class="cn('flex h-10 items-center gap-2 rounded-md border border-input bg-muted/50 px-3 text-sm md:h-9')"
+      :class="cn('flex h-10 items-center gap-2 rounded-md border border-border bg-muted px-3 text-sm')"
     >
       <span :class="cn('min-w-0 flex-1 truncate tabular-nums', !props.value && 'text-muted-foreground')">
         {{ props.value || '—' }}

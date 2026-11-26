@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Textarea } from '@/shared/ui/textarea'
 import { useI18n } from 'vue-i18n'
 
 import type { EditorNoteData } from '../model/flow'
@@ -16,13 +17,13 @@ const { t } = useI18n()
     class="w-56 rounded-lg border bg-muted p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring"
     :class="props.selected ? 'border-primary' : 'border-border'"
   >
-    <textarea
-      class="nodrag nowheel block min-h-16 w-full resize-y bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
-      :value="props.data.text"
+    <Textarea
+      class="nodrag nowheel block min-h-16 border-0 bg-transparent px-0 py-0 text-xs"
+      :model-value="props.data.text"
       :placeholder="t('workflow.note.placeholder')"
       :aria-label="t('workflow.note.label')"
       rows="3"
-      @input="emit('text', props.id, ($event.target as HTMLTextAreaElement).value)"
+      @update:model-value="(text) => emit('text', props.id, String(text))"
     />
   </div>
 </template>

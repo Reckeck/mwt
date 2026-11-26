@@ -10,6 +10,10 @@ interface VaultState {
   error: string | null
   busy: boolean
   recents: RecentVault[]
+  /** `recents` was asked for at least once: an empty list before that is not yet an answer. */
+  recentsLoaded: boolean
+  /** The last `recent_vaults` read failed: not a first run, the list is unknown. */
+  recentsError: string | null
 }
 
 const empty = (): VaultState => ({
@@ -19,6 +23,8 @@ const empty = (): VaultState => ({
   error: null,
   busy: false,
   recents: [],
+  recentsLoaded: false,
+  recentsError: null,
 })
 
 export const useVaultStore = defineStore('vault', {
@@ -38,7 +44,14 @@ export const useVaultStore = defineStore('vault', {
       return this.status
     },
     async loadRecents() {
-      this.recents = await call<RecentVault[]>('recent_vaults')
+      try {
+        this.recents = await call<RecentVault[]>('recent_vaults')
+        this.recentsLoaded = true
+        this.recentsError = null
+      } catch (err) {
+        this.recentsError = (err as Error).message
+        throw err
+      }
     },
     /** Returns the index the row had (for `restoreRecent`), `-1` when it was not listed. */
     async forgetRecent(path: string) {

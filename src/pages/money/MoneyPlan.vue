@@ -1,54 +1,61 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
 import { ChevronDown } from 'lucide-vue-next'
 
 import { BudgetList } from '@/widgets/budget-list'
+import { BudgetSettings } from '@/widgets/budget-settings'
+import { FixedCosts } from '@/widgets/fixed-costs'
 import { GoalList } from '@/widgets/goal-list'
-import { Button } from '@/shared/ui/button'
-import { FOCUS_QUERY_KEY } from '@/shared/lib/use-focus-row'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
+import { Button } from '@/shared/ui/button'
 
-import { providePlanReady } from './model/use-plan-ready'
-import { PlanGoals, PlanLimits, PlanNext } from './ui/plan'
+import PlanCarryOver from './ui/plan/PlanCarryOver.vue'
+import PlanEmergencyFund from './ui/plan/PlanEmergencyFund.vue'
+import PlanEnvelopes from './ui/plan/PlanEnvelopes.vue'
+import PlanGoals from './ui/plan/PlanGoals.vue'
 
 /**
- * The plan (Money 2 · 9, 10): limits and goals side by side, then what the
- * month still brings. Editing, deleting and the goal calendar wait below,
- * folded.
+ * The plan (Budget): limits as Budget rows, goals, envelopes, the carry-over prompt and the emergency fund.
+ * The full goal list with its calendar waits folded below.
+ * The regular payments sit under the envelopes.
+ * The plan's own settings (savings rate, a usual month, the daily budget) wait folded below.
  */
-const props = defineProps<{ filter: ReportFilter }>()
-
 const { t } = useI18n()
-/** Hidden, not unmounted, until every block has its first data: the blocks load and keep their tour anchors. */
-const ready = providePlanReady()
-const route = useRoute()
-/** A link to one goal or limit (`?focus=`) unfolds the lists, where its row is lit. */
-const focused = () => typeof route.query[FOCUS_QUERY_KEY] === 'string'
-const details = ref(focused())
-watch(focused, (now) => {
-  if (now) details.value = true
-})
+const settingsOpen = ref(false)
+const goalsOpen = ref(false)
 </script>
 
 <template>
-  <div :class="['grid grid-cols-1 gap-4', !ready && 'invisible']" :aria-busy="!ready">
+  <div class="grid grid-cols-1 gap-4">
     <div class="grid items-start gap-4 @3xl:grid-cols-2">
-      <PlanLimits :filter="props.filter" />
-      <PlanGoals :filter="props.filter" />
+      <section class="grid content-start gap-2 rounded-lg border border-border bg-card p-4" data-tour="plan-limits">
+        <h2 class="heading-section">{{ t('money.plan.limits') }}</h2>
+        <BudgetList editable />
+      </section>
+      <div class="grid gap-4">
+        <PlanGoals />
+        <PlanEmergencyFund />
+        <PlanCarryOver />
+      </div>
     </div>
-    <PlanNext />
-    <Collapsible v-model:open="details" class="grid grid-cols-1 gap-3">
+    <PlanEnvelopes />
+    <FixedCosts />
+    <Collapsible v-model:open="goalsOpen" class="grid gap-3">
       <CollapsibleTrigger as-child>
         <Button variant="ghost" size="sm" class="w-fit text-muted-foreground" data-plan-details>
-          {{ t('money.plan.details') }} <ChevronDown :class="['transition-transform', details && 'rotate-180']" />
+          {{ t('money.plan.details') }} <ChevronDown :class="['transition-transform', goalsOpen && 'rotate-180']" />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent class="grid grid-cols-1 gap-6">
-        <BudgetList v-if="details" />
-        <GoalList v-if="details" />
-      </CollapsibleContent>
+      <CollapsibleContent><GoalList v-if="goalsOpen" /></CollapsibleContent>
+    </Collapsible>
+    <Collapsible v-model:open="settingsOpen" class="grid gap-3">
+      <CollapsibleTrigger as-child>
+        <Button variant="ghost" size="sm" class="w-fit text-muted-foreground" data-plan-settings>
+          {{ t('money.plan.settings') }} <ChevronDown :class="['transition-transform', settingsOpen && 'rotate-180']" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent><BudgetSettings v-if="settingsOpen" /></CollapsibleContent>
     </Collapsible>
   </div>
 </template>

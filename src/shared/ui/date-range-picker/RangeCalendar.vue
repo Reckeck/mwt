@@ -16,12 +16,16 @@ import {
   RangeCalendarRoot,
 } from 'reka-ui'
 
+import { boundedDate } from '@/shared/ui/date-time-picker/date-value'
 import { buttonVariants } from '@/shared/ui/button'
 import { cn } from '@/shared/lib/utils'
 
 /** The calendar of a span of days: the shadcn look of `Calendar` on reka's range parts. */
 defineProps<{ locale: string; weekStartsOn: 0 | 1 }>()
 const model = defineModel<CalendarRange>({ required: true })
+/** Navigation and picking stop at the global date range (1970..2100). */
+const minBound = boundedDate(undefined, 'min')
+const maxBound = boundedDate(undefined, 'max')
 
 const CELL = cn(
   'relative flex-1 p-0 text-center text-sm [&:has([data-selected])]:bg-accent',
@@ -37,6 +41,8 @@ const NAV = cn(buttonVariants({ variant: 'outline' }), 'size-7 bg-transparent p-
     :locale="locale"
     :week-starts-on="weekStartsOn"
     fixed-weeks
+    :min-value="minBound"
+    :max-value="maxBound"
     class="p-3"
     data-slot="range-calendar"
   >

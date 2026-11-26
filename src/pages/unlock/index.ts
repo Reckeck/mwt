@@ -1,1 +1,1 @@
-export { default as Unlock } from './Unlock.vue'
+export { default as Unlock } from './ui/Unlock.vue'

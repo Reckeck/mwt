@@ -18,7 +18,7 @@ const rest = computed(() => {
 </script>
 
 <template>
-  <div data-slot="card" :class="cn('rounded-xl border border-border bg-card text-card-foreground shadow-sm', cls)" v-bind="rest">
+  <div data-slot="card" :class="cn('rounded-lg border border-border bg-card text-card-foreground', cls)" v-bind="rest">
     <div v-if="$slots.header" data-slot="card-header" data-card-header :class="cn('flex flex-col gap-1', pad.section, pad.header)">
       <slot name="header" />
     </div>

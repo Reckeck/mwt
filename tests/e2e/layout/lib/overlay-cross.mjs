@@ -1,6 +1,6 @@
-// Layer over layer (docs/ui-overlays.md §4, items 2, 4, 6): a dialog opened from a sheet, Ctrl K over
-// a dialog, a toast over a sheet (phone) or over a glance. Each closes one layer per Esc / Back.
-import { APP, FIND, LAYER, closeLayer, fill, openLayer, press, step } from './overlay-steps.mjs'
+// Layer over layer (docs/ui-overlays.md §4, items 2, 4): Ctrl K over a dialog. Each closes one layer per Esc / Back.
+// The toast cases (over a sheet or a glance) return with their screens (W4).
+import { FIND, LAYER, closeLayer, openLayer, press, step } from './overlay-steps.mjs'
 
 const GOAL_CARD = '[data-goal-card]'
 
@@ -21,25 +21,30 @@ async function waitFor(page, selector) {
   return false
 }
 
-const toast = (page) =>
-  page.eval(`
-    const { notify } = await import('/src/shared/lib/notify/index.ts')
-    window.__undo = 0
-    notify.success('check-layout', { action: { label: 'Undo', onClick: () => window.__undo++ } })
-    return true`)
-
-/** Presses the toast's «Undo» like a user: a mouse press and release at its middle. */
-async function pressUndo(page) {
-  await page.sleep(400)
-  const at = await page.eval(`
-    const button = [...document.querySelectorAll('[data-sonner-toast] button')].find((el) => el.textContent.trim() === 'Undo')
-    if (!button) return null
-    const rect = button.getBoundingClientRect()
-    return [Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2)]`)
-  if (!at) return false
-  for (const type of ['mousePressed', 'mouseReleased']) await page.send('Input.dispatchMouseEvent', { type, x: at[0], y: at[1], button: 'left', clickCount: 1 })
-  await page.sleep(300)
-  return true
+/**
+ * Item 2: Ctrl K over an open converter dialog. Either the palette shows on top, takes the focus and Esc closes
+ * only it, or it waits (a modal layer holds the keys): then the dialog keeps the focus. Never a palette under it.
+ */
+async function paletteOverDialog(page, touch) {
+  const problems = []
+  const palette = '[data-command-palette][data-open="true"]'
+  const dialog = '[data-overlay="converter"]'
+  await openLayer(page, { route: '/' })
+  await page.eval(`const converter = await import('/src/shared/lib/converter.ts'); converter.openConverter(); return true`)
+  if (!(await waitFor(page, dialog))) return ['the converter did not open']
+  await page.sleep(500)
+  await press(page, 'k', 2)
+  await page.sleep(500)
+  if (await page.eval(LAYER(palette))) {
+    if (!(await page.eval(ON_TOP(palette, 'input')))) problems.push('the palette is under the dialog (a click would not reach it)')
+    if (!(await page.eval(`return Boolean(document.activeElement?.closest('[data-command-palette]'))`))) problems.push('focus stays in the dialog under the palette')
+    if (!(await closeLayer(page, palette, touch))) problems.push('the palette over a dialog does not close')
+    if (!(await page.eval(LAYER(dialog)))) problems.push('one Esc / Back closed the palette and the dialog under it')
+  } else if (!(await page.eval(`${FIND(dialog)} return Boolean(layer?.contains(document.activeElement))`))) {
+    problems.push('Ctrl K lost the focus of the dialog')
+  }
+  await closeLayer(page, dialog, touch)
+  return problems
 }
 
 /** Item 6: the delete question over a goal's card; one Esc / Back closes the question, the next the card. */
@@ -60,84 +65,9 @@ async function dialogInSheet(page, touch) {
   return problems
 }
 
-/**
- * Item 2: Ctrl K over an open quick-add dialog. Either the palette shows on top, takes the focus and Esc closes
- * only it, or it waits (a modal layer holds the keys): then the dialog keeps the focus. Never a palette under it.
- */
-async function paletteOverDialog(page, touch) {
-  const problems = []
-  const palette = '[data-command-palette][data-open="true"]'
-  const dialog = '[data-overlay="quick-add"]'
-  await openLayer(page, { route: '/' })
-  await page.eval(`const quick = await import('/src/shared/lib/quick-add.ts'); quick.openQuickAdd(); return true`)
-  if (!(await waitFor(page, dialog))) return ['quick add did not open']
-  await page.sleep(500)
-  await press(page, 'k', 2)
-  await page.sleep(500)
-  if (await page.eval(LAYER(palette))) {
-    if (!(await page.eval(ON_TOP(palette, 'input')))) problems.push('the palette is under the dialog (a click would not reach it)')
-    if (!(await page.eval(`return Boolean(document.activeElement?.closest('[data-command-palette]'))`))) problems.push('focus stays in the dialog under the palette')
-    if (!(await closeLayer(page, palette, touch))) problems.push('the palette over a dialog does not close')
-    if (!(await page.eval(LAYER(dialog)))) problems.push('one Esc / Back closed the palette and the dialog under it')
-  } else if (!(await page.eval(`${FIND(dialog)} return Boolean(layer?.contains(document.activeElement))`))) {
-    problems.push('Ctrl K lost the focus of the dialog')
-  }
-  await press(page, 'n', 2)
-  await page.sleep(400)
-  if ((await page.eval(`return document.querySelectorAll('${dialog}').length`)) > 1) problems.push('Ctrl N opened a second quick add over the first')
-  await closeLayer(page, dialog, touch)
-  return problems
-}
-
-/** Item 4: a toast over a full-screen sheet does not hide its way out, its «Undo» works, the sheet stays. */
-async function toastOverSheet(page, touch) {
-  const problems = []
-  await openLayer(page, { route: '/money/plan' })
-  await step(page, { query: { open: 'goal:{goal}' } })
-  if (!(await waitFor(page, GOAL_CARD))) return ['the goal card did not open']
-  await page.sleep(500)
-  await toast(page)
-  await page.sleep(500)
-  if (touch && !(await page.eval(ON_TOP(GOAL_CARD, 'button:has(.sr-only)')))) problems.push('the toast covers the card’s close button')
-  if (!(await pressUndo(page))) problems.push('the toast did not show over the card')
-  else {
-    if (!(await page.eval(`return window.__undo`))) problems.push('the toast over the card cannot be pressed')
-    if (!(await page.eval(LAYER(GOAL_CARD)))) problems.push('pressing the toast closed the card under it')
-  }
-  await closeLayer(page, GOAL_CARD, touch)
-  if (touch) {
-    // The settings window: its «‹» and «×» stay uncovered too.
-    await step(page, { query: { settings: 'app' } })
-    await page.sleep(600)
-    await toast(page)
-    await page.sleep(500)
-    if (!(await page.eval(ON_TOP('[data-overlay="settings"]', 'button[aria-label="Закрыть"]')))) problems.push('the toast covers the settings window’s way out')
-    // Pressed away: left for its 10 s it sits over whatever the next entry has to press on a phone.
-    if (!(await pressUndo(page))) problems.push('the toast did not show over the settings window')
-    await closeLayer(page, '[data-overlay="settings"]', touch)
-  }
-  return problems
-}
-
-/** Item 4: a toast over a glance popover or sheet: pressing «Undo» works and does not close the glance. */
-async function toastOverGlance(page, touch) {
-  const problems = []
-  await openLayer(page, { route: '/' })
-  if ((await step(page, { click: '[data-glance-trigger="capital"]' })) || !(await waitFor(page, '[data-overlay="glance-capital"]'))) return ['the glance did not open']
-  await page.sleep(500)
-  await toast(page)
-  if (!(await pressUndo(page))) return ['the toast did not show over the glance']
-  if (!(await page.eval(`return window.__undo`))) problems.push('the toast over a glance cannot be pressed')
-  if (!(await page.eval(LAYER('[data-overlay="glance-capital"]')))) problems.push('pressing the toast closed the glance under it')
-  await closeLayer(page, '[data-overlay="glance-capital"]', touch)
-  return problems
-}
-
 const CROSS = [
   { id: 'dialog-in-sheet', run: dialogInSheet },
   { id: 'palette-over-dialog', run: paletteOverDialog },
-  { id: 'toast-over-sheet', run: toastOverSheet },
-  { id: 'toast-over-glance', run: toastOverGlance },
 ]
 
 export const CROSS_IDS = CROSS.map((entry) => entry.id)

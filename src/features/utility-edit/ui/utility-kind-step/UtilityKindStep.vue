@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { StoreNodeSelect } from '@/entities/store'
+import { Combobox } from '@/shared/ui/combobox'
 import { Button } from '@/shared/ui/button'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
@@ -20,6 +21,8 @@ const emit = defineEmits<{ next: [] }>()
 const { t } = useI18n()
 const { name, kind, propertyId, properties, form } = useUtilityForm()
 
+const propertyOptions = computed(() => properties.value.map((node) => ({ value: node.store.id, label: node.store.name })))
+
 function choose(value: UtilityKindName) {
   if (kind.value === value) emit('next')
   else kind.value = value
@@ -31,14 +34,7 @@ function choose(value: UtilityKindName) {
     <Input id="utility-name" v-model="name" :placeholder="t('utilities.namePlaceholder')" />
   </FormField>
   <FormField v-if="props.askProperty" for="utility-property" :label="t('utilities.property')" required :error="form.error('property')">
-    <StoreNodeSelect
-      id="utility-property"
-      v-model="propertyId"
-      :nodes="properties"
-      flat
-      :placeholder="t('utilities.pickProperty')"
-      :invalid="Boolean(form.error('property'))"
-    />
+    <Combobox id="utility-property" v-model="propertyId" :options="propertyOptions" :placeholder="t('utilities.pickProperty')" />
     <p v-if="!properties.length" class="text-xs text-muted-foreground">{{ t('utilities.noProperty') }}</p>
   </FormField>
   <div class="grid gap-1.5">

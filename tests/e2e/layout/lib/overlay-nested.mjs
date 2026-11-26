@@ -6,15 +6,16 @@ import { FIND, LAYER, closeLayer, openLayer, pointOf, press, step } from './over
 
 const overlay = (id) => `[data-overlay="${id}"]`
 
-/** Types into a field the way a keyboard does (an input event Vue and Reka see). */
-const TYPE_IN = (selector, text) => `
-  const field = document.querySelector(${JSON.stringify(selector)})
-  field.focus()
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, ${JSON.stringify(text)})
-  field.dispatchEvent(new Event('input', { bubbles: true }))
-  return true`
-
+// The pairs of the screens that are rebuilt; the rest come back with their W4 tasks (T72).
 export const NESTED = [
+  {
+    id: 'confirm-in-goal-sheet',
+    route: '/money/plan',
+    open: [{ query: { open: 'goal:{goal}' } }],
+    parent: '[data-goal-card]',
+    child: overlay('goal-delete'),
+    openChild: [{ click: '[data-goal-delete]' }],
+  },
   {
     id: 'select-in-dialog',
     route: '/automations/alerts',
@@ -26,91 +27,12 @@ export const NESTED = [
     insideCloses: true,
   },
   {
-    id: 'date-in-dialog',
-    route: '/',
-    open: [{ click: '[data-tour="quick-add"]' }],
-    phoneOpen: [{ click: '[aria-label="Новая операция"]' }],
-    parent: overlay('quick-add'),
-    child: '[data-slot="popover-content"]',
-    openChild: [
-      { click: `${overlay('quick-add')} [data-slot="collapsible-trigger"]`, once: true },
-      { click: `${overlay('quick-add')} [data-slot="popover-trigger"]`, text: 'Сейчас' },
-    ],
-  },
-  {
     id: 'confirm-in-sheet',
     route: '/automations',
-    open: [{ query: { open: 'automation:{automation}' } }],
+    open: [{ query: { card: '{automation}' } }],
     parent: '[data-automation-card]',
     child: overlay('confirm'),
     openChild: [{ click: '[data-automation-card] [data-slot="confirm-button"]' }],
-  },
-  {
-    id: 'menu-in-sheet',
-    route: '/transactions',
-    open: [{ click: '[data-tx-open]' }],
-    parent: '[data-tx-card]',
-    child: '[role="menu"]',
-    openChild: [{ click: '[data-tx-card] button', text: '^\\s*Добавить' }],
-    corner: true,
-    // On a phone the same button opens a sheet.
-    phoneChild: '[data-attachment-sheet]',
-  },
-  {
-    id: 'money-in-glance',
-    route: '/',
-    open: [{ click: '[data-glance-trigger="capital"]' }],
-    parent: overlay('glance-capital'),
-    child: overlay('money-card'),
-    openChild: [{ click: `${overlay('glance-capital')} [data-money-convertible]` }],
-  },
-  {
-    id: 'money-in-sheet',
-    route: '/transactions',
-    open: [{ click: '[data-tx-open]' }],
-    parent: '[data-tx-card]',
-    child: overlay('money-card'),
-    openChild: [{ click: '[data-tx-card] [data-money-convertible]:not(a *, button *, [role="button"] *)' }],
-  },
-  {
-    id: 'select-in-settings',
-    route: '/?settings=accounting&section=categories',
-    open: [],
-    desktop: true,
-    parent: overlay('settings'),
-    child: '[role="listbox"]',
-    openChild: [{ click: `${overlay('settings')} [data-slot="select-trigger"]` }],
-    inside: '[role="option"]',
-    insideCloses: true,
-  },
-  {
-    id: 'confirm-in-settings',
-    route: '/?settings=accounting&section=categories',
-    open: [],
-    desktop: true,
-    parent: overlay('settings'),
-    child: overlay('confirm'),
-    openChild: [{ click: `${overlay('settings')} [data-slot="confirm-button"]` }],
-  },
-  {
-    id: 'dialog-in-settings',
-    route: '/?settings=vault&section=file',
-    open: [],
-    parent: overlay('settings'),
-    child: overlay('password-change'),
-    openChild: [{ click: 'button', text: 'Сменить пароль' }],
-  },
-  // A name typed into a contact field offers `Create "…"`: the contact form opens over the form, the name filled in.
-  {
-    id: 'contact-create-in-form',
-    route: '/money/together',
-    open: [{ click: '[data-tour="shared-new"]' }],
-    parent: overlay('shared-event-edit'),
-    child: overlay('contact-edit'),
-    openChild: [
-      { eval: TYPE_IN('input[aria-label^="Добавить участника"]', 'Гриша') },
-      { click: '[role="option"]', text: 'Создать' },
-    ],
   },
 ]
 

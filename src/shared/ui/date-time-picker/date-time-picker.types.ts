@@ -16,4 +16,6 @@ export interface DateTimePickerProps {
   /** Earliest and latest allowed value, in the same format as the model. */
   min?: string
   max?: string
+  /** A pill that is as wide as its text (a chip in a row of chips) instead of a full-width field. */
+  chip?: boolean
 }

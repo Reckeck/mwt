@@ -46,6 +46,31 @@ If this document and the skill disagree, the skill is right.
 - Record details open on the side (`Sheet`), short forms in a dialog,
   large sections as a separate page.
 
+## Themes
+
+30 built-in themes (Default light/dark, Dracula, Nord, Gruvbox, Catppuccin and others) are chosen
+in Settings. The choice is per device; "Auto" pairs one light and one dark theme and follows the
+system. A theme changes colours, money colours, chart palette and the radius only: never the font,
+spacing or layout.
+
+- **Tokens.** A theme owns the CSS custom properties listed in `THEME_TOKENS`
+  (`src/shared/lib/theme/tokens.ts`): surfaces, text, primary/secondary/accent, status colours with
+  their soft variants, borders, sidebar, charts, the four money colours (`--money-income`,
+  `--money-expense`, `--money-transfer`, `--money-in-transit`) and `--radius`. Components use the
+  tokens, never raw colours (`check-ui`).
+- **Add a theme.** Create `src/shared/lib/theme/themes/<id>.ts` exporting a `Theme` (`id`, `name`,
+  `mode`, a complete `tokens` map; the header names the source palette, its licence and every token
+  tuned away from upstream as `tuned from upstream: <token>, <original value>`), then add it to
+  `builtinThemes` in `registry.ts`. Run `pnpm exec vitest run src/shared/lib/theme`: the registry,
+  `assertCompleteTheme` (every token present) and the contrast test must pass.
+- **Contrast test.** `themes.contrast.test.ts` checks every built-in theme against
+  `CONTRAST_PAIRS` (`contrast-pairs.ts`): text pairs at 4.5:1 (WCAG AA), chart and graphic pairs at
+  3:1. A failing palette is tuned (the nearest passing colour) and the change is noted in the
+  header; the only exceptions are the four Default chart tokens listed in the test.
+- **Look at it.** `mise run shots -- themes --theme <id|all>` renders five screens at desktop and
+  phone widths into `.cache/shots/themes/`, and checks that the page really shows the picked theme's
+  background. It is not a gate: open the PNG files and compare colours with the tokens.
+
 ## Checks
 
 `mise run check` includes the interface checks:

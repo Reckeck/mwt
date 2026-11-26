@@ -1,46 +1,35 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
 
-import { useMonthBalance } from '@/entities/report'
-import { formatMonthKey } from '@/shared/lib/format'
-import { shiftMonth } from '@/shared/lib/period'
-import { SectionState } from '@/shared/ui/section-state'
+import { BudgetList } from '@/widgets/budget-list'
+import { DailyBudget } from '@/widgets/daily-budget'
+import { MonthSummary } from '@/widgets/month-summary'
+import { currentMonth } from '@/shared/lib/period'
 
-import { useIsPhone } from '@/shared/lib/phone'
+import MonthBalanceFigures from './ui/month/MonthBalanceFigures.vue'
 
-import { MonthBalanceCard, MonthDaysChart, MonthNow, MonthPhone } from './ui/month-balance'
-
-/** `Month's balance` (Money 3 · 15): the month in a sentence, day by day, then the twelve months with the carry. */
-const props = defineProps<{ filter: ReportFilter }>()
-
+/**
+ * The month (Budget): what is left to spend and the pace, how it went, and the categories against their
+ * limits as Budget rows. It is always the running month: the figures above it are the backend's «now».
+ */
 const { t } = useI18n()
-const route = useRoute()
-const phone = useIsPhone()
-const router = useRouter()
-const month = computed(() => props.filter.to ?? '')
-const year = computed<ReportFilter>(() => ({ ...props.filter, from: shiftMonth(month.value, -11), to: month.value }))
-const balance = useMonthBalance(year)
-const data = computed(() => balance.data.value ?? null)
-const row = computed(() => data.value?.rows.find((entry) => entry.month === month.value) ?? null)
-const daysTitle = computed(() => {
-  const name = formatMonthKey(month.value, { month: 'long' })
-  return t('balance.days.title', { month: name.charAt(0).toUpperCase() + name.slice(1) })
-})
-
-function pick(key: string) {
-  void router.replace({ query: { ...route.query, from: key, to: key } })
-}
+const month = currentMonth()
 </script>
 
 <template>
-  <SectionState :loading="balance.isPending.value" :error="balance.error.value" skeleton="figure" @retry="balance.refetch()">
-    <MonthPhone v-if="data && row && phone" :balance="data" :row="row" :month="month" @pick="pick" />
-    <div v-else-if="data && row" class="grid grid-cols-1 gap-4 md:grid-cols-[330px_minmax(0,1fr)]">
-      <MonthNow :balance="data" :row="row" />
-      <MonthDaysChart :balance="data" :title="daysTitle" />
-      <MonthBalanceCard :balance="data" :month="month" class="md:col-span-2" @pick="pick" />
+  <div class="grid grid-cols-1 gap-4">
+    <div class="grid items-start gap-4 @3xl:grid-cols-2">
+      <div class="grid gap-4" data-tour="month-left">
+        <DailyBudget />
+        <MonthSummary />
+      </div>
+      <div class="grid gap-4">
+        <MonthBalanceFigures :month="month" />
+        <section class="grid gap-2 rounded-lg border border-border bg-card p-4">
+          <h2 class="heading-section">{{ t('money.month.limits') }}</h2>
+          <BudgetList />
+        </section>
+      </div>
     </div>
-  </SectionState>
+  </div>
 </template>

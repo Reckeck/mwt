@@ -3,28 +3,21 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-/** The slices of spec E10, read as text: what they may call, and what they may never do. */
-const SLICES = [
-  'src/entities/crypto-tx',
-  'src/features/crypto-tx-override',
-  'src/widgets/crypto-operations',
-  'src/pages/crypto-operations',
-]
-const ALLOWED = new Set([
-  'crypto_list_operations',
-  'crypto_operation_detail',
-  'crypto_set_override',
-  'open_explorer',
-  // Spec E13: a read of the pointers between an operation and a fiat record; it writes nothing.
-  'crypto_link_pairs',
-])
+import { CRYPTO_ALLOWED_CALLS, CRYPTO_MODULE_SLICES } from './readonly-lists'
+
+/**
+ * The slices that show the crypto module (spec E10), read as text: what they may call, and what they may never
+ * do. The module reads the chain; the screens never create, delete or fetch by themselves.
+ */
+const SLICES = CRYPTO_MODULE_SLICES
+const ALLOWED = new Set<string>(CRYPTO_ALLOWED_CALLS)
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name)
     return statSync(path).isDirectory()
       ? files(path)
-      : /\.(vue|ts)$/.test(name) && !name.endsWith('.test.ts')
+      : /\.(vue|ts)$/.test(name) && !/\.test\.ts$/.test(name)
         ? [path]
         : []
   })
@@ -33,19 +26,16 @@ const sources = SLICES.flatMap((slice) => files(join(process.cwd(), slice))).map
   (path) => [path, readFileSync(path, 'utf8')] as const,
 )
 
-describe('the operations slices', () => {
-  it('call only the three commands that read operations or correct them, and open_explorer', () => {
+describe('the crypto slices', () => {
+  it('call only reads, token verdicts and market data', () => {
     const called = new Set(
       sources.flatMap(([, text]) => [...text.matchAll(/\bcall(?:<[^>]*>)?\(\s*'([a-z_]+)'/g)].map((match) => match[1])),
     )
     expect([...called].filter((name) => !ALLOWED.has(name))).toEqual([])
-    expect(called.has('crypto_list_operations')).toBe(true)
+    expect(called.has('crypto_list_positions')).toBe(true)
   })
 
-  it('reach the explorer only through open_explorer, in one file, never by a request, a link or an image', () => {
-    const openers = sources.filter(([, text]) => text.includes('open_explorer')).map(([path]) => path)
-    expect(openers).toHaveLength(1)
-    expect(openers[0]).toMatch(/open-in-browser\.ts$/)
+  it('reach no network by themselves: no request, link, image or frame', () => {
     for (const [path, text] of sources) {
       expect(text, path).not.toMatch(
         /\bfetch\(|XMLHttpRequest|window\.open|<a\s|<img|<iframe|<link\s|new Image|sendBeacon|:href=|\bhref=/,
@@ -53,37 +43,9 @@ describe('the operations slices', () => {
     }
   })
 
-  it('has no create or delete action: no such command, no such label', () => {
+  it('have no create or delete action: no such command, no such label', () => {
     for (const [path, text] of sources) {
-      expect(text, path).not.toMatch(/crypto_(create|delete|remove|add)_/)
-    }
-    const names = sources.flatMap(([, text]) => [...text.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1]))
-    expect(names.filter((name) => /create|delete|remove|add/.test(name))).toEqual([])
-  })
-})
-
-describe('an engine-driven wallet (its `crypto_account_id` is set)', () => {
-  const tabs = readFileSync(join(process.cwd(), 'src/pages/wallet/ui/wallet-tabs/WalletTabs.vue'), 'utf8')
-
-  it('shows the read-only operations list in its history tab, and never the fiat list with its edit and delete', () => {
-    const history = tabs.slice(tabs.indexOf('<template #history>'), tabs.indexOf('<template #terminal>'))
-    expect(history).toMatch(/<CryptoOperations\s+v-if="engineAccountId"/)
-    // The fiat list, with its row menu (edit, delete, duplicate), is only the `v-else`.
-    expect(history).toMatch(/<StoreTransactions\s+v-else/)
-    expect(history.match(/<StoreTransactions/g)).toHaveLength(1)
-  })
-
-  it('offers on a row of the module only corrections, the exchange declaration and the explorer', () => {
-    const menu = readFileSync(
-      join(process.cwd(), 'src/features/crypto-tx-override/model/use-crypto-actions.ts'),
-      'utf8',
-    )
-    const ids = [...menu.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1])
-    expect(ids).toEqual(['exchange', 'category', 'description', 'hide', 'explorer'])
-    for (const [path, text] of sources) {
-      expect(text, path).not.toMatch(
-        /TransactionCreate|TransactionEdit|transaction-delete|TxRowMenu|StoreTransactions|StoreAdjust|store-adjust/,
-      )
+      expect(text, path).not.toMatch(/crypto_(create|delete|remove|add|connect|wipe)_?/)
     }
   })
 })

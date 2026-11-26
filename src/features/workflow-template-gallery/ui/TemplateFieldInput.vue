@@ -5,9 +5,9 @@ import { useQuery } from '@tanstack/vue-query'
 
 import { CurrencyPicker, Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
-import { CategorySelect } from '@/features/category-select'
 import { call } from '@/shared/api/ipc'
-import { useStoreTree } from '@/shared/api/queries'
+import { useCategories, useStoreTree } from '@/shared/api/queries'
+import { categoryOptions } from '@/shared/lib/categories'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Select, SelectItem } from '@/shared/ui/select'
@@ -28,10 +28,8 @@ const budgets = useQuery({
 const groups = computed<CategoryGroup[]>(() =>
   props.templateId === 'pay_yourself_first' ? ['income'] : ['fixed', 'daily'],
 )
-const category = computed({
-  get: () => model.value,
-  set: (next: string | string[]) => (model.value = Array.isArray(next) ? (next[0] ?? '') : next),
-})
+const categories = useCategories()
+const categoryChoices = computed(() => categoryOptions(categories.data.value, t, groups.value))
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6]
 const DAYS = Array.from({ length: 28 }, (_, index) => index + 1)
 </script>
@@ -45,7 +43,9 @@ const DAYS = Array.from({ length: 28 }, (_, index) => index + 1)
     :placeholder="t('workflowTemplates.pickStore')"
     :invalid="props.invalid"
   />
-  <CategorySelect v-else-if="props.field.kind === 'category'" :id="props.id" v-model="category" :groups="groups" no-create />
+  <Select v-else-if="props.field.kind === 'category'" :id="props.id" v-model="model">
+    <SelectItem v-for="choice in categoryChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</SelectItem>
+  </Select>
   <CurrencyPicker v-else-if="props.field.kind === 'currency'" :id="props.id" v-model="model" />
   <Select v-else-if="props.field.kind === 'budget'" :id="props.id" v-model="model" :placeholder="t('workflowTemplates.pickBudget')">
     <SelectItem v-for="budget in budgets.data.value ?? []" :key="budget.id" :value="budget.id">

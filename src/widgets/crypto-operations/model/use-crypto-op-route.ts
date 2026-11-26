@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { CRYPTO_OP_QUERY_KEYS, cryptoOpFilterFromQuery, cryptoOpFilterToQuery } from '@/entities/crypto-tx'
+import { CRYPTO_OP_QUERY_KEYS, cryptoOpFilterFromQuery, cryptoOpFilterToQuery } from './crypto-op-filter'
 
 /**
  * The filter and the open card live in the address (`?chain=&token=&…&op=`), so a link from another screen

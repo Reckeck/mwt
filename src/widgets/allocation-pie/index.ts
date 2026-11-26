@@ -1,2 +1,2 @@
 export { default as AllocationPie } from './AllocationPie.vue'
-export * from './allocation-pie.types'
+export type { AllocationPieProps } from './allocation-pie.types'

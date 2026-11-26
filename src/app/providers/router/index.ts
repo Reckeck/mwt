@@ -6,6 +6,7 @@ import { i18n } from '@/shared/config/i18n'
 import { automationsRoutes } from './automations.routes'
 import { cryptoRoutes } from './crypto.routes'
 import { moneyRoutes } from './money.routes'
+import { routePlaceholder } from './route-placeholder'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -23,25 +24,25 @@ export const router = createRouter({
         {
           path: '',
           name: 'dashboard',
-          component: () => import('@/pages/dashboard').then((page) => page.Dashboard),
+          component: routePlaceholder,
           meta: { i18n: 'nav.dashboard' },
         },
         {
           path: 'stores',
           name: 'stores',
-          component: () => import('@/pages/stores').then((page) => page.Stores),
+          component: () => import('@/pages/stores').then((page) => page.StoresPage),
           meta: { i18n: 'nav.stores' },
         },
         {
           path: 'stores/:id',
           name: 'wallet',
-          component: () => import('@/pages/wallet').then((page) => page.Wallet),
+          component: routePlaceholder,
           meta: { i18n: 'nav.wallets' },
         },
         {
           path: 'stores/:id/settings',
           name: 'wallet-settings',
-          component: () => import('@/pages/wallet-settings').then((page) => page.WalletSettings),
+          component: routePlaceholder,
           meta: { i18n: 'walletSettings.nav' },
         },
         {
@@ -83,7 +84,7 @@ export const router = createRouter({
         {
           path: 'contacts',
           name: 'contacts',
-          component: () => import('@/pages/contacts').then((page) => page.Contacts),
+          component: routePlaceholder,
           meta: { i18n: 'nav.contacts' },
         },
         moneyRoutes,

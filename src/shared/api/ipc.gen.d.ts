@@ -139,7 +139,20 @@ yes: boolean, };
  * Preferences that follow the *user*, not the vault: they must survive opening
  * a different vault, so they are stored next to the app, not inside the doc.
  */
-type AppSettings = { theme: Theme, locale: Locale, 
+type AppSettings = { theme: Theme, 
+/**
+ * Colour theme picked for this device (any mode); `None` = the default.
+ * Device-only: never part of the vault doc.
+ */
+theme_id: string | null, 
+/**
+ * Theme used while the resolved mode is light; `None` = follow `theme_id`.
+ */
+theme_light_id: string | null, 
+/**
+ * Theme used while the resolved mode is dark; `None` = follow `theme_id`.
+ */
+theme_dark_id: string | null, locale: Locale, 
 /**
  * ISO 4217 code the whole portfolio is valued in (e.g. `usd`, `rub`).
  */
@@ -8563,7 +8576,11 @@ type UpdateAccountInput = { account_id: string, name?: string, note?: string, ar
 /**
  * Partial update: only the fields present in the payload are touched.
  */
-type UpdateAppSettingsInput = { theme: Theme | null, locale: Locale | null, base_currency: string | null, 
+type UpdateAppSettingsInput = { theme: Theme | null, 
+/**
+ * Theme ids: an empty string clears the choice.
+ */
+theme_id: string | null, theme_light_id: string | null, theme_dark_id: string | null, locale: Locale | null, base_currency: string | null, 
 /**
  * Marks the base currency as picked without changing it.
  */

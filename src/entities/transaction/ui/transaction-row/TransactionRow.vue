@@ -5,6 +5,7 @@ import { Money } from '@/entities/currency'
 import { Check, ExternalLink, Paperclip } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
+import { IconBadge } from '@/shared/ui/icon-badge'
 import { KeptMark } from '@/shared/ui/kept-mark'
 import { EntityLink } from '@/shared/ui/entity-link'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +13,6 @@ import { call } from '@/shared/api/ipc'
 import { formatDateTime } from '@/shared/lib/format'
 import { txForMonthLabel } from '@/shared/lib/transactions'
 import {
-  amountClass,
   txAutomation,
   txDebt,
   txDetails,
@@ -33,6 +33,8 @@ import { useIsPhone } from '@/shared/lib/phone'
 import { dayLabel } from '../../lib/day-label'
 import { TX_KIND_ICON } from '../../lib/kind-icon'
 import { routeRepeats, sideRoute, sideRouteText } from '../../lib/side-route'
+import { txIsImported } from '../../lib/tx-imported'
+import { txLegFlow } from '../../lib/tx-flow'
 import { useTxTitle } from '../../lib/tx-title'
 import type { TransactionRowProps } from './transaction-row.types'
 
@@ -73,11 +75,7 @@ const automation = computed(() => txAutomation(props.tx))
 const fee = computed(() => txFee(props.tx))
 /** `for September`: an income recorded for a month other than its date's. */
 const forMonth = computed(() => txForMonthLabel(props.tx))
-/** Brought in from an exchange; a correction has no categories, so it gets the mark here. */
-const imported = computed(() => {
-  const origin = meta.value.origin
-  return typeof origin === 'object' && 'import' in origin && !meta.value.categories.includes('exchange_import')
-})
+const imported = computed(() => txIsImported(props.tx))
 
 /** Where the money went or came from, seen from this list's wallet; in parts so each side can be a link. */
 const routeParts = computed(() => sideRoute(props.tx, context.sideLabel))
@@ -111,7 +109,8 @@ const phoneLine = computed(() => {
 </script>
 
 <template>
-  <div class="flex gap-x-3 gap-y-1 py-3" :class="phone ? 'items-center' : 'flex-wrap items-start'">
+  <!-- 64 px on the phone, 52 px on desktop: two lines, an icon circle, the signed amount (Ops row). -->
+  <div class="group/row flex items-center gap-x-3 gap-y-1 py-2" :class="phone ? 'min-h-16' : 'min-h-13'">
     <!-- On the phone a square mark instead of the word, so the amount keeps its line. -->
     <span v-if="phone && props.selected !== null" class="flex size-9 shrink-0 items-center justify-center">
       <span
@@ -123,18 +122,13 @@ const phoneLine = computed(() => {
     </span>
     <!-- One grey icon for every kind, PC and phone: a word mark (`Correction`) overflowed its column.
          The colour of the amount already tells in from out; the kind's name is in the title. -->
-    <span
-      v-else
-      class="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-muted text-muted-foreground"
-      :title="t(`tx.kindNoun.${kind}`)"
-      data-tx-kind
-    >
-      <component :is="TX_KIND_ICON[kind]" class="size-4" aria-hidden="true" />
+    <span v-else class="shrink-0" :title="t(`tx.kindNoun.${kind}`)" data-tx-kind>
+      <IconBadge :icon="TX_KIND_ICON[kind]" :size="phone ? 'md' : 'sm'" />
       <span class="sr-only">{{ t(`tx.kindNoun.${kind}`) }}</span>
     </span>
 
     <!-- An openable row opens from a see-through button over its body; the wallet names sit above it. -->
-    <div class="relative min-w-0 flex-1" :class="!phone && 'basis-56'">
+    <div class="relative min-w-0 flex-1">
       <Button
         v-if="props.openable"
         variant="ghost"
@@ -145,8 +139,8 @@ const phoneLine = computed(() => {
         data-tx-open
         @click="emit('open', props.tx)"
       />
-      <div class="pointer-events-none relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-        <span class="font-medium" data-tx-title>{{ title.text }}</span>
+      <div class="pointer-events-none relative flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden">
+        <span class="min-w-0 max-w-full truncate font-medium" data-tx-title>{{ title.text }}</span>
         <span
           v-if="attached"
           class="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground"
@@ -203,19 +197,18 @@ const phoneLine = computed(() => {
             />
           </span>
         </template>
+        <template v-if="notes">{{ ' · ' }}<span data-tx-notes>{{ notes }}</span></template>
       </p>
-      <p v-if="notes && !phone" class="pointer-events-none relative truncate text-xs text-muted-foreground">{{ notes }}</p>
     </div>
 
-    <!-- On a narrow screen the amounts and actions wrap under the text instead of squeezing it. -->
+    <!-- The amounts keep their width and sit at the right edge; the text column is the one that shrinks. -->
     <div class="ml-auto shrink-0 text-right">
       <p
         v-for="leg in shownLegs"
         :key="leg.store_id + leg.asset.symbol"
         class="whitespace-nowrap font-medium tabular-nums"
-        :class="ownMove ? 'text-foreground' : amountClass(leg.amount)"
       >
-        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" :signed="!ownMove || Boolean(props.storeId)" />
+        <Money :amount="leg.amount" :currency="leg.asset.symbol" :at="meta.timestamp" :flow="txLegFlow(kind, ownMove, leg.amount, Boolean(props.storeId))" />
       </p>
       <p v-if="fee" class="whitespace-nowrap text-xs text-muted-foreground tabular-nums">
         {{ t('tx.fee') }} <Money :amount="fee.amount" :currency="fee.asset" />
@@ -231,7 +224,10 @@ const phoneLine = computed(() => {
 
     <!-- One column of fixed width in every row: nothing moves on hover, amounts line up. -->
     <!-- On the phone the menu is a hold on the row (the list's sheet): the amount takes the room. -->
-    <div v-if="!phone" class="flex w-8 shrink-0 justify-end">
+    <div
+      v-if="!phone"
+      class="flex w-8 shrink-0 justify-end transition-opacity pointer-fine:opacity-0 pointer-fine:focus-within:opacity-100 pointer-fine:group-hover/row:opacity-100"
+    >
       <slot v-if="slots.actions" name="actions" :tx="props.tx" />
       <Button
         v-else-if="explorer"

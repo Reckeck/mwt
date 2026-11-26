@@ -9,6 +9,7 @@ import { createYear, createYearRange, toDate } from "reka-ui/date"
 import { computed, toRaw } from "vue"
 import { useI18n } from "vue-i18n"
 import { cn } from '@/shared/lib/utils'
+import { boundedDate } from '@/shared/ui/date-time-picker/date-value'
 import { Select, SelectItem } from '@/shared/ui/select'
 import { CalendarCell, CalendarCellTrigger, CalendarGrid, CalendarGridBody, CalendarGridHead, CalendarGridRow, CalendarHeadCell, CalendarHeader, CalendarHeading, CalendarNextButton, CalendarPrevButton } from '.'
 
@@ -27,13 +28,20 @@ const placeholder = useVModel(props, "placeholder", emits, {
 
 const formatter = useDateFormatter(props.locale ?? "en")
 
+/** Navigation and picking stop at the global date range even when the caller sets no bound. */
+const minBound = computed(() => props.minValue ?? boundedDate(undefined, 'min'))
+const maxBound = computed(() => props.maxValue ?? boundedDate(undefined, 'max'))
+
+const atLeast = (bound: DateValue, value: DateValue) => (value.compare(bound) < 0 ? bound : value)
+const atMost = (bound: DateValue, value: DateValue) => (value.compare(bound) > 0 ? bound : value)
+
 const yearRange = computed(() => {
   return props.yearRange ?? createYearRange({
-    start: props?.minValue ?? (toRaw(props.placeholder) ?? props.defaultPlaceholder ?? today(getLocalTimeZone()))
-      .cycle("year", -100),
+    start: props?.minValue ?? atLeast(minBound.value, (toRaw(props.placeholder) ?? props.defaultPlaceholder ?? today(getLocalTimeZone()))
+      .cycle("year", -100)),
 
-    end: props?.maxValue ?? (toRaw(props.placeholder) ?? props.defaultPlaceholder ?? today(getLocalTimeZone()))
-      .cycle("year", 10),
+    end: props?.maxValue ?? atMost(maxBound.value, (toRaw(props.placeholder) ?? props.defaultPlaceholder ?? today(getLocalTimeZone()))
+      .cycle("year", 10)),
   })
 })
 
@@ -76,6 +84,8 @@ const { t } = useI18n()
   <CalendarRoot
     v-slot="{ grid, weekDays, date }"
     v-bind="forwarded"
+    :min-value="minBound"
+    :max-value="maxBound"
     v-model:placeholder="placeholder"
     data-slot="calendar"
     :class="cn('p-3', props.class)"

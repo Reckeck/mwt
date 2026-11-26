@@ -18,8 +18,10 @@ import type { SectionStateProps } from './section-state.types'
  *
  * The skeleton takes its height at once (nothing below jumps when it
  * appears) but fades in only after a moment, so a fast answer does not flash
- * a placeholder. The empty block takes its action button from `#empty`; a page whose
- * content has its own height gives the placeholder in `#loading`.
+ * a placeholder. `operations` rows are as tall as an operation row (64 px
+ * phone, 52 px desktop), so the content replaces them without a jump (rule 17).
+ * The empty block takes its action button from `#empty`; a page whose content
+ * has its own height gives the placeholder in `#loading`.
  */
 const props = withDefaults(defineProps<SectionStateProps>(), {
   loading: false,
@@ -91,7 +93,7 @@ function errorDetail(err: unknown): string {
       </div>
       <div v-else class="flex flex-col gap-2">
         <Skeleton v-if="props.skeleton === 'table'" class="h-8 w-full" />
-        <Skeleton v-for="row in props.rows" :key="row" class="h-10 w-full" />
+        <Skeleton v-for="row in props.rows" :key="row" :class="props.skeleton === 'operations' ? 'h-16 w-full md:h-13' : 'h-10 w-full'" />
       </div>
     </slot>
   </div>

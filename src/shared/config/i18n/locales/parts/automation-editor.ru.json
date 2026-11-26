@@ -1,0 +1,11 @@
+{
+  "automation.template.kind": "Вид операции",
+  "automation.template.amount": "Сумма",
+  "automation.template.to": "На кошелёк",
+  "automation.template.category": "Категория",
+  "automation.template.comment": "Заметка",
+  "automation.template.unsupported": "Эта автоматизация делает обмен или сделку. Операция здесь не правится: расписание меняется в схеме.",
+  "automation.template.toSelf": "Перевод нужен на другой кошелёк, не на тот, с которого он списывается.",
+  "workflow.runs.open": "Запуски",
+  "workflow.runs.title": "Запуски этой схемы"
+}

@@ -18,6 +18,8 @@ const { t } = useI18n()
 const isPhone = useIsPhone()
 const { reset, exit } = useSandboxBar()
 const resetOpen = ref(false)
+/** Phone-only side insets: the bar keeps clear of the notch in landscape; `md:px-6` takes over above. */
+const insetClass = 'pl-[calc(0.75rem+var(--safe-left))] pr-[calc(0.75rem+var(--safe-right))]'
 
 function confirmReset() {
   reset.mutate(undefined, { onSuccess: () => (resetOpen.value = false) })
@@ -26,7 +28,8 @@ function confirmReset() {
 
 <template>
   <div
-    class="box-content flex min-h-11 shrink-0 items-center gap-3 border-b border-warning/40 bg-warning/15 px-3 pt-safe md:min-h-10 md:px-6"
+    class="box-content flex min-h-11 shrink-0 items-center gap-3 border-b border-warning/40 bg-warning/15 pt-safe md:min-h-10 md:px-6"
+    :class="insetClass"
     role="status"
     data-sandbox-bar
   >

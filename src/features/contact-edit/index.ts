@@ -1,7 +1,0 @@
-export { default as ContactAccounts } from './ui/ContactAccounts.vue'
-export { default as ContactArchive } from './ui/ContactArchive.vue'
-export { default as ContactEditDialog } from './ui/ContactEditDialog.vue'
-export * from './contact-edit.constants'
-export * from './contact-edit.types'
-export { useContactCreation } from './model/use-contact-creation'
-export { default as ContactAccountForm } from './ui/ContactAccountForm.vue'

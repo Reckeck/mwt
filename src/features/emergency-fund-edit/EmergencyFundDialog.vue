@@ -4,8 +4,9 @@ import { useI18n } from 'vue-i18n'
 
 import { useStoreTree } from '@/shared/api/queries'
 import { Money } from '@/entities/currency'
-import { StoreNodeSelect } from '@/entities/store'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { formatMoney, formatQuantity } from '@/shared/lib/format'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { FormDialog } from '@/shared/ui/form-dialog'
@@ -27,6 +28,13 @@ const { storeIds, targetMonths, avgMonths, makeGoal, goal, form, set, save } = u
   () => props.fund,
   () => props.status,
   open,
+)
+
+/** The fund takes savings accounts only, each by its full path. */
+const accounts = computed(() =>
+  flattenStoreTree(tree.data.value ?? []).filter(
+    (node) => node.store.purpose === 'savings' || storeIds.value.includes(node.store.id),
+  ),
 )
 
 // money: plain — the hint under the field is a string prop of FormField
@@ -64,13 +72,13 @@ const monthsHint = computed(() => {
       :error="form.error('accounts')"
       required
     >
-      <StoreNodeSelect
+      <ComboStoreNodeSelect
         id="emergency-accounts"
-        v-model:ids="storeIds"
-        :nodes="tree.data.value ?? []"
-        purpose="savings"
+        v-model="storeIds"
+        :nodes="accounts"
         multiple
         :placeholder="t('emergency.dialog.none')"
+        :empty-label="t('emergency.dialog.none')"
       />
     </FormField>
     <template v-if="goal">

@@ -7,8 +7,6 @@ import { AssetInput } from '@/entities/asset'
 import { useDataSources } from '@/entities/data-source'
 import { CurrencyPicker, Money } from '@/entities/currency'
 import { StoreNodeSelect } from '@/entities/store'
-import { CategorySelect } from '@/features/category-select'
-import { AccountRefPicker } from '@/features/transaction-create'
 import { Input } from '@/shared/ui/input'
 import { TimeInput } from '@/shared/ui/time-input'
 import { Label } from '@/shared/ui/label'
@@ -21,7 +19,9 @@ import { WORKFLOW_KEYS, localized } from '@/shared/lib/workflow'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import TargetsField from './TargetsField.vue'
-import { useStoreTree } from '@/shared/api/queries'
+import { useCategories, useStoreTree } from '@/shared/api/queries'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
+import { CATEGORY_GROUPS, categoryOptions } from '@/shared/lib/categories'
 
 /** One field of a node, edited by the control its kind asks for. */
 /** `error`: the check's word on this very field (an empty required one), shown under it. */
@@ -34,7 +34,9 @@ const kind = computed(() => props.param.kind.kind)
 const current = computed(() => props.value ?? props.param.default)
 const text = computed(() => (current.value === null || current.value === undefined ? '' : String(current.value)))
 
-const tree = useStoreTree(computed(() => kind.value === 'store'))
+const tree = useStoreTree(computed(() => kind.value === 'store' || kind.value === 'account'))
+/** Every live wallet, sub-accounts too. */
+const stores = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 const budgets = useQuery({
   queryKey: ['budgets'],
   queryFn: () => call<Budget[]>('list_budgets'),
@@ -62,7 +64,8 @@ const storeId = computed(() => {
   if (!raw) return ''
   return typeof raw === 'string' ? raw : (raw.store ?? '')
 })
-const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings', 'service']
+const categories = useCategories()
+const categoryChoices = computed(() => categoryOptions(categories.data.value, t, CATEGORY_GROUPS))
 </script>
 
 <template>
@@ -92,18 +95,13 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
       <DateTimePicker v-else-if="kind === 'date'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)" />
       <Textarea v-else-if="kind === 'long_text'" :id="id" :model-value="text" rows="3" @update:model-value="(next) => emit('update', String(next))" />
       <StoreNodeSelect
-        v-else-if="kind === 'store'"
-        :model-value="storeId"
-        :nodes="tree.data.value ?? []"
-        :empty-label="t(props.param.required ? 'workflow.field.pickStore' : 'workflow.field.anyStore')"
-        @update:model-value="(next) => emit('update', next ? { store: next } : null)"
-      />
-      <AccountRefPicker
-        v-else-if="kind === 'account'"
+        v-else-if="kind === 'store' || kind === 'account'"
         :id="id"
-        :model-value="(current as AccountRef | null) ?? null"
-        :empty-label="t(props.param.required ? 'workflow.field.pickStore' : 'workflow.field.notSet')"
-        @update:model-value="(next) => emit('update', next)"
+        :model-value="storeId"
+        :nodes="stores"
+        :placeholder="t('workflow.field.pickStore')"
+        :empty-label="props.param.required ? undefined : t('workflow.field.anyStore')"
+        @update:model-value="(next) => emit('update', next ? { store: next } : null)"
       />
       <AssetInput
         v-else-if="kind === 'asset'"
@@ -112,14 +110,9 @@ const CATEGORY_GROUPS: CategoryGroup[] = ['income', 'fixed', 'daily', 'savings',
         @update:model-value="(next) => emit('update', next)"
       />
       <CurrencyPicker v-else-if="kind === 'currency'" :id="id" :model-value="text" label="" @update:model-value="(next) => emit('update', next)" />
-      <CategorySelect
-        v-else-if="kind === 'category'"
-        :id="id"
-        :model-value="text"
-        :groups="CATEGORY_GROUPS"
-        no-create
-        @update:model-value="(next) => emit('update', next || null)"
-      />
+      <Select v-else-if="kind === 'category'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
+        <SelectItem v-for="choice in categoryChoices" :key="choice.value" :value="choice.value">{{ choice.label }}</SelectItem>
+      </Select>
       <Select v-else-if="kind === 'budget'" :id="id" :model-value="text" @update:model-value="(next) => emit('update', next || null)">
         <SelectItem value="">{{ t('workflow.field.notSet') }}</SelectItem>
         <SelectItem v-for="budget in budgets.data.value ?? []" :key="budget.id" :value="budget.id">

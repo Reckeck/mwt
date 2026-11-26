@@ -17,40 +17,25 @@ export const PHONE = [
   [360, 740],
 ]
 
-/** Every view in full at these sizes; the rest get the main screens only. */
-const FULL_AT = new Set(['1280x720', '1024x640', '768x800', '560x860', '390x844', '360x740'])
-
-const PHONE_AT = new Set(['390x844', '360x740'])
-
-const MAIN_ROUTES = ['/', '/stores', 'stores:unfolded', '/transactions', '/money/where', '/automations/reminders', 'settings:app:app', 'settings:accounting:currencies']
-
-const STATIC_ROUTES = [
+/**
+ * The views: the home page, the rebuilt operations and automations screens, and the shared route placeholder
+ * (every other route renders it, spec D14). A screen's own routes come back with its W4 task.
+ */
+const ROUTES = [
   '/',
-  '/stores',
-  // The wallets table with every wallet that has sub-accounts unfolded.
-  'stores:unfolded',
   '/transactions',
-  '/contacts',
   '/transactions/calendar',
   '/transactions/bonuses',
-  '/money',
-  '/money/where',
-  '/money/wealth',
-  '/money/investments',
+  '/transactions/crypto',
   '/money/month',
-  '/money/health',
-  '/automations',
-  '/money/calculator',
   '/money/plan',
-  // Together: the list and the event with its three tabs (the seed event `Barbecue`).
-  '/money/together',
-  '/money/together/mock-event-skewers',
-  '/money/together/mock-event-skewers?tab=people',
-  '/money/together/mock-event-skewers?tab=settle',
+  '/money/calculator',
+  '/automations',
   '/automations/reminders',
   '/automations/alerts',
   '/automations/workflows',
   '/automations/journal',
+  '/automations/sources',
 ]
 
 const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`
@@ -136,59 +121,17 @@ export async function setTheme(page, theme) {
   await page.sleep(300)
 }
 
-/** The views: static routes, wallets of each kind, their settings, every settings tab. */
-export async function views(page, size) {
-  const stores = await page.eval(`
-    const { call } = await import('/src/shared/api/ipc.ts')
-    const tree = await call('get_store_tree')
-    const seen = new Set()
-    const out = []
-    for (const node of tree) {
-      const kind = node.store?.kind ?? node.kind
-      if (seen.has(kind)) continue
-      seen.add(kind)
-      out.push(node.store?.id ?? node.id)
-    }
-    return out`)
-  const tabs = await page.eval(`
-    const { SETTINGS_GROUPS } = await import('/src/widgets/settings-shell/settings-shell.constants.ts')
-    return SETTINGS_GROUPS.flatMap((group) => group.tabs.map((tab) => group.id + ':' + tab.sections[0].id))`)
-  // The plan with its goal and limit lists unfolded (a link's `?focus=`): wide tables and cards live there.
-  const goalId = PHONE_AT.has(size)
-    ? await page.eval(`
-        const { call } = await import('/src/shared/api/ipc.ts')
-        return (await call('list_goals'))[0]?.id ?? null`)
-    : null
-  const all = [
-    ...(goalId ? [`/money/plan?focus=${goalId}`] : []),
-    ...STATIC_ROUTES,
-    ...stores.flatMap((id) => [`/stores/${id}`, `/stores/${id}/settings`]),
-    ...tabs.map((id) => `settings:${id}`),
-  ]
-  return FULL_AT.has(size) ? all : all.filter((view) => MAIN_ROUTES.includes(view))
+/** The views to measure (the same at every size). */
+export function views() {
+  return ROUTES
 }
 
 async function openOnce(page, view) {
-  const target = view.startsWith('settings:')
-    ? `{ path: '/', query: { settings: '${view.split(':')[1]}', section: '${view.split(':')[2]}' } }`
-    : view === 'stores:unfolded'
-      ? `'/stores'`
-      : `'${view}'`
-  // Unfolded wallets are a setting of the device: set for this view, cleared for every other.
-  await page.eval(`${APP}
-    const { call } = await import('/src/shared/api/ipc.ts')
-    const open = '${view}' === 'stores:unfolded'
-      ? (await call('get_store_tree')).filter((node) => node.children.length).map((node) => node.store.id)
-      : []
-    localStorage.setItem('wallets-expanded', JSON.stringify(open))
-    // The table reads the setting when it mounts: leave the page it is on first.
-    if (gp.$route.path === '/stores') await gp.$router.push('/')
-    return true`)
   // The new route's own first frames are what the click asked for: a browser leaves shifts
   // within 500 ms of input out of CLS. Counted is what moves after that — data landing.
   await page.eval(`${APP}
     if (window.__layout) window.__layout.navAt = performance.now()
-    await gp.$router.push(${target})
+    await gp.$router.push('${view}')
     await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
     return true`)
   await page.eval(RESET_OBSERVERS)
@@ -248,22 +191,17 @@ async function hoverShift(page) {
 export async function dialogJump(page) {
   await page.eval(`${APP} await gp.$router.push('/'); return true`)
   await page.sleep(500)
-  const opened = await page.eval(`
-    const button = document.querySelector('[data-tour="quick-add"]')
-    if (!button) return false
-    button.click()
-    return true`)
-  if (!opened) return ['quick add button ([data-tour="quick-add"]) not found']
+  await page.eval(`const converter = await import('/src/shared/lib/converter.ts'); converter.openConverter(); return true`)
   const samples = []
-  // Right after the click, mid-animation, and once it has settled.
+  // Right after opening, mid-animation, and once it has settled.
   for (const wait of [0, 40, 40, 60, 460]) {
     if (wait) await page.sleep(wait)
     samples.push(await page.eval(DIALOG_RECT))
   }
-  await page.eval(`document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true`)
+  await press(page, 'Escape')
   await page.sleep(300)
   const final = samples.at(-1)
-  if (!final) return ['quick add dialog did not open']
+  if (!final) return ['the converter dialog did not open']
   // The centre, not the corner: a scale-in grows the box around a fixed centre.
   const centre = (rect) => [rect[0] + rect[2] / 2, rect[1] + rect[3] / 2]
   const [finalX, finalY] = centre(final)
@@ -292,30 +230,17 @@ export async function listenerLeak(page) {
   return last > first ? [`'prices-updated' listeners grow per visit: ${first} → ${last}`] : []
 }
 
-/** Back closes the top layer for settings and the quick-add dialog. */
+/** Back closes the top layer for the command palette. */
 export async function backCloses(page) {
   const problems = []
   const back = `const { closeTopLayer } = await import('/src/shared/lib/back-stack.ts'); return closeTopLayer()`
-  await page.eval(`${APP} await gp.$router.push({ path: '/', query: { settings: 'app' } }); return true`)
-  await page.sleep(600)
+  await page.eval(`document.querySelector('[data-command-palette-trigger]')?.click(); return true`)
+  await page.sleep(400)
+  const open = `return Boolean(document.querySelector('[data-command-palette][data-open="true"]'))`
+  if (!(await page.eval(open))) return ['command palette did not open (no trigger found)']
   await page.eval(back)
   await page.sleep(400)
-  if (await page.eval(`${APP} return Boolean(gp.$route.query.settings)`)) problems.push('Back does not close the settings window')
-  for (const [name, opener] of [
-    ['quick add', `document.querySelector('[data-tour="quick-add"]')?.click()`],
-    ['command palette', `document.querySelector('[data-command-palette-trigger]')?.click()`],
-  ]) {
-    await page.eval(`${opener}; return true`)
-    await page.sleep(400)
-    const open = `return Boolean(document.querySelector('[role="dialog"][data-state="open"], [data-command-palette][data-open="true"]'))`
-    if (!(await page.eval(open))) {
-      problems.push(`${name} did not open (no trigger found)`)
-      continue
-    }
-    await page.eval(back)
-    await page.sleep(400)
-    if (await page.eval(open)) problems.push(`Back does not close the ${name}`)
-  }
+  if (await page.eval(open)) problems.push('Back does not close the command palette')
   return problems
 }
 
@@ -353,7 +278,7 @@ export async function confirmStable(page) {
 
 /** A toast over an open dialog can be clicked, and the click does not close the dialog. */
 export async function toastOverDialog(page) {
-  await page.eval(`${APP} await gp.$router.push({ path: '/', query: { settings: 'app' } }); return true`)
+  await page.eval(`${APP} await gp.$router.push('/'); const converter = await import('/src/shared/lib/converter.ts'); converter.openConverter(); return true`)
   await page.sleep(600)
   await page.eval(`
     const { notify } = await import('/src/shared/lib/notify/index.ts')
@@ -370,10 +295,11 @@ export async function toastOverDialog(page) {
   await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at[0], y: at[1], button: 'left', clickCount: 1 })
   await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at[0], y: at[1], button: 'left', clickCount: 1 })
   await page.sleep(400)
-  const result = await page.eval(`${APP} return { undo: window.__undo, open: Boolean(gp.$route.query.settings) }`)
+  const result = await page.eval(`${APP} return { undo: window.__undo, open: Boolean(document.querySelector('[data-overlay="converter"]')) }`)
   const problems = []
   if (!result.undo) problems.push('the toast action cannot be clicked while a dialog is open')
   if (!result.open) problems.push('clicking a toast closes the dialog under it')
-  await page.eval(`${APP} await gp.$router.push('/'); return true`)
+  await press(page, 'Escape')
+  await page.sleep(400)
   return problems
 }
