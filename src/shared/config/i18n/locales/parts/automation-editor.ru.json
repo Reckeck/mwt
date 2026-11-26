@@ -1,0 +1,8 @@
+{
+  "automation.template.kind": "Вид операции",
+  "automation.template.amount": "Сумма",
+  "automation.template.to": "На кошелёк",
+  "automation.template.category": "Категория",
+  "automation.template.comment": "Заметка",
+  "automation.template.unsupported": "Эта автоматизация делает обмен или сделку. Операция здесь не правится: расписание меняется в схеме."
+}

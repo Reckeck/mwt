@@ -1,0 +1,8 @@
+{
+  "automation.template.kind": "Operation kind",
+  "automation.template.amount": "Amount",
+  "automation.template.to": "To wallet",
+  "automation.template.category": "Category",
+  "automation.template.comment": "Note",
+  "automation.template.unsupported": "This automation makes an exchange or a trade. Its operation is not edited here: change its schedule from the scheme."
+}
