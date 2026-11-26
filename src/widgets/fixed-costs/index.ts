@@ -1,1 +1,1 @@
-export { default as FixedCosts } from './ui/FixedCosts.vue'
+export { default as FixedCosts } from './FixedCosts.vue'
