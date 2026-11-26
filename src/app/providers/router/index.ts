@@ -51,7 +51,7 @@ export const router = createRouter({
             {
               path: '',
               name: 'transactions',
-              component: routePlaceholder,
+              component: () => import('@/pages/transactions').then((page) => page.Transactions),
               meta: { i18n: 'nav.transactions' },
             },
             {
