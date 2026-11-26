@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { localDay } from './datetime'
+import { dateBoundsError, localDay } from './datetime'
 
 const originalZone = process.env.TZ
 function inZone(zone: string) {
@@ -51,5 +51,15 @@ describe('formatCalendarDay', () => {
   it('shows a dash for an empty day', async () => {
     const { formatCalendarDay } = await import('./datetime')
     expect(formatCalendarDay('')).toBe('—')
+  })
+})
+
+describe('dateBoundsError', () => {
+  it('passes both edges and blank, refuses one past', () => {
+    expect(dateBoundsError('1970-01-01')).toBeNull()
+    expect(dateBoundsError('2100-12-31')).toBeNull()
+    expect(dateBoundsError('')).toBeNull()
+    expect(dateBoundsError('1969-12-31')).not.toBeNull()
+    expect(dateBoundsError('2101-01-01')).not.toBeNull()
   })
 })

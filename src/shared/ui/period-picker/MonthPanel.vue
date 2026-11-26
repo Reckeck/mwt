@@ -7,6 +7,8 @@ import { type MonthRange, currentMonth, monthKey, pickMonth, rangeDays } from '@
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 
+import { monthInBounds, yearInBounds } from './period-bounds'
+
 /**
  * The year and its twelve months: a click picks a month, Shift + click (or a
  * second tap on a phone, `extend`) stretches the period to it.
@@ -23,6 +25,9 @@ watch(
   },
 )
 const now = currentMonth()
+const nowYear = Number(now.slice(0, 4))
+const canPrevYear = computed(() => yearInBounds(year.value - 1))
+const canNextYear = computed(() => year.value < nowYear && yearInBounds(year.value + 1))
 const months = computed(() => Array.from({ length: 12 }, (_unused, index) => monthKey(year.value, index)))
 /** On a phone a second tap extends the period from the first; there is no Shift. */
 const anchor = ref<string | null>(null)
@@ -46,16 +51,16 @@ const dayText = (iso: string) => iso.split('-').reverse().join('.')
 <template>
   <div class="grid gap-3">
     <div class="flex items-center gap-2">
-      <Button variant="outline" size="icon-sm" class="size-7" :aria-label="t('period.prevYear')" @click="year -= 1">‹</Button>
+      <Button variant="outline" size="icon-sm" class="size-7" :aria-label="t('period.prevYear')" :disabled="!canPrevYear" @click="year -= 1">‹</Button>
       <b class="flex-1 text-center text-sm">{{ year }}</b>
-      <Button variant="outline" size="icon-sm" class="size-7" :aria-label="t('period.nextYear')" :disabled="year >= Number(now.slice(0, 4))" @click="year += 1">›</Button>
+      <Button variant="outline" size="icon-sm" class="size-7" :aria-label="t('period.nextYear')" :disabled="!canNextYear" @click="year += 1">›</Button>
     </div>
     <div class="grid grid-cols-4 gap-1">
       <button
         v-for="key in months"
         :key="key"
         type="button"
-        :disabled="key > now"
+        :disabled="key > now || !monthInBounds(key)"
         :aria-pressed="key >= range.from && key <= range.to"
         :class="cn('flex items-center justify-center rounded-[7px] border', props.touch ? 'h-10 text-sm' : 'h-[34px] text-[13px]', tone(key))"
         @click="pick(key, $event)"

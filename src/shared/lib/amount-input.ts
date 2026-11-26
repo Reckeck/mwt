@@ -1,11 +1,9 @@
+import { MAX_INTEGER_DIGITS } from './limits'
+
+export { MAX_INTEGER_DIGITS }
+
 /** Thousands separator shown while typing: a narrow no-break space, never `,` or `.`. */
 export const GROUP_SEPARATOR = ' '
-
-/**
- * Most integer digits an amount may have (the Rust `Amount` input bound is 1e18).
- * Local until `src/shared/lib/limits.ts` exists (T46), which will own it.
- */
-export const MAX_INTEGER_DIGITS = 18
 
 export interface AmountNormalizeOptions {
   /** Most fraction digits kept; `undefined` keeps everything typed. */
