@@ -6,11 +6,12 @@
  * Font properties get no special case (CI6): `font-family` is a parse error (not a custom property),
  * `--font-sans` is an unknown custom property, hence a dropped warning.
  */
-import { ColorParseError, type FailingPair, toHex } from '../contrast'
+import { ColorParseError, type FailingPair, relativeLuminance, toHex } from '../contrast'
 import { defaultDark } from '../themes/default-dark'
 import { defaultLight } from '../themes/default-light'
 import { THEME_TOKENS, type ThemeToken } from '../tokens'
 import type { ThemeMode, ThemeTokens } from '../types'
+import { type ContrastReport, reportContrast } from './contrast-report'
 import { type ParsedDeclaration, parseThemeCss } from './parse'
 
 export const MAX_FILE_BYTES = 64 * 1024
@@ -39,8 +40,10 @@ export interface ValidationResult {
   errors: ValidationIssue[]
   warnings: ValidationIssue[]
   theme?: ValidatedTheme
-  /** Filled by the contrast step (CI7); empty here. */
+  /** All failing contrast pairs with their ratios (CI7); empty when the file failed before the contrast step. */
   contrast: FailingPair[]
+  /** True when a non-blocking pair fails (CI7). */
+  contrastWarning: boolean
 }
 
 const TOKEN_SET: ReadonlySet<string> = new Set(THEME_TOKENS)
@@ -93,12 +96,7 @@ function nameFromFile(fileName: string | undefined): string {
 function guessMode(background: string | undefined): ThemeMode {
   if (!background) return 'dark'
   try {
-    const hex = toHex(background)
-    const linear = (channel: number) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
-    const [red, green, blue] = [1, 3, 5].map((offset) =>
-      linear(Number.parseInt(hex.slice(offset, offset + 2), 16) / 255),
-    )
-    return 0.2126 * red + 0.7152 * green + 0.0722 * blue > LIGHT_LUMINANCE ? 'light' : 'dark'
+    return relativeLuminance(background) > LIGHT_LUMINANCE ? 'light' : 'dark'
   } catch (error) {
     if (error instanceof ColorParseError) return 'dark'
     throw error
@@ -114,7 +112,6 @@ function declarationProblem({ name, value }: ParsedDeclaration): string | null {
   return problem ? `${problem} in ${name}` : null
 }
 
-/** Validates the text of a custom theme file; `fileName` feeds the name fallback (Q6). */
 /** The source before the first `{` that is not inside a comment, so a name may contain braces. */
 function headerBeforeRule(text: string): string {
   let index = 0
@@ -127,10 +124,20 @@ function headerBeforeRule(text: string): string {
   return text.slice(0, index)
 }
 
+/**
+ * Validates the text of a custom theme file; `fileName` feeds the name fallback (Q6). The one composed
+ * entry point: it also runs the contrast step (CI7) and returns `theme` only when `errors` is empty.
+ */
 export function validateTheme(text: string, fileName?: string): ValidationResult {
   const errors: ValidationIssue[] = []
   const warnings: ValidationIssue[] = []
-  const result = (theme?: ValidatedTheme): ValidationResult => ({ errors, warnings, theme, contrast: [] })
+  const result = (theme?: ValidatedTheme, contrast: Partial<ContrastReport> = {}): ValidationResult => ({
+    errors,
+    warnings,
+    theme,
+    contrast: contrast.contrast ?? [],
+    contrastWarning: contrast.contrastWarning ?? false,
+  })
 
   if (new TextEncoder().encode(text).length > MAX_FILE_BYTES) {
     errors.push({ line: 1, col: 1, message: `file is larger than ${MAX_FILE_BYTES / 1024} KiB` })
@@ -173,11 +180,17 @@ export function validateTheme(text: string, fileName?: string): ValidationResult
   if (missing.length > 0) {
     warnings.push({ line: 1, col: 1, message: `missing tokens fall back to ${base.name}: ${missing.join(', ')}` })
   }
-  const tokens = Object.fromEntries(THEME_TOKENS.map((token) => [token, values.get(token) ?? base.tokens[token]]))
-  return result({
+  const tokens: Record<string, string> = Object.fromEntries(
+    THEME_TOKENS.map((token) => [token, values.get(token) ?? base.tokens[token]]),
+  )
+  const report = reportContrast(tokens)
+  errors.push(...report.errors)
+  warnings.push(...report.warnings)
+  const theme: ValidatedTheme = {
     name: readComment(header, 'name') ?? nameFromFile(fileName),
     mode,
     modeGuessed: !modeDeclared,
-    tokens: tokens as ThemeTokens,
-  })
+    tokens: tokens as unknown as ThemeTokens,
+  }
+  return result(errors.length > 0 ? undefined : theme, report)
 }

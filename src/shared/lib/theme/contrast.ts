@@ -181,6 +181,11 @@ function luminance(color: Rgba): number {
   return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
 }
 
+/** WCAG relative luminance (0-1) of a colour, alpha composited on the default surface; unsupported colour is a ColorParseError. */
+export function relativeLuminance(color: string): number {
+  return luminance(composite(parseColor(color), { red: 1, green: 1, blue: 1, alpha: 1 }))
+}
+
 /** The colour as opaque `#rrggbb` (alpha composited on the default surface); an unsupported colour is a ColorParseError. */
 export function toHex(color: string): string {
   const opaque = composite(parseColor(color), { red: 1, green: 1, blue: 1, alpha: 1 })

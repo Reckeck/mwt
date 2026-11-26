@@ -37,7 +37,13 @@ describe('serializeTheme', () => {
   it.each(builtinThemes.map((theme) => [theme.id, theme] as const))('round-trips %s', (_id, theme) => {
     const result = validateTheme(serializeTheme(theme, '0.1.0'))
     expect(result.errors).toEqual([])
-    expect(result.warnings).toEqual([])
+    // Spec Q15: only the Default themes carry (chart) contrast warnings; every other built-in is clean.
+    const isDefault = theme.id.startsWith('default-')
+    expect(result.contrastWarning).toBe(isDefault)
+    if (isDefault) {
+      expect(result.warnings.length).toBeGreaterThan(0)
+      for (const warning of result.warnings) expect(warning.message).toContain('--chart-')
+    } else expect(result.warnings).toEqual([])
     expect(result.theme?.mode).toBe(theme.mode)
     expect(result.theme?.modeGuessed).toBe(false)
     expect(result.theme?.name).toBe(theme.name)

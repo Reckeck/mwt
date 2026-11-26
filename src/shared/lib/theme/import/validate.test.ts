@@ -1,7 +1,6 @@
 // check-ui-ignore raw-color: theme fixtures are colour data fed to the parser, not UI styling
 import { describe, expect, it } from 'vitest'
-import { checkPairs } from '../contrast'
-import { TEXT_PAIRS } from '../contrast-pairs'
+import { builtinThemes } from '../registry'
 import { defaultDark } from '../themes/default-dark'
 import { defaultLight } from '../themes/default-light'
 import { THEME_TOKENS } from '../tokens'
@@ -23,8 +22,10 @@ describe('validateTheme', () => {
   it('accepts a complete file with name and mode', () => {
     const result = validateTheme(fullFile('/* name: Mine */\n/* mode: dark */'))
     expect(result.errors).toEqual([])
-    expect(result.warnings).toEqual([])
-    expect(result.contrast).toEqual([])
+    // Default dark keeps one chart pair below 3:1 (spec Q15); nothing else is reported.
+    expect(result.warnings.map((warning) => warning.message)).toEqual([expect.stringContaining('--chart-1 on --card')])
+    expect(result.contrast.map((pair) => pair.foreground)).toEqual(['--chart-1'])
+    expect(result.contrastWarning).toBe(true)
     expect(result.theme).toMatchObject({ name: 'Mine', mode: 'dark', modeGuessed: false })
     expect(result.theme?.tokens['--background']).toBe(defaultDark.tokens['--background'])
   })
@@ -43,13 +44,14 @@ describe('validateTheme', () => {
 
   it('falls back to the base theme of the declared mode with one warning', () => {
     const light = validateTheme('/* mode: light */\n:root { --background: #fafafa; }')
+    expect(light.errors).toEqual([])
     expect(light.theme?.tokens['--foreground']).toBe(defaultLight.tokens['--foreground'])
     expect(light.theme?.tokens['--background']).toBe('#fafafa')
     const missing = light.warnings.filter((warning) => warning.message.startsWith('missing tokens'))
     expect(missing).toHaveLength(1)
     expect(missing[0].message).toContain('--foreground')
     expect(missing[0].message).not.toContain('--background,')
-    const dark = validateTheme('/* mode: dark */\n:root { --background: #fafafa; }')
+    const dark = validateTheme('/* mode: dark */\n:root { --background: #101010; }')
     expect(dark.theme?.tokens['--foreground']).toBe(defaultDark.tokens['--foreground'])
   })
 
@@ -149,18 +151,38 @@ describe('validateTheme', () => {
 
   it('knows every whitelisted token', () => {
     const body = THEME_TOKENS.map((token) => `${token}: ${token === '--radius' ? '4px' : '#123456'};`).join('\n')
+    // every colour is the same, so contrast fails: this test is only about the token whitelist
     const result = validateTheme(`/* mode: dark */\n:root { ${body} }`)
-    expect(result.errors).toEqual([])
-    expect(result.warnings).toEqual([])
+    expect(result.warnings.filter((warning) => /unknown|missing/.test(warning.message))).toEqual([])
+    expect(result.errors.every((error) => error.message.includes('minimum 3:1'))).toBe(true)
   })
 
   it('blocks a near-black foreground written as bare hsl() numbers', () => {
     const result = validateTheme('/* mode: dark */ :root{--background:hsl(0 0 0);--foreground:hsl(0 0 1)}')
-    const pair = TEXT_PAIRS.filter(
-      (entry) => entry.foreground === '--foreground' && entry.background === '--background',
-    )
-    expect(pair).toHaveLength(1)
-    const failing = checkPairs(result.theme?.tokens ?? {}, pair)
-    expect(failing.map((entry) => entry.foreground)).toEqual(['--foreground'])
+    expect(result.errors.some((error) => error.message.startsWith('--foreground on --background'))).toBe(true)
+    expect(result.theme).toBeUndefined()
   })
+
+  it('blocks a 1:1 foreground on background and returns no applicable theme (CI7, CI9)', () => {
+    const result = validateTheme(fullFile('/* mode: dark */', { '--foreground': '#222222', '--background': '#222222' }))
+    expect(result.errors.map((error) => error.message)).toContain(
+      '--foreground on --background is 1.00:1, needs 4.5:1 (minimum 3:1 to save)',
+    )
+    expect(result.theme).toBeUndefined()
+    expect(result.contrast.length).toBeGreaterThan(0)
+  })
+
+  it('a clean built-in-like theme has no contrast warning', () => {
+    const result = validateTheme(fullFile('/* mode: light */', { ...defaultLight.tokens }))
+    expect(result.contrastWarning).toBe(result.contrast.length > 0)
+  })
+
+  it.each(builtinThemes.map((theme) => [theme.id, theme] as const))(
+    'guesses the mode of %s from its background',
+    (_id, theme) => {
+      const result = validateTheme(`:root { --background: ${theme.tokens['--background']}; }`)
+      expect(result.theme?.modeGuessed ?? result.errors).toBe(true)
+      expect(result.theme?.mode).toBe(theme.mode)
+    },
+  )
 })
