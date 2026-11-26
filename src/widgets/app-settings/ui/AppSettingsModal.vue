@@ -4,15 +4,14 @@ import { useI18n } from 'vue-i18n'
 
 import { Label } from '@/shared/ui/label'
 import { Select, SelectItem } from '@/shared/ui/select'
-import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 import { setLocalePreference } from '@/shared/lib/locale'
 import { useSettingsStore } from '@/shared/store/settings'
 import { notify } from '@/shared/lib/notify'
 
+import AppearanceSettings from './AppearanceSettings.vue'
+
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
-
-const themes: Theme[] = ['light', 'dark', 'auto']
 
 const localeOptions: { code: Locale; label: string }[] = [
   { code: 'auto', label: 'settings.locale.auto' },
@@ -50,11 +49,6 @@ async function persist(patch: Partial<UpdateAppSettingsInput>) {
   }
 }
 
-function setTheme(theme: Theme) {
-  if (settingsStore.theme === theme) return
-  void persist({ theme })
-}
-
 /** The language must switch while the user is still looking at the control. */
 async function onLocaleChange(next: string) {
   try {
@@ -69,23 +63,7 @@ async function onLocaleChange(next: string) {
 
 <template>
   <div class="grid gap-4">
-    <!-- Theme -->
-    <div class="grid gap-1.5">
-      <Label>{{ t('settings.theme.title') }}</Label>
-      <ToggleGroup
-        type="single"
-        variant="segmented"
-        :spacing="1"
-        class="max-w-full"
-        :model-value="settingsStore.theme"
-        :aria-label="t('settings.theme.title')"
-        @update:model-value="(value) => value && setTheme(value as Theme)"
-      >
-        <ToggleGroupItem v-for="option in themes" :key="option" :value="option" class="h-10 px-3 md:px-5">
-          {{ t(`settings.theme.${option}`) }}
-        </ToggleGroupItem>
-      </ToggleGroup>
-    </div>
+    <AppearanceSettings @change="persist" />
 
     <!-- Language -->
     <div class="grid gap-1.5">

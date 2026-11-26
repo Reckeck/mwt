@@ -156,23 +156,21 @@ describe('type', () => {
     expect(css).toMatch(/--text-2xs:\s*0\.6875rem;/)
   })
 
-  it('sets the explicit radius scale in @theme and keeps no legacy --radius', () => {
-    for (const [name, size] of [
-      ['sm', '8px'],
-      ['md', '12px'],
-      ['lg', '16px'],
-      ['xl', '24px'],
+  it('derives the radius scale in @theme from the themed --radius and no component reads --radius directly', () => {
+    for (const [name, formula] of [
+      ['sm', 'calc\\(var\\(--radius\\) - 4px\\)'],
+      ['md', 'var\\(--radius\\)'],
+      ['lg', 'calc\\(var\\(--radius\\) \\+ 4px\\)'],
+      ['xl', 'calc\\(var\\(--radius\\) \\+ 12px\\)'],
     ]) {
-      expect(css).toMatch(new RegExp(`--radius-${name}:\\s*${size};`))
+      expect(css).toMatch(new RegExp(`--radius-${name}:\\s*${formula};`))
     }
     const sourceRoot = resolve(process.cwd(), 'src')
     expect(existsSync(sourceRoot)).toBe(true)
     const legacyRadius = /var\(--radius\)|calc\(var\(--radius/
     const offenders = (readdirSync(sourceRoot, { recursive: true }) as string[]).filter((file) => {
       const path = resolve(sourceRoot, file)
-      return (
-        !file.endsWith('styles.test.ts') && statSync(path).isFile() && legacyRadius.test(readFileSync(path, 'utf8'))
-      )
+      return file.endsWith('.vue') && statSync(path).isFile() && legacyRadius.test(readFileSync(path, 'utf8'))
     })
     expect(offenders).toEqual([])
   })

@@ -158,6 +158,7 @@ pub(crate) mod tests {
             crate::commands::vault_backups::VAULT_BACKUPS_NAMES,
             crate::commands::vault_link::VAULT_LINK_NAMES,
             crate::commands::vault_recents::VAULT_RECENTS_NAMES,
+            crate::commands::window::WINDOW_NAMES,
             crate::commands::workflows::WORKFLOWS_NAMES,
         ];
         contexts
@@ -274,7 +275,7 @@ pub(crate) mod tests {
     /// The spec's 402 counted `#[tauri::command]` attributes: `get_autostart` and
     /// `set_autostart` each carry one per platform (desktop and mobile twins), so two names
     /// are counted twice.
-    const COMMAND_COUNT: usize = 400;
+    const COMMAND_COUNT: usize = 401;
 
     #[test]
     fn the_command_count_is_unchanged() {

@@ -20,12 +20,12 @@ describe('ListRow', () => {
       mount(ListRow, { props: { ...base, tone: 'positive' } })
         .find('[data-list-row-value]')
         .classes(),
-    ).toContain('text-success')
+    ).toContain('text-money-income')
     expect(
       mount(ListRow, { props: { ...base, tone: 'negative' } })
         .find('[data-list-row-value]')
         .classes(),
-    ).toContain('text-destructive')
+    ).toContain('text-money-expense')
   })
 
   it('leaves out the mark, subtitle and value when not given', () => {

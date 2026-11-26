@@ -50,6 +50,12 @@ export const useSettingsStore = defineStore('settings', {
     // -- app-scoped: the values views actually read --
 
     theme: (state): Theme => state.app?.theme ?? 'auto',
+    /** Colour theme picked for this device; null = Default. */
+    themeId: (state): string | null => state.app?.theme_id ?? null,
+    /** Theme while the resolved mode is light; null = follow `themeId`. */
+    themeLightId: (state): string | null => state.app?.theme_light_id ?? null,
+    /** Theme while the resolved mode is dark; null = follow `themeId`. */
+    themeDarkId: (state): string | null => state.app?.theme_dark_id ?? null,
     locale: (state): Locale => state.app?.locale ?? 'auto',
     /** Lowercase ISO code; always non-empty so labels never render blank. */
     baseCurrency: (state): string => state.app?.base_currency || 'usd',
@@ -132,6 +138,10 @@ export const useSettingsStore = defineStore('settings', {
       this.app = await call<AppSettings>('update_app_settings', {
         input: {
           theme: patch.theme ?? null,
+          // A field left out is untouched; an empty string clears it back to Default.
+          theme_id: patch.theme_id ?? null,
+          theme_light_id: patch.theme_light_id ?? null,
+          theme_dark_id: patch.theme_dark_id ?? null,
           locale: patch.locale ?? null,
           base_currency: patch.base_currency ?? null,
           base_currency_chosen: patch.base_currency_chosen ?? null,

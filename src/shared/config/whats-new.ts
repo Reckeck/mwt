@@ -15,6 +15,11 @@ import { WHATS_NEW_NOVEMBER } from './whats-new.november.ts'
 export type { WhatsNewEntry, WhatsNewPoint } from './whats-new.types'
 
 export const WHATS_NEW: WhatsNewEntry[] = [
+  {
+    id: 'themes',
+    date: '2026-11-26',
+    points: [{ key: 'picker', route: 'settings:app' }],
+  },
   ...WHATS_NEW_CRYPTO_NETWORK,
   ...WHATS_NEW_NOVEMBER,
   {
