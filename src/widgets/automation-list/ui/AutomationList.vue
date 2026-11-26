@@ -70,9 +70,9 @@ function subtitle(item: MineItem): string {
       <Card size="sm">
         <ul class="divide-y divide-border">
           <li v-for="item in items" :key="`${item.kind}-${item.id}`" :data-mine-row="item.kind">
-            <div class="flex min-h-16 items-center gap-2">
+            <div class="flex items-center gap-2">
               <RouterLink :to="target(item)" class="min-w-0 flex-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <ListRow :title="item.name" :subtitle="subtitle(item)" :icon="KIND_ICON[item.kind]" />
+                <ListRow :title="item.name" :subtitle="subtitle(item)" :icon="KIND_ICON[item.kind]" size="withControl" />
               </RouterLink>
               <Switch
                 class="shrink-0"

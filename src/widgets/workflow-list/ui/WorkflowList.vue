@@ -73,6 +73,7 @@ const remove = useMutation({
                 :title="workflow.name"
                 :subtitle="workflow.description || formatDateTime(workflow.updated_at)"
                 :icon="WorkflowIcon"
+                size="withControl"
               />
             </div>
             <Switch
