@@ -86,6 +86,13 @@ UPDATE_CLIENT=1 cargo test -p trade-app client_gen   # client.gen.ts
 UPDATE_CLIENT=1 cargo test -p trade-app events_gen   # events.gen.ts
 ```
 
+**Coverage of op-period A10 (generated types current).** `ipc::client_gen::client_gen_is_current` (and
+`events_gen`) fail when `client.gen.ts` / `events.gen.ts` drift; `mise run gen-types` and the registration
+guard (`CLIENT_COMMANDS` against the `#[ipc]` commands) run inside `mise run check`; the mock parity of A1-A5 is
+asserted by `src/shared/api/mock/period.test.ts`, `planning/templates.test.ts` and `planning/distribution.test.ts`.
+A2 is covered by `distribution_tests.rs` (A2: transfer, envelope moves, four parts; over-allocation refused) and
+`templates_tests.rs` (A2 in full); the batch full check log is `period-w9-check.log`.
+
 **Pilot status.** Only `#[ipc]` commands have metadata, so the client covers the pilot module,
 `commands/workflows.rs`; the other commands are still `#[tauri::command]` and are called with the raw
 `call('name', args)` of `ipc.ts`, which stays valid. The client grows as areas are moved onto `#[ipc]`.

@@ -25,6 +25,7 @@ portfolio container, not an asset; an asset is represented by a `Holding` inside
 | `envelopes` | `Vec<Envelope>` | envelopes (see above) |
 | `debt_terms` | `Vec<DebtTerms>` | the term and note of a debt with a contact per asset; the debt amount comes from transactions with `debt` |
 | `shared_events` | `Vec<SharedEvent>` | `serde(default)`: shared spending (see "Shared events"); shares, balances and status are not stored |
+| `operation_templates` | `Vec<OperationTemplate>` | `serde(default)`: saved operation shapes `{ id, name, archived, created_at, kind, store_id?, asset?, amount?, categories, comment, contact_id?, period_rule?, distribution? }`; the distribution applies to income only; synced as `records("operation_templates", ID)` |
 | `budgets`, `goals`, `reminders`, `price_alerts`, `utility_items`, `meter_readings`, `enrichments` | `Vec<…>` | planning. Since v3 automations are schemes (`workflows`) with `Workflow.automation: AutomationSpec { preset, schedule, starts_at, template, amount_mode (fixed/varies), workday_shift (none/back/forward) }`: the graph is built from a form (`workflow::automation`), runs are `workflow_runs`; `Automation`/`AutomationRun` are only IPC views. `preset` is a ready wallet template (salary, DCA, loan payment…); `UtilityItem.property_id` — utilities always belong to a property; `PriceAlert.store_id` (`serde(default)`) — the exchange whose terminal holds the alert, `None` — common. v2: `Reminder.repeat` (every N days/weeks/months/years), `Reminder.source` (an auto-reminder and its source), `muted`, `user_edited`, `snoozed_until`; `MeterReading.day` (day of month, `None` = month end) |
 | `notification_log` | `Vec<NoticeRecord>` | v2: shown notifications (a "source + occurrence" key, so as not to repeat after a restart), at most 500 |
 | `sync` | `SyncState` | `serde(default)`: change stamps, tombstones, trusted devices, batches for undo, vault transfers to new devices (`transfers`) — device sync (`docs/sync.md`); not exported to TS, a copy from the JSON editor is ignored |
@@ -273,6 +274,23 @@ balance (V13) is not an error.
 Before the check, categories are normalized, and empty ones are filled by the first
 matching rule (`CategorizationRule`: a substring of the comment or contact name,
 case-insensitive).
+
+### Period, spread, parts and distribution (additive)
+
+Operations carry the «what it is for» data in new optional fields; none of them changes the money date, the legs or the
+holdings. All are `serde(default)` and are skipped when empty, so an old vault is read unchanged in JSON and MessagePack.
+
+| Where | Field | Meaning |
+|---|---|---|
+| `Transaction` | `period?: OpPeriod` | what the operation is «for»; none means the month of the date |
+| `Transaction` | `spread?: Spread` | per-month shares of the amount over `period` |
+| `Transaction` | `income_ref?` | the income whose distribution made this operation (a back-reference for integrity checks only) |
+| `Transaction` (income) | `parts: Vec<ReceivedPart>` | «arrived in parts»: empty is a single-store income; otherwise `amount` is the total and `store_id` is the first part's store |
+| `Category` | `period_rule?: PeriodRule` | the default rule applied at creation only |
+| `OperationTemplate` | `period_rule?`, `distribution?: DistributionRule` | see the `operation_templates` collection above |
+
+`VAULT_FORMAT_VERSION` is **still 1**: the change is additive, no `storage::vN` module was added or touched and no
+migration runs. A fixture written before these fields opens unchanged.
 
 ## Contacts
 
