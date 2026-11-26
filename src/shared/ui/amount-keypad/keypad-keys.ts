@@ -14,10 +14,10 @@ const operator = (value: KeypadOperator, label: string): KeypadKey => ({
   label,
 })
 
-/** Digits on three columns, operators on the fourth. */
+/** A phone's order (board 463195): 1 2 3 on top, the operators down the fourth column, `+` last. */
 export const KEYPAD_ROWS: KeypadKey[][] = [
-  [digit('7'), digit('8'), digit('9'), operator('+', '+')],
-  [digit('4'), digit('5'), digit('6'), operator('-', '-')],
-  [digit('1'), digit('2'), digit('3'), operator('*', 'x')],
-  [{ kind: 'decimal', id: 'decimal' }, digit('0'), { kind: 'backspace', id: 'backspace' }, operator('/', '/')],
+  [digit('1'), digit('2'), digit('3'), operator('/', '÷')],
+  [digit('4'), digit('5'), digit('6'), operator('*', '×')],
+  [digit('7'), digit('8'), digit('9'), operator('-', '−')],
+  [{ kind: 'decimal', id: 'decimal' }, digit('0'), { kind: 'backspace', id: 'backspace' }, operator('+', '+')],
 ]

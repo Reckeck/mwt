@@ -16,7 +16,7 @@ const OPERATOR_LABEL_KEY: Record<KeypadOperator, string> = {
 
 /**
  * The on-screen number pad of a phone (quick add, amount forms): digits, the
- * decimal mark, backspace and a column of `+ - x /`. It only reports what was
+ * decimal mark, backspace and a column of `÷ × − +` (board 463195). It only reports what was
  * pressed; the owner applies the events to its own text. Desktop has a
  * keyboard, so nothing is rendered there.
  */
@@ -56,7 +56,7 @@ function ariaLabel(key: KeypadKey): string {
         v-for="key in row"
         :key="key.id"
         type="button"
-        :variant="key.kind === 'operator' ? 'secondary' : 'outline'"
+        :variant="key.kind === 'digit' ? 'outline' : 'secondary'"
         class="text-keypad h-14 min-w-10"
         :aria-label="ariaLabel(key)"
         :data-pad-key="key.id"

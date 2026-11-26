@@ -38,7 +38,7 @@ function toggle() {
 <template>
   <FormField :for="props.id" :label="props.label" required :error="props.error">
     <slot v-if="byContact" name="contact" :id="props.id" :invalid="Boolean(props.error)" />
-    <AccountRefPicker v-else :id="props.id" v-model="wallet" :invalid="Boolean(props.error)" />
+    <AccountRefPicker v-else :id="props.id" v-model="wallet" variant="plate" :invalid="Boolean(props.error)" />
     <Button v-if="byContact || props.canContact" type="button" variant="link" size="sm" class="h-auto justify-self-start px-0" data-transfer-side-toggle @click="toggle">
       {{ byContact ? t('quickAdd.sideWallet') : t('quickAdd.sideContact') }}
     </Button>

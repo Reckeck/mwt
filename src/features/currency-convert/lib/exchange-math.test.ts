@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
-import { exchangeLoss, exchangeRate } from './exchange-math'
+import { exchangeQuote } from './exchange-math'
 
-describe('exchangeRate', () => {
-  it('is got per one given', () => {
-    expect(exchangeRate('100', '92')).toBe('0.92')
+describe('exchangeQuote', () => {
+  it('tells the rate, the market rate and the loss in the given currency', () => {
+    expect(exchangeQuote('45000', '480', '488.6')).toEqual({
+      rate: '93.75',
+      market: '92.0998772',
+      loss: '792.06',
+      percent: '1.8',
+    })
   })
-  it('is null without both amounts', () => {
-    expect(exchangeRate('', '92')).toBeNull()
-    expect(exchangeRate('100', '0')).toBeNull()
+  it('a deal better than the market loses a negative amount', () => {
+    const quote = exchangeQuote('100', '92', '90')
+    expect(quote?.loss?.startsWith('-')).toBe(true)
+    expect(quote?.percent?.startsWith('-')).toBe(true)
   })
-})
-
-describe('exchangeLoss', () => {
-  it('is the market value minus what was got', () => {
-    expect(exchangeLoss('95', '92')).toBe('3')
+  it('without the market rate only the deal rate is known', () => {
+    expect(exchangeQuote('100', '92', null)).toEqual({ rate: '1.08695652', market: null, loss: null, percent: null })
   })
-  it('is negative when the deal beats the market', () => {
-    expect(exchangeLoss('90', '92')).toBe('-2')
-  })
-  it('is null without a market value', () => {
-    expect(exchangeLoss(null, '92')).toBeNull()
+  it('needs both amounts', () => {
+    expect(exchangeQuote('', '92', '90')).toBeNull()
+    expect(exchangeQuote('100', '0', '90')).toBeNull()
   })
 })
