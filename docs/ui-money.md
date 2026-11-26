@@ -161,7 +161,7 @@ The "currency / date" column: where the currency comes from and whether there is
 | A3 | `widgets/analytics-reports/views/PortfolioView.vue:87` | the pie tooltip WITHOUT conversions (its own formatter on top of useMoneyChartTooltip) | currency | G |
 | A4 | `charts with useMoneyChartTooltip: Cashflow, Pnl, Networth, Saldo, Inflation, Losses, Portfolio(line), StoreChart, MonthDaysChart, WealthChart, InvestResult, UtilityStats` | a tooltip with conversions (+ "≈" under the value) | chart currency | T (already correct) |
 | A5 | `shared/lib/chart-theme.ts:65 (axisMoney: StoreChart, WealthChart, views/chart.ts, result-chart.ts, echarts.ts)` | axis labels | currency | T |
-| A6 | `widgets/trading-chart/*, topup-advisor/advisor-chart.ts, capital-health/ui/SavingsCard.vue, inflation-settings/ui/InflationSpark.vue` | candle prices (.toFixed), percentages — not money amounts | — | X |
+| A6 | `widgets/price-chart/*, topup-advisor/advisor-chart.ts, capital-health/ui/SavingsCard.vue, inflation-settings/ui/InflationSpark.vue` | candle prices (.toFixed), percentages — not money amounts | — | X |
 | A7 | `widgets/invest-result/ui/ResultAnswer.vue:31-80; ResultHint.vue:24-29; lib/answer.ts:39` | the investment calculator answer: 7 phrases with amounts | form currency | S |
 
 ### Automations

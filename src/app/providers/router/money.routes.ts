@@ -27,13 +27,13 @@ export const moneyRoutes: RouteRecordRaw = {
     {
       path: 'wealth',
       name: 'money-wealth',
-      component: routePlaceholder,
+      component: () => import('@/pages/money').then((page) => page.MoneyWealth),
       meta: { i18n: 'nav.money', group: 'wealth' },
     },
     {
       path: 'investments',
       name: 'money-investments',
-      component: routePlaceholder,
+      component: () => import('@/pages/money').then((page) => page.MoneyInvestments),
       meta: { i18n: 'nav.money', group: 'investments' },
     },
     {

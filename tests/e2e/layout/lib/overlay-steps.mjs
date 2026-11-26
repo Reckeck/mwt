@@ -6,7 +6,10 @@ export const PAGE = `
   const main = document.querySelector('main') ?? document.body
   const rect = main.getBoundingClientRect()
   const root = document.documentElement
-  return [root.scrollWidth, root.scrollHeight, root.clientWidth, Math.round(rect.left), Math.round(rect.top), Math.round(rect.width), Math.round(rect.height)]
+  // Scrolling is not a change: a trigger below the fold is scrolled to when it is clicked, so the top is measured in the content.
+  let scrolled = 0
+  for (let node = main.parentElement; node; node = node.parentElement) scrolled += node.scrollTop
+  return [root.scrollWidth, root.scrollHeight, root.clientWidth, Math.round(rect.left), Math.round(rect.top + scrolled), Math.round(rect.width), Math.round(rect.height)]
 `
 
 /** Placeholders in routes and query values: {goal}, {automation}, {store:<kind>}, {event:seed|others} (the seed event; an event somebody else leads). */

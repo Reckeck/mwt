@@ -61,6 +61,9 @@ export const OVERLAYS = [
     open: [{ eval: PINIA('vault', 'status = { ...store.status, sandbox: true }') }, { click: '[data-sandbox-reset]' }],
     layer: overlay('sandbox-reset'), cleanup: PINIA('vault', 'status = { ...store.status, sandbox: false }'),
   },
+  // 3.2 Unlock screen (T41). vault-receive and app-settings-unlock return with T42.
+  { id: 'vault-create', route: '/unlock', locked: true, phone: true, open: [{ click: '[data-unlock-create]' }], layer: overlay('vault-create') },
+  { id: 'vault-unlock', route: '/unlock', locked: true, phone: true, open: [{ click: '[data-recents-other]' }], layer: overlay('vault-unlock') },
   { id: 'sync-pairing', route: '/', phone: true, open: [{ eval: SYNC_SESSION('pairing'), wait: 600 }], layer: overlay('sync-pairing'), cleanup: SYNC_RESET },
   { id: 'sync-plan', route: '/', phone: 'only', open: [{ eval: SYNC_SESSION('awaiting_confirm'), wait: 600 }], layer: overlay('sync-plan'), cleanup: SYNC_RESET },
 ]

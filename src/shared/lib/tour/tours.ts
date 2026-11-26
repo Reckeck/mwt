@@ -18,6 +18,25 @@ export const TOURS: Record<string, TourStep[]> = {
     { target: 'open-settings', key: 'dashboard.settings', side: 'right' },
     { target: 'profile-trigger', key: 'dashboard.contextMenu', side: 'bottom' },
   ],
+  // Capital: the accounts screen and Money · Capital share the hero and the allocation.
+  stores: [
+    { target: 'wealth-head', key: 'money.wealthHead', side: 'bottom' },
+    { target: 'wealth-table', key: 'money.wealthTable', side: 'top' },
+    { target: 'stores-list', key: 'stores.list', side: 'top' },
+  ],
+  'money-wealth': [
+    { target: 'wealth-head', key: 'money.wealthHead', side: 'bottom' },
+    { target: 'wealth-table', key: 'money.wealthTable', side: 'top' },
+  ],
+  'money-investments': [
+    { target: 'invest-figures', key: 'money.investFigures', side: 'bottom' },
+    { target: 'invest-table', key: 'money.investTable', side: 'top' },
+  ],
+  'crypto-positions': [
+    { target: 'defi-list', key: 'defi.list', side: 'top' },
+    { target: 'defi-net', key: 'defi.net', side: 'bottom' },
+    { target: 'defi-fees', key: 'defi.fees', side: 'top' },
+  ],
   // The settings window opens over any screen; a step of a tab that is not open is skipped.
   settings: [{ target: 'appearance-settings', key: 'settings.appearance', side: 'bottom' }],
   // Before a vault is open: the sandbox.
@@ -29,14 +48,11 @@ const PLACEHOLDER_ROUTES = [
   'money',
   'money-where',
   'money-plan',
-  'money-wealth',
-  'money-investments',
   'money-month',
   'money-health',
   'money-calculator',
   'money-together',
   'money-together-event',
-  'stores',
   'wallet',
   'wallet-settings',
   'transactions',
@@ -44,7 +60,6 @@ const PLACEHOLDER_ROUTES = [
   'transactions-bonuses',
   'contacts',
   'crypto-operations',
-  'crypto-positions',
   'automations',
   'automations-journal',
   'automations-workflows',

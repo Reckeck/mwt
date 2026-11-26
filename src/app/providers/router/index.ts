@@ -14,7 +14,7 @@ export const router = createRouter({
     {
       path: '/unlock',
       name: 'unlock',
-      component: routePlaceholder,
+      component: () => import('@/pages/unlock').then((page) => page.Unlock),
       meta: { public: true },
     },
     {
@@ -30,7 +30,7 @@ export const router = createRouter({
         {
           path: 'stores',
           name: 'stores',
-          component: routePlaceholder,
+          component: () => import('@/pages/stores').then((page) => page.StoresPage),
           meta: { i18n: 'nav.stores' },
         },
         {

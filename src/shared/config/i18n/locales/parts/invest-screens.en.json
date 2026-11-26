@@ -1,0 +1,16 @@
+{
+  "money.invest.title": "Investments",
+  "money.invest.accounts": "Investment accounts",
+  "money.invest.defiOpen": "Open DeFi positions",
+  "cryptoTrack.positions.kind.pool": "liquidity pool",
+  "cryptoTrack.positions.kind.lending": "loan and supply",
+  "cryptoTrack.positions.kind.staking": "staking",
+  "cryptoTrack.addresses.title": "Followed addresses",
+  "cryptoTrack.addresses.settings": "Network settings",
+  "cryptoTrack.chart.title": "Price",
+  "cryptoTrack.chart.symbol": "Coin",
+  "cryptoTrack.chart.step": "Step",
+  "cryptoTrack.chart.steps.hour": "Hour",
+  "cryptoTrack.chart.steps.day": "Day",
+  "cryptoTrack.chart.empty": "No price data yet"
+}
