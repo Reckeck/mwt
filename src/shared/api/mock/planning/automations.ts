@@ -1,6 +1,7 @@
 /** Commands: automations, budgets, goals and their simulation. */
 
 import { txMeta } from '@/shared/lib/transactions'
+import type { MockBasis } from '../period'
 import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTotals } from './budget-calc'
 import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
 import { deleteGoal, restoreGoal } from './goal-delete'
@@ -139,7 +140,7 @@ export function planAutomations(
       remove(budgets, String(args?.id))
       return {}
     case 'get_budget_status': {
-      const totals = monthTotals(ctx, currentMonth())
+      const totals = monthTotals(ctx, currentMonth(), (args?.basis as MockBasis | null) ?? 'period')
       return budgets
         .filter((budget) => budget.active)
         .map((budget): BudgetStatus => {
@@ -159,7 +160,12 @@ export function planAutomations(
     case 'get_daily_budget':
       return dailyBudget(ctx, settings.daily_budget_mode, rate)
     case 'get_month_summary':
-      return monthSummary(ctx, String(args?.month ?? currentMonth()), rate)
+      return monthSummary(
+        ctx,
+        String(args?.month ?? currentMonth()),
+        rate,
+        (args?.basis as MockBasis | null) ?? 'period',
+      )
     case 'list_goals':
       return [...goals].sort((left, right) => right.priority - left.priority)
     case 'create_goal': {

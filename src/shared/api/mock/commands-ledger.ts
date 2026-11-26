@@ -8,6 +8,7 @@ import { mockDebtTerms } from './catalog'
 import { contactBalancesWithEvents } from './shared-events/view'
 import { applySharedEdit, cascadeSharedDelete, planSharedTxEdit } from './shared-events/ledger-sync'
 import { mockSharedEvents } from './shared-events/state'
+import { periodCommands } from './commands-period'
 import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -133,6 +134,7 @@ export const contactsCommands: MockCommands = {
 
 /** Commands: transactions. */
 export const transactionsCommands: MockCommands = {
+  ...periodCommands,
   transaction_kinds_for_store_kind: ({ args }) => {
     return resolve(mockKindsFor(args?.kind as StoreKind))
   },
@@ -194,7 +196,7 @@ export const transactionsCommands: MockCommands = {
     const input = body as UpdateTransactionInput
     const index = mockTransactions.findIndex((tx) => txId(tx) === input.id)
     if (index < 0) throw { code: 'MISSING', message: 'transaction' }
-    const kept = { id: input.id, origin: txMeta(mockTransactions[index]).origin }
+    const kept = { id: input.id, origin: txMeta(mockTransactions[index]).origin, stored: mockTransactions[index] }
     const next = mockTransactionFrom(input.transaction, priceOf, kept, (storeId, symbol) =>
       mockBalanceOf(storeId, symbol, input.id),
     )
