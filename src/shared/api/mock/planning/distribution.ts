@@ -84,14 +84,17 @@ function goalEnvelope(income: TopupTx, goalId: string, storeId: string): Envelop
   return made
 }
 
+/** Rust `not_enough_free` for a goal row, `plan_fund_envelope` for an envelope row. */
+function notEnoughFree(free: number, symbol: string, target: DistributionPart['target']): string {
+  const onCard = target !== 'none' && 'goal' in target
+  return `only ${text(free)} ${symbol} is ${onCard ? 'free on the card' : 'free in this wallet'}`
+}
+
 function createEffect(income: TopupTx, part: DistributionPart): EffectRef {
   const amount = Number(part.amount)
   const at = income.meta.timestamp
   const target = part.target
   if (target !== 'none' && 'store' in target) {
-    const symbol = income.asset.symbol
-    const free = mockBalanceOf(income.store_id, symbol)
-    if (free < amount) fail(`only ${text(free)} ${symbol} is available on the card`, 'INSUFFICIENT_FUNDS')
     const transfer: Transaction = {
       transfer: {
         meta: { ...income.meta, id: uuid(), comment: '', categories: [], period: undefined, spread: undefined },
@@ -123,7 +126,7 @@ function createEffect(income: TopupTx, part: DistributionPart): EffectRef {
     fail('the envelope must sit on the card and the asset of the income')
   }
   const free = Number(mockEnvelopeView(envelope).free)
-  if (free < amount) fail(`only ${text(free)} ${envelope.asset.symbol} is free in this wallet`, 'INSUFFICIENT_FUNDS')
+  if (free < amount) fail(notEnoughFree(free, envelope.asset.symbol, target), 'INSUFFICIENT_FUNDS')
   const move = recordEnvelopeMove(envelope, amount, { incomeRef: income.meta.id, at })
   return { envelope_move: { envelope_id: envelope.id, move_id: move?.id ?? '' } }
 }

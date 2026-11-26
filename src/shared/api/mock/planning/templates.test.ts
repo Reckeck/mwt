@@ -234,4 +234,15 @@ describe('D12/Q11, D9/Q12 an automation run books like the core', () => {
     expect(waits.some((wait) => wait.run_id === asking.id)).toBe(false)
     expect(asking.outcome).toBe('done')
   })
+
+  it('confirm without a mode on a rule that still asks is refused with the core text', async () => {
+    const automation = await automationOf('Still asks D9', { mode: 'ask' })
+    await mock('run_automation', { id: automation.id })
+    const asking = workflowRuns.find((run) => run.workflow_id === automation.id)
+    if (!asking) throw new Error('no run')
+    const refused = await refusal(() =>
+      mock('confirm_distribution', { input: { run_id: asking.id, amount: '120000' } }),
+    )
+    expect(refused?.message).toBe('the rule still asks: choose how to distribute')
+  })
 })

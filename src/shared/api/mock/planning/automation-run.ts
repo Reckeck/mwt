@@ -82,7 +82,7 @@ export function confirmDistribution(input: ConfirmDistributionInput): Transactio
   if (!('topup' in tx)) return fail('DISTRIBUTION_NOT_INCOME: only an income distributes')
   tx.topup.amount = input.amount
   const mode = input.mode ?? rule.on_other_amount
-  if (mode === 'ask') fail('the rule asks again: choose how to distribute')
+  if (mode === 'ask') fail('the rule still asks: choose how to distribute')
   const places = placesOf(tx.topup.asset.symbol)
   const resolved = resolveRule(
     { ...rule, on_other_amount: mode },

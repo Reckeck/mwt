@@ -105,6 +105,77 @@ describe('A2 a distribution of a 120 000 income (S6-S9)', () => {
   })
 })
 
+/** The card spends `spent` of the 120 000 salary, so the distribution asks for more than the card holds. */
+async function spendOnCard(parts: Fixture, spent: string) {
+  await mock('add_transaction', {
+    input: {
+      type: 'payment',
+      common: {
+        timestamp: '2026-11-06T09:00:00Z',
+        comment: 'rent',
+        categories: ['rent'],
+        flow_id: null,
+        contact_id: null,
+        price_usd: null,
+        fx_override: null,
+        price: null,
+        price_currency: null,
+      },
+      store_id: parts.card.id,
+      asset: RUB,
+      amount: spent,
+      fee: null,
+      to: null,
+      details: {},
+    },
+  })
+}
+
+describe('S9 a row larger than what the card holds (core create_transfer, not_enough_free)', () => {
+  it('books a store row of 20 000 although the card holds 10 000, as the core does', async () => {
+    const parts = await fixture()
+    await spendOnCard(parts, '110000')
+    const transfers = transfersOf()
+    await mock('distribute_income', {
+      input: { income: { source: 'stored', id: parts.incomeId }, rows: [rows(parts)[0], rows(parts)[3]] },
+    })
+    expect(transfersOf()).toBe(transfers + 1)
+  })
+
+  it('refuses a goal row with the core text "only {free} {symbol} is free on the card"', async () => {
+    const parts = await fixture()
+    await spendOnCard(parts, '119000')
+    const goal = (await mock('create_goal', {
+      input: {
+        name: 'Trip',
+        active: true,
+        target_amount: '50000',
+        currency: 'RUB',
+        starts_at: '2026-11-01T00:00:00Z',
+        deadline: null,
+        priority: 3,
+        monthly_commitment: null,
+        scope: { store_ids: [parts.card.id], include_children: true },
+        scenario_id: null,
+        expected_return: null,
+      },
+    })) as Goal
+    const refused = await refusal(() =>
+      mock('distribute_income', {
+        input: {
+          income: { source: 'stored', id: parts.incomeId },
+          rows: [
+            { kind: { sum: { amount: '20000' } }, target: { goal: { goal_id: goal.id, store_id: parts.card.id } } },
+            { kind: 'remainder', target: 'none' },
+          ],
+        },
+      }),
+    )
+    expect(refused?.code).toBe('INSUFFICIENT_FUNDS')
+    expect(refused?.message).toBe('only 1000 RUB is free on the card')
+  })
+})
+
 describe('A2b a distribution is edited and undone (S11, V1-V4)', () => {
   it('rewrites 20 000 as 25 000 and undo removes every effect', async () => {
     const parts = await fixture()
