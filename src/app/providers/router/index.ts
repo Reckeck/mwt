@@ -6,6 +6,7 @@ import { i18n } from '@/shared/config/i18n'
 import { automationsRoutes } from './automations.routes'
 import { cryptoRoutes } from './crypto.routes'
 import { moneyRoutes } from './money.routes'
+import { routePlaceholder } from './route-placeholder'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -13,7 +14,7 @@ export const router = createRouter({
     {
       path: '/unlock',
       name: 'unlock',
-      component: () => import('@/pages/unlock').then((page) => page.Unlock),
+      component: routePlaceholder,
       meta: { public: true },
     },
     {
@@ -23,35 +24,34 @@ export const router = createRouter({
         {
           path: '',
           name: 'dashboard',
-          component: () => import('@/pages/dashboard').then((page) => page.Dashboard),
+          component: routePlaceholder,
           meta: { i18n: 'nav.dashboard' },
         },
         {
           path: 'stores',
           name: 'stores',
-          component: () => import('@/pages/stores').then((page) => page.Stores),
+          component: routePlaceholder,
           meta: { i18n: 'nav.stores' },
         },
         {
           path: 'stores/:id',
           name: 'wallet',
-          component: () => import('@/pages/wallet').then((page) => page.Wallet),
+          component: routePlaceholder,
           meta: { i18n: 'nav.wallets' },
         },
         {
           path: 'stores/:id/settings',
           name: 'wallet-settings',
-          component: () => import('@/pages/wallet-settings').then((page) => page.WalletSettings),
+          component: routePlaceholder,
           meta: { i18n: 'walletSettings.nav' },
         },
         {
           path: 'transactions',
-          component: () => import('@/pages/transactions').then((page) => page.TransactionsSection),
           children: [
             {
               path: '',
               name: 'transactions',
-              component: () => import('@/pages/transactions').then((page) => page.Transactions),
+              component: routePlaceholder,
               meta: { i18n: 'nav.transactions' },
             },
             {
@@ -63,19 +63,19 @@ export const router = createRouter({
               // What the crypto module read from its sources; the filter is in the query (spec E10).
               path: 'crypto',
               name: 'crypto-operations',
-              component: () => import('@/pages/crypto-operations').then((page) => page.CryptoOperations),
+              component: routePlaceholder,
               meta: { i18n: 'cryptoTrack.operations.title' },
             },
             {
               path: 'calendar',
               name: 'transactions-calendar',
-              component: () => import('@/pages/transactions').then((page) => page.TransactionsCalendar),
+              component: routePlaceholder,
               meta: { i18n: 'nav.transactions' },
             },
             {
               path: 'bonuses',
               name: 'transactions-bonuses',
-              component: () => import('@/pages/transactions').then((page) => page.TransactionsBonuses),
+              component: routePlaceholder,
               meta: { i18n: 'nav.transactions' },
             },
           ],
@@ -83,7 +83,7 @@ export const router = createRouter({
         {
           path: 'contacts',
           name: 'contacts',
-          component: () => import('@/pages/contacts').then((page) => page.Contacts),
+          component: routePlaceholder,
           meta: { i18n: 'nav.contacts' },
         },
         moneyRoutes,

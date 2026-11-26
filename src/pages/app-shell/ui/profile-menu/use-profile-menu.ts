@@ -3,7 +3,6 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   Bell,
-  BellRing,
   Copy,
   EyeOff,
   GraduationCap,
@@ -19,7 +18,6 @@ import type { Component } from 'vue'
 import { useVaultDelete } from '@/features/vault-delete'
 import { useVaultForget } from '@/features/vault-forget'
 import { useSyncIndicator } from '@/features/vault-sync'
-import { useUnreadNotices } from '@/widgets/notification-bell'
 import { pluralForm } from '@/shared/lib/format'
 import { notify } from '@/shared/lib/notify'
 import { settingsQuery } from '@/shared/lib/settings-link'
@@ -33,7 +31,7 @@ export interface ProfileEntry {
   label: string
   hint?: string
   destructive?: boolean
-  /** A small number beside the label (unread notifications). */
+  /** A small number beside the label. */
   count?: number
   /** Colour of the icon, for a state (sync trouble). */
   iconClass?: string
@@ -49,7 +47,7 @@ export interface ProfileMenuOptions {
 
 /**
  * The profile menu's model: the vault actions of the open vault, then the status rows that left the
- * top bar (sync, notifications, tours), Automations, Reminders and Settings. Every entry goes where
+ * top bar (sync, tours), Automations, Reminders and Settings. Every entry goes where
  * it went before (spec D10): the same routes, the settings window, the lock.
  */
 export function useProfileMenu(options: ProfileMenuOptions) {
@@ -60,8 +58,6 @@ export function useProfileMenu(options: ProfileMenuOptions) {
   const { saveCopy } = useVaultDelete()
 
   const open = ref(false)
-  const noticesOpen = ref(false)
-  const { unread } = useUnreadNotices()
   const sync = useSyncIndicator()
   /** Icon and colour of the sync row: busy, then unreliable clock, then connected devices. */
   function syncLook(): { icon: Component; iconClass?: string } {
@@ -70,8 +66,8 @@ export function useProfileMenu(options: ProfileMenuOptions) {
     if (sync.connected.value) return { icon: RefreshCw, iconClass: 'text-success' }
     return { icon: RefreshCw }
   }
-  /** The profile button's dot: something unread, or sync in trouble. */
-  const attention = computed(() => unread.value > 0 || (sync.enabled.value && sync.unreliable.value))
+  /** The profile button's dot: sync in trouble. */
+  const attention = computed(() => sync.enabled.value && sync.unreliable.value)
 
   // The history is read when the menu opens: the row of the open vault gives forget and copy; the open vault is never deleted from here (the backend refuses it).
   watch(open, (isOpen) => {
@@ -132,13 +128,6 @@ export function useProfileMenu(options: ProfileMenuOptions) {
         run: () => close(() => void router.push({ query: settingsQuery(router.currentRoute.value.query, 'sync') })),
       })
     }
-    entries.push({
-      id: 'notifications',
-      icon: BellRing,
-      label: t('notices.title'),
-      count: unread.value || undefined,
-      run: () => close(() => (noticesOpen.value = true)),
-    })
     const tour = options.tour()
     if (tour.available) {
       const count = tour.steps
@@ -182,5 +171,5 @@ export function useProfileMenu(options: ProfileMenuOptions) {
     },
   ])
 
-  return { open, noticesOpen, attention, current, vaultName, vaultEntries, statusEntries, appEntries }
+  return { open, attention, current, vaultName, vaultEntries, statusEntries, appEntries }
 }

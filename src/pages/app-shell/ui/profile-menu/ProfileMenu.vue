@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 import { CircleUserRound } from 'lucide-vue-next'
 
-import { NotificationBell } from '@/widgets/notification-bell'
 import { Button } from '@/shared/ui/button'
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/shared/ui/drawer'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
@@ -26,7 +25,7 @@ const emit = defineEmits<{ startTour: []; allTours: [] }>()
  */
 const { t } = useI18n()
 const phone = useIsPhone()
-const { open, noticesOpen, attention, vaultName, vaultEntries, statusEntries, appEntries } = useProfileMenu({
+const { open, attention, vaultName, vaultEntries, statusEntries, appEntries } = useProfileMenu({
   tour: () => ({ available: props.hasTour, steps: props.tourSteps ?? 0 }),
   startTour: () => emit('startTour'),
   allTours: () => emit('allTours'),
@@ -64,5 +63,4 @@ const { open, noticesOpen, attention, vaultName, vaultEntries, statusEntries, ap
       <ProfileMenuList :vault-name="vaultName" :vault-entries="vaultEntries" :status-entries="statusEntries" :app-entries="appEntries" />
     </DrawerContent>
   </Drawer>
-  <NotificationBell v-model:open="noticesOpen" />
 </template>

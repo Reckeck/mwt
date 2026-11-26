@@ -1,5 +1,7 @@
 {
   "app.title": "Multi Wallet Tracker",
+  "routePlaceholder.title": "This screen is being rebuilt",
+  "routePlaceholder.description": "It will come back with the new design.",
   "nav.dashboard": "Dashboard",
   "nav.section.home": "Home",
   "nav.section.operations": "Operations",

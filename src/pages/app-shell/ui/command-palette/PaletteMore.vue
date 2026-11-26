@@ -40,11 +40,8 @@ const wallets = computed(() =>
     .map((node) => walletRow(node, t, settings.baseCurrency)),
 )
 const index = usePaletteIndex(computed(() => NAV_SECTIONS.map((section) => section.root)))
-/** Settings and sub-tabs: a heading and its entries each. */
-const groups = computed(() => [
-  { key: 'settings', heading: t('palette.settings'), items: index.settings.value },
-  { key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value },
-])
+/** Sub-tabs: a heading and its entries. */
+const groups = computed(() => [{ key: 'tabs', heading: t('palette.tabs'), items: index.tabs.value }])
 </script>
 
 <template>

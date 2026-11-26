@@ -4,12 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /** The slices of spec E10, read as text: what they may call, and what they may never do. */
-const SLICES = [
-  'src/entities/crypto-tx',
-  'src/features/crypto-tx-override',
-  'src/widgets/crypto-operations',
-  'src/pages/crypto-operations',
-]
+const SLICES = ['src/entities/crypto-tx', 'src/features/crypto-tx-override']
 const ALLOWED = new Set([
   'crypto_list_operations',
   'crypto_operation_detail',
@@ -59,31 +54,5 @@ describe('the operations slices', () => {
     }
     const names = sources.flatMap(([, text]) => [...text.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1]))
     expect(names.filter((name) => /create|delete|remove|add/.test(name))).toEqual([])
-  })
-})
-
-describe('an engine-driven wallet (its `crypto_account_id` is set)', () => {
-  const tabs = readFileSync(join(process.cwd(), 'src/pages/wallet/ui/wallet-tabs/WalletTabs.vue'), 'utf8')
-
-  it('shows the read-only operations list in its history tab, and never the fiat list with its edit and delete', () => {
-    const history = tabs.slice(tabs.indexOf('<template #history>'), tabs.indexOf('<template #terminal>'))
-    expect(history).toMatch(/<CryptoOperations\s+v-if="engineAccountId"/)
-    // The fiat list, with its row menu (edit, delete, duplicate), is only the `v-else`.
-    expect(history).toMatch(/<StoreTransactions\s+v-else/)
-    expect(history.match(/<StoreTransactions/g)).toHaveLength(1)
-  })
-
-  it('offers on a row of the module only corrections, the exchange declaration and the explorer', () => {
-    const menu = readFileSync(
-      join(process.cwd(), 'src/features/crypto-tx-override/model/use-crypto-actions.ts'),
-      'utf8',
-    )
-    const ids = [...menu.matchAll(/id: '([a-z-]+)'/g)].map((match) => match[1])
-    expect(ids).toEqual(['exchange', 'category', 'description', 'hide', 'explorer'])
-    for (const [path, text] of sources) {
-      expect(text, path).not.toMatch(
-        /TransactionCreate|TransactionEdit|transaction-delete|TxRowMenu|StoreTransactions|StoreAdjust|store-adjust/,
-      )
-    }
   })
 })
