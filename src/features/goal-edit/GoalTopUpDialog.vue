@@ -11,7 +11,7 @@ import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 
 /**
- * `Top up`: put a sum (goal currency) aside for the goal in its wallet. The core caps it at the wallet's
+ * `Put aside`: put a sum (goal currency) aside for the goal in its wallet. The core caps it at the wallet's
  * free balance and answers with what was taken, so the toast names the real amount.
  */
 const props = defineProps<{ goal: Goal; storeId: string }>()

@@ -1,31 +1,23 @@
-/**
- * The «Money» section: four tabs one goes to often (spending, where it went, the plan, shared events)
- * and five behind «More» (capital, investments, the month's balance, the checkup, the calculator).
- */
-export type MoneyGroup =
-  | 'spending'
-  | 'where'
-  | 'plan'
-  | 'together'
-  | 'wealth'
-  | 'investments'
-  | 'month'
-  | 'health'
-  | 'calculator'
-
-/** Route name of each tab. */
-export const GROUP_ROUTE: Record<MoneyGroup, string> = {
-  spending: 'money',
-  where: 'money-where',
-  plan: 'money-plan',
-  together: 'money-together',
-  wealth: 'money-wealth',
-  investments: 'money-investments',
-  month: 'money-month',
-  health: 'money-health',
-  calculator: 'money-calculator',
+/** The minimum of a route record the tab strip reads. */
+export interface TabRecord {
+  name?: string | symbol
+  meta: { group?: string }
 }
 
-/** The strip; the rest wait behind «More», in this order. */
-export const MAIN_GROUPS: MoneyGroup[] = ['spending', 'where', 'plan', 'together']
-export const MORE_GROUPS: MoneyGroup[] = ['wealth', 'investments', 'month', 'health', 'calculator']
+export interface BudgetTab {
+  name: string
+  /** i18n key of the label. */
+  labelKey: string
+}
+
+/**
+ * The tabs of the Budget section: one per child route of the section frame, in route order. The routes
+ * decide the set (the router gives the frame only the Budget routes), so there is no second list here.
+ */
+export function budgetTabs(children: readonly TabRecord[]): BudgetTab[] {
+  return children.flatMap((child) =>
+    typeof child.name === 'string' && child.meta.group
+      ? [{ name: child.name, labelKey: `money.tab.${child.meta.group}` }]
+      : [],
+  )
+}
