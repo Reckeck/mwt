@@ -24,6 +24,10 @@ use crate::planning::flows::flows_between;
 use crate::planning::schedule::{fresh_moments, processed_dates};
 use crate::service::Session;
 use crate::time::{Clock, FixedClock, secs_or_now, unix_secs};
+use crate::usecases::money::portfolio::recompute_holdings;
+use crate::usecases::money::transactions::prepare_transaction_at;
+use crate::usecases::planning::automation_rules::{run_graph, run_template};
+use crate::usecases::planning::distribution::apply_distribution_at;
 use crate::usecases::planning::notifications::notice;
 use crate::usecases::sync::peer_sync;
 use crate::workflow::catalog::node_def;
@@ -81,7 +85,7 @@ pub fn wf_insert(
 ) -> std::result::Result<Vec<Transaction>, String> {
     insert_checked(vault, txs, now).map_err(|refusal| match refusal {
         InsertRefusal::Short(reason) => describe_reject(&reason),
-        InsertRefusal::Invalid(message) => message,
+        InsertRefusal::Invalid(error) => error.to_string(),
     })
 }
 
@@ -89,7 +93,8 @@ pub fn wf_insert(
 enum InsertRefusal {
     /// The money is short: the one place that says so.
     Short(Box<RejectReason>),
-    Invalid(String),
+    /// Any other refusal, with the error as it was raised (its kind and code stay).
+    Invalid(Error),
 }
 
 fn insert_checked(
@@ -98,33 +103,99 @@ fn insert_checked(
     now: i64,
 ) -> std::result::Result<Vec<Transaction>, InsertRefusal> {
     let backup = vault.doc.clone();
+    let noticed = vault.run_notices.len();
     let flow = (txs.len() > 1).then(|| uuid::Uuid::new_v4().to_string());
     let mut saved = Vec::with_capacity(txs.len());
     for mut tx in txs {
         if let Some(flow) = &flow {
             tx.meta_mut().flow_id = Some(flow.clone());
         }
-        let secs = secs_or_now(&tx.meta().timestamp);
-        let result = match crate::planning::automations::funds_shortfall(&vault.doc, &tx, secs) {
-            Some(reason) => Err(InsertRefusal::Short(Box::new(reason))),
-            // The run's clock, not the wall one: an emulated run days
-            // ahead dates its operations days ahead too.
-            None => crate::usecases::money::transactions::prepare_transaction_at(
-                vault,
-                &mut tx,
-                now.max(secs) * 1000,
-            )
-            .map_err(|err| InsertRefusal::Invalid(err.to_string())),
-        };
-        if let Err(refusal) = result {
-            vault.doc = backup;
-            return Err(refusal);
+        match book_one(vault, tx, now) {
+            Ok(booked) => saved.push(booked),
+            Err(refusal) => {
+                vault.doc = backup;
+                vault.run_notices.truncate(noticed);
+                return Err(refusal);
+            }
         }
-        vault.doc.transactions.push(tx.clone());
-        crate::usecases::money::portfolio::recompute_holdings(vault);
-        saved.push(tx);
     }
     Ok(saved)
+}
+
+/// One operation of a run: funds checked, prepared, stored. An income of an automation with an
+/// operation template also takes the template's period rule and distribution in the same write
+/// (spec op-period T22, D5, D12).
+fn book_one(
+    vault: &mut Session,
+    mut tx: Transaction,
+    now: i64,
+) -> std::result::Result<Transaction, InsertRefusal> {
+    let invalid = InsertRefusal::Invalid;
+    // The user's answer to a question comes first: the rules below read the confirmed amount.
+    if let Some(confirmation) = &vault.confirmation {
+        confirmation.settle(&mut tx).map_err(invalid)?;
+    }
+    let template = run_template(vault, &tx);
+    if let Some(template) = &template {
+        template.apply_creation_rules(vault, &mut tx);
+    }
+    let secs = secs_or_now(&tx.meta().timestamp);
+    if let Some(reason) = crate::planning::automations::funds_shortfall(&vault.doc, &tx, secs) {
+        return Err(InsertRefusal::Short(Box::new(reason)));
+    }
+    // The run's clock, not the wall one: an emulated run days ahead dates its
+    // operations days ahead too.
+    let now_ms = now.max(secs) * 1000;
+    prepare_transaction_at(vault, &mut tx, now_ms).map_err(invalid)?;
+    let rows = match &template {
+        Some(template) => template.rows(vault, &tx).map_err(invalid)?,
+        None => None,
+    };
+    vault.doc.transactions.push(tx.clone());
+    recompute_holdings(vault);
+    let Some(rows) = rows else {
+        return Ok(tx);
+    };
+    apply_distribution_at(vault, &tx.meta().id, &rows, now_ms).map_err(invalid)?;
+    Ok(vault
+        .doc
+        .transactions
+        .iter()
+        .find(|stored| stored.meta().id == tx.meta().id)
+        .cloned()
+        .unwrap_or(tx))
+}
+
+/// "Create now": one operation booked as the schedule books it, with the template's period rule
+/// and distribution, then written with its run record in one commit. A refusal puts the
+/// document back.
+pub(crate) fn book_manual_run(
+    vault: &mut Session,
+    tx: Transaction,
+    record: WorkflowRun,
+    now: i64,
+) -> Result<Transaction> {
+    let backup = vault.doc.clone();
+    vault.run_notices.clear();
+    let booked = match book_one(vault, tx, now) {
+        Ok(booked) => booked,
+        Err(refusal) => {
+            let error = match refusal {
+                InsertRefusal::Short(reason) => {
+                    crate::planning::automations::funds_error(&vault.doc, *reason)
+                }
+                InsertRefusal::Invalid(error) => error,
+            };
+            vault.doc = backup;
+            vault.run_notices.clear();
+            return Err(error);
+        }
+    };
+    vault.doc.workflow_runs.push(record);
+    commit_applied(vault)?;
+    let noticed = std::mem::take(&mut vault.run_notices);
+    crate::usecases::planning::notifications::log_notices(vault, noticed)?;
+    Ok(booked)
 }
 
 // -- lookups that cross areas ----------------------------------------------------
@@ -256,7 +327,13 @@ pub(crate) fn keep_run(
     pass: &mut WorkflowPass,
 ) -> Result<()> {
     let ru = peer_sync::notice_in_russian(vault);
-    vault.transact(|tx| write_run(tx, report, pass, ru))
+    let noticed = std::mem::take(&mut vault.run_notices);
+    vault.transact(|tx| write_run(tx, report, pass, ru))?;
+    // What a failed or refused run noticed never happened.
+    if matches!(report.run.outcome, RunOutcome::Done) {
+        pass.notices.extend(noticed);
+    }
+    Ok(())
 }
 
 /// A run that never happened, in the journal with its reason, so nothing is
@@ -453,7 +530,7 @@ pub fn retry_workflow_run(
         return retry_queued_refusal(vault, batch, now);
     }
     let workflow = workflow_record(&vault.doc, &run.workflow_id)?;
-    let graph = Graph::parse(&workflow.graph)?;
+    let graph = run_graph(&vault.doc, &workflow)?;
     let trigger = graph
         .node(trigger_node)
         .cloned()
@@ -499,7 +576,7 @@ fn retry_queued_refusal(
             InsertRefusal::Short(reason) => Error::InsufficientFunds(
                 crate::planning::automations::describe_shortfall(&vault.doc, &reason),
             ),
-            InsertRefusal::Invalid(message) => Error::InvalidInput(message),
+            InsertRefusal::Invalid(error) => error,
         })
     })?;
     // `RunClosing::Required` already failed with `Missing` when the run is gone.
@@ -508,6 +585,10 @@ fn retry_queued_refusal(
         pass.created.clone_from(&closed.created);
         pass.runs.push(closed);
     }
+    // What the booking noticed (an income left undistributed) is kept once, like on the
+    // other run paths.
+    pass.notices = std::mem::take(&mut vault.run_notices);
+    log_pass_notices(vault, &mut pass)?;
     Ok(pass)
 }
 
@@ -549,7 +630,7 @@ pub fn run_workflow_now(
     zone: &str,
 ) -> Result<RunReport> {
     let workflow = workflow_record(&vault.doc, id)?;
-    let graph = Graph::parse(&workflow.graph)?;
+    let graph = run_graph(&vault.doc, &workflow)?;
     if let Some(issue) = validate(&graph)
         .into_iter()
         .find(|issue| issue.level == crate::workflow::IssueLevel::Error)
@@ -851,7 +932,7 @@ fn fire_due_automations(
         let Some(spec) = workflow.automation.clone() else {
             continue;
         };
-        let Ok(graph) = Graph::parse(&workflow.graph) else {
+        let Ok(graph) = run_graph(&vault.doc, &workflow) else {
             continue;
         };
         let Some(trigger) = graph.node(automation::TRIGGER).cloned() else {
@@ -891,9 +972,8 @@ fn fire_due_automations(
         ctx.trigger_label = trigger_label(&trigger.kind, &at);
         ctx.trigger_values = BTreeMap::from([("at".to_string(), WfValue::Date(at))]);
         ctx.mode = RunMode::Live;
-        let before = vault.doc.transactions.len();
         let mut report = exec::run(vault, &graph, &ctx);
-        link_to_property(vault, &workflow, before);
+        link_to_property(vault, &workflow, &report.run.created);
         let planned = cal.date_of(moment);
         stamp_planned_date(&mut vault.doc, &report.run.created, planned);
         report.run.planned_date = Some(planned);
@@ -904,8 +984,8 @@ fn fire_due_automations(
 }
 
 /// What an automation books belongs to its property (plan G4): the operations
-/// added since `before` get the link.
-fn link_to_property(vault: &mut Session, workflow: &Workflow, before: usize) {
+/// the run created get the link (not the transfers its distribution booked beside them).
+fn link_to_property(vault: &mut Session, workflow: &Workflow, created: &[String]) {
     let Some(property) = workflow
         .automation
         .as_ref()
@@ -916,12 +996,8 @@ fn link_to_property(vault: &mut Session, workflow: &Workflow, before: usize) {
     else {
         return;
     };
-    let made: Vec<String> = vault.doc.transactions[before.min(vault.doc.transactions.len())..]
-        .iter()
-        .map(|tx| tx.meta().id.clone())
-        .collect();
-    for id in made {
-        crate::usecases::household::property_links::set_property_link(vault, &id, Some(&property));
+    for id in created {
+        crate::usecases::household::property_links::set_property_link(vault, id, Some(&property));
     }
 }
 

@@ -77,3 +77,51 @@ proptest! {
         let _ = parse_date(&raw, &Calendar::new(zone));
     }
 }
+
+mod period_shares {
+    //! P6: shares always sum to the amount and are never negative.
+
+    use proptest::prelude::*;
+    use rust_decimal::Decimal;
+
+    use crate::Amount;
+    use crate::calendar::period::{by_days_shares, even_shares};
+
+    fn total(shares: &[Amount]) -> Decimal {
+        shares
+            .iter()
+            .fold(Decimal::ZERO, |sum, share| sum + share.0)
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        #[test]
+        fn p6_even_shares_sum_to_the_amount(
+            raw in 0..1_000_000_000_000i64,
+            scale in 0..=4u32,
+            months in 1..=13usize,
+            places in 0..=4u32,
+        ) {
+            let amount = Amount::new(Decimal::new(raw, scale));
+            let shares = even_shares(amount, months, places);
+            prop_assert_eq!(shares.len(), months);
+            prop_assert_eq!(total(&shares), amount.0);
+            prop_assert!(shares.iter().all(|share| !share.is_negative()));
+        }
+
+        #[test]
+        fn p6_by_days_shares_sum_to_the_amount(
+            raw in 0..1_000_000_000_000i64,
+            scale in 0..=4u32,
+            days in proptest::collection::vec(1..=31u32, 1..=13),
+            places in 0..=4u32,
+        ) {
+            let amount = Amount::new(Decimal::new(raw, scale));
+            let shares = by_days_shares(amount, &days, places);
+            prop_assert_eq!(shares.len(), days.len());
+            prop_assert_eq!(total(&shares), amount.0);
+            prop_assert!(shares.iter().all(|share| !share.is_negative()));
+        }
+    }
+}

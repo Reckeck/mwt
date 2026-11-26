@@ -30,7 +30,7 @@ use mwt_money::worth::FlowClass;
 use mwt_planning::agenda::UpcomingItem;
 use mwt_planning::budget::{budget_currency, manual_day_limit};
 use mwt_planning::daily_budget::{month_allowance, month_plan};
-use mwt_planning::flows::{Flow, flows_between, leg_value_in};
+use mwt_planning::flows::{Basis, Flow, flows_between, flows_for_basis, leg_value_in};
 use mwt_planning::upcoming::upcoming;
 
 /// Longest range a report covers.
@@ -78,6 +78,15 @@ pub struct ReportFilter {
     /// Restate each month in today's money by the reference inflation.
     #[serde(default)]
     pub real_terms: bool,
+    /// Which date the cashflow, year, categories and where-it-went reports
+    /// count by; default `period`. Stores, PnL, portfolio, net-worth,
+    /// inflation and loss reports have no basis (R3): they read money moments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "ts",
+        ts(type = "\"period\" | \"money_date\" | null", optional)
+    )]
+    pub basis: Option<Basis>,
 }
 
 /// What a report covers, for its header.
@@ -150,6 +159,10 @@ pub struct CashflowRow {
     pub budget_out: Amount,
     /// `income − fixed − daily`.
     pub net: Amount,
+    /// The month's income by the money date, next to `income` (which follows
+    /// the report's basis); equal to it under the `money_date` basis.
+    #[serde(default)]
+    pub income_by_money_date: Amount,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -503,6 +516,8 @@ pub struct Ctx {
     pub(crate) coefficients: BTreeMap<NaiveDate, Amount>,
     pub(crate) real: bool,
     pub(crate) scope: Option<HashSet<String>>,
+    /// The date the report's month figures count by.
+    pub basis: Basis,
 }
 
 /// Where the period before one of `span` months starting at `first` begins.
@@ -589,6 +604,11 @@ impl Ctx {
 
     pub(crate) fn index_of(&self, date: NaiveDate) -> Option<usize> {
         month_index(&self.months, date)
+    }
+
+    /// The first day of the month a flow counts in under the report's basis.
+    pub(crate) fn flow_month(flow: &Flow) -> NaiveDate {
+        calendar::parse_month(&flow.month).unwrap_or_else(|| first_of_month(flow.date))
     }
 }
 
@@ -695,6 +715,7 @@ pub fn report_ctx(books: &Books, filter: &ReportFilter, now: i64, zone: &str) ->
         now,
         real: filter.real_terms,
         scope,
+        basis: filter.basis.unwrap_or(Basis::Period),
     })
 }
 
@@ -732,9 +753,19 @@ pub fn report(
     Ok(report)
 }
 
-/// Classified flows of the report range (or `[from, to)`), in scope.
+/// Classified flows of the report range (or `[from, to)`), in scope, read by
+/// the report's basis. Reports without a basis (search, workflow runs, stores,
+/// PnL, portfolio, net worth) never come through here: they stay on the money
+/// date (Q10, R3).
 pub fn report_flows(books: &Books, ctx: &Ctx, from: i64, to: i64) -> Vec<Flow> {
-    flows_between(books, &ctx.cal, &ctx.currency, from, to)
+    in_scope(
+        ctx,
+        flows_for_basis(books, &ctx.cal, &ctx.currency, from, to, ctx.basis),
+    )
+}
+
+fn in_scope(ctx: &Ctx, flows: Vec<Flow>) -> Vec<Flow> {
+    flows
         .into_iter()
         .filter(|flow| {
             ctx.scope
@@ -756,7 +787,7 @@ pub fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
         })
         .collect();
     for flow in report_flows(books, ctx, ctx.start(), ctx.end()) {
-        let Some(index) = ctx.index_of(flow.date) else {
+        let Some(index) = ctx.index_of(Ctx::flow_month(&flow)) else {
             continue;
         };
         let value = flow.value;
@@ -771,10 +802,12 @@ pub fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
             FlowClass::Ignored => {}
         }
     }
+    add_income_by_money_date(books, ctx, &mut rows);
     // Today's money is applied to the month's sums once, not to every flow.
     for (row, month) in rows.iter_mut().zip(&ctx.months) {
         for cell in [
             &mut row.income,
+            &mut row.income_by_money_date,
             &mut row.fixed,
             &mut row.daily,
             &mut row.savings_moved,
@@ -791,6 +824,7 @@ pub fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
     for row in &mut rows {
         row.net = row.income - row.fixed - row.daily;
         total.income += row.income;
+        total.income_by_money_date += row.income_by_money_date;
         total.fixed += row.fixed;
         total.daily += row.daily;
         total.savings_moved += row.savings_moved;
@@ -802,6 +836,26 @@ pub fn cashflow_report(books: &Books, ctx: &Ctx) -> CashflowReport {
         meta: ctx.meta(),
         rows,
         total,
+    }
+}
+
+/// Fills each row's `income_by_money_date`: the income of the money date's
+/// month, whatever the report's basis.
+fn add_income_by_money_date(books: &Books, ctx: &Ctx, rows: &mut [CashflowRow]) {
+    if ctx.basis == Basis::MoneyDate {
+        for row in rows.iter_mut() {
+            row.income_by_money_date = row.income;
+        }
+        return;
+    }
+    let flows = in_scope(
+        ctx,
+        flows_between(books, &ctx.cal, &ctx.currency, ctx.start(), ctx.end()),
+    );
+    for flow in flows.iter().filter(|flow| flow.class == FlowClass::Income) {
+        if let Some(index) = ctx.index_of(flow.date) {
+            rows[index].income_by_money_date += flow.value;
+        }
     }
 }
 
@@ -904,7 +958,7 @@ pub fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
         let entry = table
             .entry((order(group), key))
             .or_insert_with(|| (vec![Amount::ZERO; span], Amount::ZERO, Some(group), 0));
-        match ctx.index_of(flow.date) {
+        match ctx.index_of(Ctx::flow_month(flow)) {
             Some(index) => {
                 entry.0[index] += flow.value;
                 if !flow.priced() {
@@ -916,7 +970,7 @@ pub fn categories_report(books: &Books, ctx: &Ctx) -> CategoriesReport {
                     }
                 }
             }
-            None => entry.1 += ctx.restated(flow.value, flow.date),
+            None => entry.1 += ctx.restated(flow.value, Ctx::flow_month(flow)),
         }
     }
     // Today's money is applied to each month's sum once, and the previous period's flows
@@ -1488,7 +1542,10 @@ pub fn inflation_report(books: &Books, ctx: &Ctx) -> InflationReport {
 // -- the calendar -----------------------------------------------------------------------
 
 /// Spending by day of a month (`YYYY-MM`) against the day's allowance,
-/// with what is still to come (plan F6).
+/// with what is still to come (plan F6). Days, the allowance and the pool are
+/// by the money date: the pool is `month_allowance`, which R3 keeps on the
+/// money date. The calendar has no `basis`: spec Q20 (owner decision
+/// 2026-11-25).
 pub fn calendar_month(books: &Books, month: &str, now: i64, zone: &str) -> Result<CalendarMonth> {
     let first = calendar::parse_month(month)
         .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;

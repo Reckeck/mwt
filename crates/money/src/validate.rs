@@ -5,12 +5,18 @@
 
 use std::collections::HashSet;
 
+use chrono::{Datelike, NaiveDate};
 use mwt_base::Amount;
+use mwt_base::calendar::days_in_month;
+use mwt_base::calendar::period::{
+    HalfPart, half_bounds, months_touched, quarter_bounds, year_bounds,
+};
 use mwt_base::error::{Error, Result, WalletRule};
+use mwt_base::limits::MAX_PERIOD_DAYS;
 use mwt_model::CategoryGroup;
 use mwt_model::{
-    AccountRef, AdjustmentTx, DebtEffect, FuturesAction, KindDetails, LegRole, Transaction, TxKind,
-    allowed_kinds,
+    AccountRef, AdjustmentTx, DebtEffect, FuturesAction, KindDetails, LegRole, OpPeriod,
+    PeriodKind, Spread, TopupTx, Transaction, TxKind, TxMeta, allowed_kinds,
 };
 use mwt_model::{Store, StoreKind};
 use mwt_model::{VaultDoc, iso_to_millis};
@@ -207,6 +213,11 @@ pub fn check_adjustment(doc: &VaultDoc, tx: &AdjustmentTx) -> Result<()> {
 /// Every store a transaction is booked on, with the kind it must accept.
 pub fn store_sides(tx: &Transaction) -> Vec<&str> {
     match tx {
+        Transaction::Topup(inner) if !inner.parts.is_empty() => inner
+            .parts
+            .iter()
+            .map(|part| part.store_id.as_str())
+            .collect(),
         Transaction::Topup(inner) => vec![&inner.store_id],
         Transaction::Payment(inner) => vec![&inner.store_id],
         Transaction::Transfer(inner) => [inner.from.store_id(), inner.to.store_id()]
@@ -223,6 +234,37 @@ pub fn store_sides(tx: &Transaction) -> Vec<&str> {
         Transaction::AssetSell(inner) => vec![&inner.store_id],
         Transaction::Adjustment(inner) => vec![&inner.store_id],
     }
+}
+
+/// S2, S14: an income that arrived in parts. At least two parts, each a
+/// positive sum (the store, kind and asset rules run on the sides and legs), summing exactly to the amount, with a valid own date; never together
+/// with a distribution. No parts: nothing to check.
+fn check_parts(income: &TopupTx, now_ms: i64) -> Result<()> {
+    if income.parts.is_empty() {
+        return Ok(());
+    }
+    if income.distribution.is_some() {
+        return Err(invalid(
+            "an income cannot arrive in parts and be distributed at once",
+        ));
+    }
+    if income.parts.len() < 2 {
+        return Err(invalid("an income in parts needs at least two parts"));
+    }
+    let mut total = Amount::ZERO;
+    for part in &income.parts {
+        positive(part.amount, "a part")?;
+        if let Some(moment) = &part.timestamp {
+            check_moment(moment, now_ms)?;
+        }
+        total = total
+            .checked_add(part.amount)
+            .ok_or_else(|| invalid("the parts are too large"))?;
+    }
+    if total != income.amount {
+        return Err(invalid("the parts must add up to the amount"));
+    }
+    Ok(())
 }
 
 /// Plan §4.5, V1–V14 (V13 — negative balances — is a warning, not an error),
@@ -285,6 +327,7 @@ pub fn validate_transaction_at(doc: &VaultDoc, tx: &Transaction, now_ms: i64) ->
             if store.kind == StoreKind::Property && inner.details.unit_price.is_none() {
                 return Err(invalid("buying property needs a unit price"));
             }
+            check_parts(inner, now_ms)?;
         }
         Transaction::Payment(inner) => {
             positive(inner.amount, "the amount")?;
@@ -390,19 +433,25 @@ pub fn validate_transaction_at(doc: &VaultDoc, tx: &Transaction, now_ms: i64) ->
     check_meta(doc, tx, now_ms)
 }
 
-/// V5, V10, V11, V12 — the shared fields.
-fn check_meta(doc: &VaultDoc, tx: &Transaction, now_ms: i64) -> Result<()> {
-    let meta = tx.meta();
-    let kind = tx.kind();
-
-    // V11
-    let millis = iso_to_millis(&meta.timestamp);
-    if millis == 0 && !meta.timestamp.starts_with("1970-01-01T00:00:00") {
+/// V11 — a date of an operation or of one of its parts: valid RFC3339 and at
+/// most `MAX_FUTURE_MS` ahead of `now_ms`.
+fn check_moment(raw: &str, now_ms: i64) -> Result<()> {
+    let millis = iso_to_millis(raw);
+    if millis == 0 && !raw.starts_with("1970-01-01T00:00:00") {
         return Err(invalid("the date is not a valid RFC3339 timestamp"));
     }
     if millis > now_ms + MAX_FUTURE_MS {
         return Err(invalid("the date is too far in the future"));
     }
+    Ok(())
+}
+
+/// V5, V10, V11, V12 — the shared fields.
+fn check_meta(doc: &VaultDoc, tx: &Transaction, now_ms: i64) -> Result<()> {
+    let meta = tx.meta();
+    let kind = tx.kind();
+
+    check_moment(&meta.timestamp, now_ms)?;
 
     // V5
     if matches!(kind, TxKind::Topup | TxKind::Payment) && meta.categories.is_empty() {
@@ -446,5 +495,111 @@ fn check_meta(doc: &VaultDoc, tx: &Transaction, now_ms: i64) -> Result<()> {
     {
         return Err(Error::Missing(format!("contact {contact_id}")));
     }
+    check_period(tx)
+}
+
+fn period_date(raw: &str) -> Result<NaiveDate> {
+    NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        .ok()
+        .filter(|date| date.format("%Y-%m-%d").to_string() == raw)
+        .ok_or_else(|| invalid("a period date must look like YYYY-MM-DD"))
+}
+
+/// P2: the dates of `period` match the normal form of its kind.
+fn check_period_form(period: &OpPeriod) -> Result<(NaiveDate, NaiveDate)> {
+    let start = period_date(&period.start)?;
+    let end = period_date(&period.end)?;
+    if end < start {
+        return Err(invalid("a period must not end before it starts"));
+    }
+    let normal = match period.kind {
+        PeriodKind::Month => {
+            start.day() == 1 && end == start.with_day(days_in_month(start)).unwrap_or(start)
+        }
+        PeriodKind::Half => {
+            let half = if start.day() == 1 {
+                HalfPart::First
+            } else {
+                HalfPart::Second
+            };
+            (start.day() == 1 || start.day() == 16) && (start, end) == half_bounds(start, half)
+        }
+        PeriodKind::Quarter => (start, end) == quarter_bounds(start),
+        PeriodKind::Year => (start, end) == year_bounds(start),
+        PeriodKind::Range => (end - start).num_days() < MAX_PERIOD_DAYS,
+    };
+    if normal {
+        Ok((start, end))
+    } else {
+        Err(invalid("the period does not match its kind"))
+    }
+}
+
+/// P5, P6: one share per month touched, none negative, summing to `amount`.
+fn check_shares(spread: &Spread, months: &[String], amount: Amount) -> Result<()> {
+    let one_each = spread.shares.len() == months.len()
+        && spread
+            .shares
+            .iter()
+            .zip(months)
+            .all(|(share, month)| share.month == *month);
+    if !one_each {
+        return Err(invalid(
+            "a spread needs one share for each month of the period",
+        ));
+    }
+    let mut sum = Amount::ZERO;
+    for share in &spread.shares {
+        if share.amount.is_negative() {
+            return Err(invalid("a share must not be negative"));
+        }
+        sum = sum
+            .checked_add(share.amount)
+            .ok_or_else(|| invalid("the shares are too large"))?;
+    }
+    if sum != amount {
+        return Err(invalid("the shares do not add up to the amount"));
+    }
     Ok(())
 }
+
+/// P1, P2, P5, P6: the period of an operation and its spread. A period over
+/// several months with no spread passes (Q3): it stays a label.
+pub fn check_period_meta(kind: TxKind, meta: &TxMeta, amount: Option<Amount>) -> Result<()> {
+    let Some(period) = &meta.period else {
+        return match meta.spread {
+            Some(_) => Err(invalid("a spread needs a period")),
+            None => Ok(()),
+        };
+    };
+    if !matches!(kind, TxKind::Topup | TxKind::Payment) {
+        return Err(invalid("only an income or an expense has a period"));
+    }
+    let (start, end) = check_period_form(period)?;
+    let Some(spread) = &meta.spread else {
+        return Ok(());
+    };
+    let months = months_touched(start, end);
+    if months.len() < 2 {
+        return Err(invalid("a spread needs a period over more than one month"));
+    }
+    let amount = amount.ok_or_else(|| invalid("this operation has no amount to spread"))?;
+    check_shares(spread, &months, amount)
+}
+
+fn check_period(tx: &Transaction) -> Result<()> {
+    let amount = match tx {
+        Transaction::Topup(inner) => Some(inner.amount),
+        Transaction::Payment(inner) => Some(inner.amount),
+        _ => None,
+    };
+    check_period_meta(tx.kind(), tx.meta(), amount)
+}
+
+#[cfg(test)]
+#[path = "validate_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "validate_parts_tests.rs"]
+mod parts_tests;

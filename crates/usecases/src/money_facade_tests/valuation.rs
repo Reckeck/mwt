@@ -46,6 +46,8 @@ fn property(vault: &mut Session, category: PropertyCategory) -> String {
 
 fn buy(vault: &mut Session, store_id: &str, price: &str, when: &str) {
     let mut tx = Transaction::Topup(TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta: meta("bought", &["income_other"]),
         store_id: store_id.to_string(),
         asset: thing(),
@@ -265,6 +267,8 @@ fn a_purchase_is_signed_with_the_currency_of_its_label() {
     vault.set_base_currency("usd");
     let flat = property(&mut vault, PropertyCategory::Flat);
     let mut tx = Transaction::Topup(TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta: meta("bought", &["income_other"]),
         store_id: flat.clone(),
         asset: thing(),

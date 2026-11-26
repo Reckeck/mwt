@@ -74,6 +74,7 @@ pub fn automation_of(
         time: spec.time.clone(),
         asks: spec.asks,
         for_month_offset: spec.for_month_offset,
+        operation_template_id: spec.operation_template_id.clone(),
     })
 }
 

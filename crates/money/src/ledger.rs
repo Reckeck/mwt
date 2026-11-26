@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use chrono::NaiveDate;
 
 use mwt_base::Amount;
-use mwt_base::calendar::Calendar;
+use mwt_base::calendar::{Calendar, first_of_month, next_month};
 use mwt_base::error::{Error, Result};
 use mwt_base::time::secs_or_now;
 use mwt_model::StoreScope;
@@ -55,6 +55,15 @@ pub struct WalletRow {
 pub struct TxPage {
     pub items: Vec<Transaction>,
     pub total: u32,
+}
+
+/// A span of days the list is for, both ends `YYYY-MM-DD`, inclusive: the
+/// period an operation is «for», not the day the money moved (spec I3).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PeriodFilter {
+    pub from: String,
+    pub to: String,
 }
 
 /// What the operations list and graph show.
@@ -112,6 +121,10 @@ pub struct TxFilter {
     /// (Currency-1 · 7).
     #[serde(default)]
     pub unpriced: bool,
+    /// Only operations whose period (or, with none, the month of their date)
+    /// intersects this span; it combines with `from`/`to` by AND (Q17).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period: Option<PeriodFilter>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -409,6 +422,13 @@ fn filtered<'doc>(
     let cal = Calendar::new(zone);
     let from = parse_day(filter.from.as_deref())?;
     let to = parse_day(filter.to.as_deref())?;
+    let period = match &filter.period {
+        None => None,
+        Some(span) => Some((
+            parse_day(Some(&span.from))?.ok_or_else(empty_period_end)?,
+            parse_day(Some(&span.to))?.ok_or_else(empty_period_end)?,
+        )),
+    };
     let ids = (!filter.scope.store_ids.is_empty()).then(|| resolve_scope(doc, &filter.scope));
     let needle = filter
         .text
@@ -454,6 +474,7 @@ fn filtered<'doc>(
             let day = cal.date_of(secs_or_now(&tx.meta().timestamp));
             from.is_none_or(|first| day >= first) && to.is_none_or(|last| day <= last)
         })
+        .filter(|tx| period.is_none_or(|span| intersects_period(tx, span, &cal)))
         .filter(|tx| !filter.hide_internal || !tx.is_internal(|id| root_of(doc, id)))
         .filter(|tx| !filter.with_fee || tx.legs().iter().any(|leg| leg.role == LegRole::Fee))
         .filter(|tx| !filter.with_attachments || attached.contains(&tx.meta().id))
@@ -531,6 +552,29 @@ fn search_text(doc: &VaultDoc, tx: &Transaction) -> String {
     parts.join(" ").to_lowercase()
 }
 
+fn empty_period_end() -> Error {
+    Error::InvalidInput("period: both ends must look like YYYY-MM-DD".into())
+}
+
+/// Whether the span the operation is for meets `span`. Without a period the
+/// operation is for the month of its date.
+fn intersects_period(tx: &Transaction, span: (NaiveDate, NaiveDate), cal: &Calendar) -> bool {
+    let meta = tx.meta();
+    let own = meta.period.as_ref().and_then(|period| {
+        let start = NaiveDate::parse_from_str(&period.start, "%Y-%m-%d").ok()?;
+        let end = NaiveDate::parse_from_str(&period.end, "%Y-%m-%d").ok()?;
+        Some((start, end))
+    });
+    let (start, end) = own.unwrap_or_else(|| {
+        let day = cal.date_of(secs_or_now(&meta.timestamp));
+        (
+            first_of_month(day),
+            next_month(first_of_month(day)).pred_opt().unwrap_or(day),
+        )
+    });
+    start <= span.1 && end >= span.0
+}
+
 fn parse_day(raw: Option<&str>) -> Result<Option<NaiveDate>> {
     match raw.map(str::trim).filter(|raw| !raw.is_empty()) {
         None => Ok(None),
@@ -566,3 +610,7 @@ fn value_in_base(books: &Books, tx: &Transaction, base: &str) -> Amount {
     }
     gave.max(got).round(2)
 }
+
+#[cfg(test)]
+#[path = "ledger_tests.rs"]
+mod tests;

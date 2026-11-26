@@ -305,7 +305,7 @@ fn comes_back_as_sent<Input>(
 fn a_category_edit_without_a_base_is_returned_as_sent() {
     comes_back_as_sent(
         serde_json::json!({"key": "food", "name": "Food", "group": "daily",
-            "essential": null, "passive": null, "base": null}),
+            "essential": null, "passive": null, "period_rule": null, "clear_period_rule": false, "base": null}),
         rebase_category_input,
     );
 }
@@ -333,12 +333,50 @@ fn a_category_edit_keeps_the_remote_change_of_an_untouched_field() {
         group: CategoryGroup::Daily,
         essential: None,
         passive: None,
+        period_rule: None,
+        clear_period_rule: false,
         base: Some(base),
     };
     let merged = rebase_category_input(&doc, edited).unwrap();
     assert_eq!(merged.name.as_deref(), Some("Groceries"));
     assert_eq!(merged.group, CategoryGroup::Fixed, "the remote group stays");
     assert!(merged.base.is_none());
+}
+
+#[test]
+fn the_rebase_keeps_a_period_rule_changed_elsewhere_when_the_edit_left_it() {
+    use mwt_model::{Category, PeriodRule};
+    let base = Category {
+        key: "pay".into(),
+        name: Some("Pay".into()),
+        period_rule: Some(PeriodRule::PrevMonth),
+        ..Category::default()
+    };
+    let doc = crate::model::vault::VaultDoc {
+        categories: vec![Category {
+            period_rule: Some(PeriodRule::ThisMonth),
+            ..base.clone()
+        }],
+        ..crate::model::vault::VaultDoc::default()
+    };
+    let untouched = UpdateCategoryInput {
+        key: "pay".into(),
+        name: Some("Pay".into()),
+        base: Some(base.clone()),
+        ..UpdateCategoryInput::default()
+    };
+    let merged = rebase_category_input(&doc, untouched).unwrap();
+    assert_eq!(merged.period_rule, Some(PeriodRule::ThisMonth));
+    let cleared = UpdateCategoryInput {
+        key: "pay".into(),
+        name: Some("Pay".into()),
+        clear_period_rule: true,
+        base: Some(base),
+        ..UpdateCategoryInput::default()
+    };
+    let merged = rebase_category_input(&doc, cleared).unwrap();
+    assert_eq!(merged.period_rule, None);
+    assert!(merged.clear_period_rule);
 }
 
 #[test]

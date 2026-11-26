@@ -6,16 +6,19 @@ import { mockNetWorth } from '../market'
 import { ledgerWorth } from './worth-split'
 
 export function cashflow(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): CashflowReport {
-  const all = flows(ctx)
+  const all = flows(ctx, filter.basis ?? 'period')
+  const byDate = flows(ctx, 'money_date')
   const rows = months.map((month): CashflowRow => {
-    const of = (test: (flow: MockFlow) => boolean) =>
-      all.filter((flow) => flow.month === month && test(flow)).reduce((sum, flow) => sum + flow.value, 0)
+    const of = (test: (flow: MockFlow) => boolean, source = all) =>
+      source.filter((flow) => flow.month === month && test(flow)).reduce((sum, flow) => sum + flow.value, 0)
     const income = of((flow) => flow.incoming && flow.group === 'income')
+    const incomeByDate = of((flow) => flow.incoming && flow.group === 'income', byDate)
     const fixed = of((flow) => !flow.incoming && flow.group === 'fixed')
     const daily = of((flow) => !flow.incoming && flow.group !== 'fixed' && flow.group !== 'service')
     return {
       month,
       income: money(income),
+      income_by_money_date: money(incomeByDate),
       fixed: money(fixed),
       daily: money(daily),
       savings_moved: '0',
@@ -31,6 +34,7 @@ export function cashflow(ctx: AnalyticsMockContext, months: string[], filter: Re
     total: {
       month: '',
       income: sum('income'),
+      income_by_money_date: sum('income_by_money_date'),
       fixed: sum('fixed'),
       daily: sum('daily'),
       savings_moved: '0',
@@ -76,7 +80,7 @@ export function yearReport(ctx: AnalyticsMockContext, months: string[], filter: 
 }
 
 export function categories(ctx: AnalyticsMockContext, months: string[], filter: ReportFilter): CategoriesReport {
-  const all = flows(ctx).filter((flow) => months.includes(flow.month))
+  const all = flows(ctx, filter.basis ?? 'period').filter((flow) => months.includes(flow.month))
   const groups: CategoryGroupBlock[] = []
   for (const group of ['income', 'fixed', 'daily', 'savings'] as CategoryGroup[]) {
     const keys = [...new Set(all.filter((flow) => (flow.group ?? 'daily') === group).map((flow) => flow.key))]

@@ -10,6 +10,7 @@ import { mockFilterTxs, mockStores } from './demo'
 import { mockHistory, mockNetWorth, mockSummary } from './market'
 import { mockInvestments } from './investments'
 import { mockAncestors, mockExploreCtx, mockOverview, mockOwnPositions, mockStore } from './tree'
+import { prepareEnvelopeDelete } from './planning/distribution'
 import { goals } from './planning/state'
 import { mockAppSettings, mockSettings } from './vault-data'
 
@@ -98,6 +99,7 @@ export const walletsCommands: MockCommands = {
   },
   delete_envelope: ({ args }) => {
     const index = mockEnvelopes.findIndex((entry) => entry.id === String(args?.id))
+    if (index >= 0) prepareEnvelopeDelete(mockEnvelopes[index])
     if (index >= 0) mockEnvelopes.splice(index, 1)
     return resolve({})
   },

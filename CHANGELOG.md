@@ -15,6 +15,13 @@ rejected with `UNSUPPORTED`.
 
 ## [Unreleased]
 
+### Added
+
+- **Period, spread, parts and distribution.** An operation can be recorded «for» another period,
+  spread over several months, and an income can arrive in parts or be distributed by a rule. Operation
+  templates (`operation_templates`) save these rules. The vault schema change is additive;
+  `VAULT_FORMAT_VERSION` is still 1 and an old vault opens unchanged.
+
 ### Changed — renaming
 
 - **TradeApp → Multi Wallet Tracker (MWT).** The new name in the window, menu and

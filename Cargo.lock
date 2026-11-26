@@ -3261,6 +3261,7 @@ dependencies = [
  "mwt-model",
  "mwt-money",
  "mwt-planning",
+ "mwt-testkit",
  "rust_decimal",
  "serde",
  "serde_json",

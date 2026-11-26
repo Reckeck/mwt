@@ -50,6 +50,8 @@ fn a_sale_shows_the_book_value_and_the_gain() {
     crate::usecases::money::transactions::add_transaction(
         &mut vault,
         Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta: meta("bought", &["income_other"]),
             store_id: things.clone(),
             asset: car.clone(),

@@ -4224,6 +4224,7 @@
   "sync.coll.manual_prices": "Hand-set prices",
   "sync.coll.envelopes": "Envelopes",
   "sync.coll.debt_terms": "Debt terms",
+  "sync.coll.operation_templates": "Operation templates",
   "sync.coll.shared_events": "Shared expenses",
   "sync.coll.key_rates": "Key rate",
   "sync.coll.workflow_runs": "Workflow runs",

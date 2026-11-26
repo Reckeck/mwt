@@ -302,6 +302,8 @@ pub const SETTINGS_SCOPE: &[(&str, Scope)] = &[
     ("carry_since", Scope::Group),
     ("onboarding_checklist_hidden", Scope::Group),
     ("schedule_timezone", Scope::Group),
+    // Which one-time fixups ran: the vault's, so a second device does not repeat them.
+    ("migrations_done", Scope::Group),
 ];
 
 /// Most days of cached prices and rates the first sync sends.
@@ -402,6 +404,7 @@ pub static COLLECTIONS: &[Collection] = &[
         ..records("envelopes", ID)
     },
     records("debt_terms", ID),
+    records("operation_templates", ID),
     // People, purchases and settlements added on different devices all stay.
     Collection {
         flatten_by: &[

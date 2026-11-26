@@ -1,18 +1,30 @@
 use std::collections::HashSet;
 
 use crate::error::{Error, Result};
-use crate::model::planning::{AutomationOutcome, AutomationRun, AutomationSpec};
+use crate::model::notify::{NoticeCategory, notice};
+use crate::model::planning::{Automation, AutomationOutcome, AutomationRun, AutomationSpec};
 use crate::model::store::Holding;
+use crate::model::transaction::{Transaction, TxOrigin};
 use crate::model::vault::VaultDoc;
-use crate::planning::automation_plan::runs_in;
+use crate::money::interest::calendar_of;
+use crate::planning::automation_plan::{automation_in, runs_in};
 use crate::planning::automations::{
     AutomationDraft, AutomationSimulation, SimulatedBalance, SimulatedRun,
 };
+use crate::planning::automations::{automation_draft, clear_estimated, set_main_amount};
+use crate::service::Session;
 use crate::time::unix_secs;
+use crate::usecases::money::transactions::{CreationRules, apply_creation_rules_on};
+use crate::usecases::planning::distribution::OVER_ALLOCATED;
+use crate::usecases::planning::templates::{RuleRows, held_quantity, resolve_rule_rows};
 use crate::workflow::automation::{self as graph_of, automation_graph};
 use crate::workflow::exec::{StepStatus, TraceStep};
+use crate::workflow::graph::Graph;
 use crate::workflow::model::{GraphVersion, MAX_GRAPH_VERSIONS, RunOutcome, Workflow, WorkflowRun};
 use crate::{Amount, calendar};
+use chrono::NaiveDate;
+use mwt_model::OnOtherAmount;
+use mwt_model::{DistributionRow, OperationTemplate};
 
 /// Run history over the document, for the command that holds the vault.
 pub fn automation_runs(doc: &VaultDoc, automation_id: Option<&str>) -> Vec<AutomationRun> {
@@ -69,7 +81,14 @@ pub(crate) fn rewrite_automation(
     draft: &AutomationDraft,
     now: &str,
 ) -> Result<()> {
-    let spec = draft.spec();
+    let mut spec = draft.spec();
+    // A draft without the template link keeps the stored one.
+    if spec.operation_template_id.is_none() {
+        spec.operation_template_id = workflow
+            .automation
+            .as_ref()
+            .and_then(|stored| stored.operation_template_id.clone());
+    }
     let graph = graph_json(&spec)?;
     if workflow.graph != graph {
         workflow.versions.push(GraphVersion {
@@ -200,5 +219,204 @@ pub(crate) fn manual_run_record(
         }],
         dry_run: false,
         planned_date: None,
+    }
+}
+
+/// What a run takes from the operation template of its automation (spec op-period T5, D5, D12):
+/// the period rule and the distribution rule. The booking itself stays the embedded draft.
+pub(crate) struct RunTemplate {
+    template: OperationTemplate,
+    /// What the rule expects the payout to be (D7).
+    expected: Amount,
+    /// The day the money was planned for, when it is not the day of the run (D5).
+    money_date: Option<NaiveDate>,
+    /// The user confirmed the amount and the way to distribute: a rule that still asks or asks
+    /// too much refuses the booking instead of leaving the income whole.
+    confirmed: bool,
+    workflow_name: String,
+    run_id: String,
+}
+
+/// D7: the payout a rule expects of an automation: its estimate when the amount differs, else
+/// the amount of the embedded draft.
+pub(crate) fn expected_payout(automation: &Automation) -> Amount {
+    graph_of::template_amount(&automation_draft(automation))
+}
+
+/// What the user answered to the question of an automation run that asks (D9, Q12, I12): carried
+/// into the resumed run, so the confirmed amount and rows are booked in the run's one write.
+#[derive(Debug, Clone)]
+pub(crate) struct Confirmation {
+    pub(crate) workflow_id: String,
+    pub(crate) amount: Amount,
+    /// How to distribute, when the user chose one; else the rule's own mode.
+    pub(crate) mode: Option<OnOtherAmount>,
+}
+
+impl Confirmation {
+    fn answers(&self, tx: &Transaction) -> bool {
+        matches!(&tx.meta().origin, TxOrigin::Workflow { workflow_id, .. } if *workflow_id == self.workflow_id)
+    }
+
+    /// The booking at the confirmed amount, no longer approximate.
+    pub(crate) fn settle(&self, tx: &mut Transaction) -> Result<()> {
+        if !self.answers(tx) {
+            return Ok(());
+        }
+        set_main_amount(tx, self.amount)?;
+        clear_estimated(tx);
+        Ok(())
+    }
+}
+
+/// The template a booked operation of an automation run answers to; `None` for an operation of
+/// another origin or of an automation without a (live) template: those behave as before.
+pub(crate) fn run_template(vault: &Session, tx: &Transaction) -> Option<RunTemplate> {
+    let doc = &vault.doc;
+    let TxOrigin::Workflow {
+        workflow_id,
+        run_id,
+        planned_at,
+        ..
+    } = &tx.meta().origin
+    else {
+        return None;
+    };
+    let workflow = doc
+        .workflows
+        .iter()
+        .find(|workflow| &workflow.id == workflow_id)?;
+    let template_id = workflow
+        .automation
+        .as_ref()?
+        .operation_template_id
+        .as_deref()?;
+    let template = doc
+        .operation_templates
+        .iter()
+        .find(|template| template.id == template_id)?;
+    let automation = automation_in(&vault.books(), workflow)?;
+    let confirmation = vault
+        .confirmation
+        .as_ref()
+        .filter(|confirmation| confirmation.answers(tx));
+    let mut template = template.clone();
+    if let (Some(rule), Some(mode)) = (
+        template.distribution.as_mut(),
+        confirmation.and_then(|confirmation| confirmation.mode),
+    ) {
+        rule.on_other_amount = mode;
+    }
+    Some(RunTemplate {
+        template,
+        expected: expected_payout(&automation),
+        money_date: planned_at
+            .as_deref()
+            .and_then(|planned| calendar_of(doc).date_of_iso(planned)),
+        confirmed: confirmation.is_some(),
+        workflow_name: workflow.name.clone(),
+        run_id: run_id.clone(),
+    })
+}
+
+/// The graph a workflow runs: an automation's through [`firing_graph`], any other as stored.
+/// Every path that starts a run (schedule, Run now, retry) takes its graph here.
+pub(crate) fn run_graph(doc: &VaultDoc, workflow: &Workflow) -> Result<Graph> {
+    let stored = Graph::parse(&workflow.graph)?;
+    Ok(match &workflow.automation {
+        Some(spec) => firing_graph(doc, spec, stored),
+        None => stored,
+    })
+}
+
+/// The graph an automation fires. A distribution rule that asks needs the question ahead of the
+/// booking though the form did not set it (D9, Q12): the stored graph then gets it.
+pub(crate) fn firing_graph(doc: &VaultDoc, spec: &AutomationSpec, stored: Graph) -> Graph {
+    let rule_asks = spec
+        .operation_template_id
+        .as_deref()
+        .and_then(|id| doc.operation_templates.iter().find(|known| known.id == id))
+        .and_then(|template| template.distribution.as_ref())
+        .is_some_and(|rule| rule.on_other_amount == OnOtherAmount::Ask);
+    if spec.asks || !rule_asks {
+        return stored;
+    }
+    automation_graph(&AutomationSpec {
+        asks: true,
+        ..spec.clone()
+    })
+}
+
+impl RunTemplate {
+    /// The period of the run comes from the template's rule, else the category's (D3), cut from
+    /// the money date of the plan (D5).
+    pub(crate) fn apply_creation_rules(&self, vault: &Session, tx: &mut Transaction) {
+        let rules = CreationRules {
+            template_rule: self.template.period_rule,
+            no_period_rule: false,
+        };
+        apply_creation_rules_on(vault, tx, &rules, self.money_date);
+    }
+
+    /// The distribution rows of an income, resolved against the card as it is before the rows
+    /// (D8). `ask` and a rule with nothing to move leave the income whole; `over` too, with a
+    /// notice that the income is undistributed (Q11). A refused rule is an error, nothing is booked. After the
+    /// user's confirmation `ask` and `over` are errors: the answer must distribute.
+    pub(crate) fn rows(
+        &self,
+        vault: &mut Session,
+        tx: &Transaction,
+    ) -> Result<Option<Vec<DistributionRow>>> {
+        let (Some(rule), Transaction::Topup(topup)) = (&self.template.distribution, tx) else {
+            return Ok(None);
+        };
+        let held = held_quantity(vault, topup);
+        Ok(match resolve_rule_rows(rule, topup, self.expected, held)? {
+            RuleRows::Ask if self.confirmed => {
+                return Err(Error::InvalidInput(
+                    "the rule still asks: choose how to distribute".into(),
+                ));
+            }
+            RuleRows::Over(over) if self.confirmed => {
+                return Err(Error::InvalidInput(format!(
+                    "{OVER_ALLOCATED}: the rows ask {over} more than the income"
+                )));
+            }
+            RuleRows::Ask => None,
+            RuleRows::Rows(rows) => rows,
+            RuleRows::Over(over) => {
+                self.notice_over(vault, tx, over);
+                None
+            }
+        })
+    }
+
+    /// The income is booked alone; the notice says the distribution did not happen. It is kept
+    /// on the session for the run's caller to deliver (Q11).
+    fn notice_over(&self, vault: &mut Session, tx: &Transaction, over: Amount) {
+        let date = tx.meta().timestamp.get(..10).unwrap_or_default();
+        let name = &self.workflow_name;
+        let (title, body) = if vault.notice_ru {
+            (
+                format!("«{name}» {date}: распределение не выполнено"),
+                format!(
+                    "Правило просит на {over} больше, чем пришло; доход записан без распределения"
+                ),
+            )
+        } else {
+            (
+                format!("“{name}” on {date}: not distributed"),
+                format!("The rule asks {over} more than came; the income is booked undistributed"),
+            )
+        };
+        let record = notice(
+            NoticeCategory::Automation,
+            format!("automation-undistributed:{}", self.run_id),
+            &title,
+            body,
+            Some(crate::routes::AUTOMATIONS.to_string()),
+            tx.meta().timestamp.clone(),
+        );
+        vault.run_notices.push(record);
     }
 }

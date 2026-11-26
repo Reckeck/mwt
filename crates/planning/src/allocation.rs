@@ -12,6 +12,8 @@ use mwt_model::{AssetClass, AssetClassLink};
 use mwt_model::{Holding, StoreKind};
 use mwt_money::books::Books;
 
+use crate::flows::Basis;
+
 /// Ids of the preset baskets; an empty name on one of them means «the UI's
 /// own name for it».
 pub const PRESET_LOCAL: &str = "local";
@@ -320,7 +322,8 @@ pub fn topup_advice(
     }
 }
 
-/// Last month's `savings_fact` in `currency`, never below zero.
+/// Last month's `savings_fact` in `currency`, never below zero. Read by the
+/// money date (R3): a period does not move it.
 pub(crate) fn last_month_savings(
     books: &Books<'_>,
     now: i64,
@@ -331,7 +334,7 @@ pub(crate) fn last_month_savings(
     let today = cal.date_of(now);
     let first = today - Duration::days(i64::from(chrono::Datelike::day(&today)) - 1);
     let month = calendar::month_key(first - Duration::days(1));
-    let saved = crate::budget::month_summary(books, &month, zone)
+    let saved = crate::budget::month_summary_by(books, &month, zone, Some(Basis::MoneyDate))
         .map(|summary| {
             books
                 .rate_book()

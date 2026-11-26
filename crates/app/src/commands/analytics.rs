@@ -12,6 +12,7 @@ use mwt_model::Pinned;
 use mwt_model::Transaction;
 use mwt_money::month_balance::MonthBalance;
 use mwt_money::search::{PinnedView, SearchEntry};
+use mwt_planning::flows::Basis;
 use mwt_reports::dashboard::SpendingOverview;
 use mwt_reports::dashboard_tiles::{MonthPace, NetWorthTrend};
 use mwt_reports::dashboard_today::{DashboardToday, ScenarioStatus};
@@ -155,15 +156,17 @@ pub async fn get_calendar(
 #[tauri::command]
 pub async fn get_spending_overview(
     period: Option<DashPeriod>,
+    basis: Option<Basis>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<SpendingOverview, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
         let period = period.unwrap_or(vault.doc.settings.dashboard_period);
-        Ok(dashboard::spending_overview(
+        Ok(dashboard::spending_overview_by(
             &vault.books(),
             period,
+            basis.unwrap_or(Basis::Period),
             now_secs(),
             &zone,
         ))
@@ -174,13 +177,15 @@ pub async fn get_spending_overview(
 /// previous month to the same date, the plan to date and the growing categories.
 #[tauri::command]
 pub async fn get_month_pace(
+    basis: Option<Basis>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MonthPace, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(dashboard_tiles::month_pace(
+        Ok(dashboard_tiles::month_pace_by(
             &vault.books(),
+            basis.unwrap_or(Basis::Period),
             now_secs(),
             &zone,
         ))

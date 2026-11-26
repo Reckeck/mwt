@@ -4,9 +4,11 @@ use mwt_model::StoreKind;
 use mwt_model::Transaction;
 use mwt_model::TxProperty;
 use mwt_usecases::ipc_contract::{
-    AddLinkedTransactionsInput, AdjustmentDraftInput, PreviewTransactionInput, TransactionInput,
-    TransactionKinds, UpdateTransactionInput,
+    AddLinkedTransactionsInput, AdjustmentDraftInput, DistributeIncomeInput, DistributedIncome,
+    DistributionPreview, IncomeTree, PreviewDistributionInput, PreviewTransactionInput,
+    TransactionInput, TransactionKinds, UpdateDistributionInput, UpdateTransactionInput,
 };
+use mwt_usecases::usecases::planning::{distribution, income_distribution};
 
 use mwt_household::property_links::tx_property_links as property_link_reads;
 use mwt_money::adjustments::AdjustmentDraft;
@@ -15,6 +17,7 @@ use mwt_money::preview::TxPreview;
 use mwt_money::{preview, rebase};
 use mwt_usecases::usecases::household::ledger;
 use mwt_usecases::usecases::money::adjustments::adjustment_draft;
+use mwt_usecases::usecases::money::transactions::CreationRules;
 use mwt_usecases::usecases::money::{rates, transactions};
 
 use crate::commands::AppState;
@@ -91,7 +94,7 @@ pub async fn get_tx_graph(
 }
 
 /// Every kind of transaction goes through here: build, auto-categorize,
-/// validate, append, re-derive holdings, persist.
+/// give a period without one by the rules (`no_period_rule` opts out), validate, append, re-derive holdings, persist.
 #[tauri::command]
 pub async fn add_transaction(
     input: TransactionInput,
@@ -102,10 +105,15 @@ pub async fn add_transaction(
         let mut input = input;
         with_vault_mut::<_, IpcError>(&state, |vault| {
             rates::resolve_input_price(vault, &mut input)?;
-            transactions::add_transaction_for(
+            let rules = CreationRules {
+                no_period_rule: input.common().no_period_rule,
+                ..CreationRules::default()
+            };
+            transactions::add_transaction_ruled(
                 vault,
                 input.to_transaction(),
                 input.property_id().as_deref(),
+                &rules,
             )
         })?
     };
@@ -126,9 +134,16 @@ pub async fn preview_transaction(
         if rates::resolve_input_price(vault, &mut draft).is_err() {
             draft.common_mut().price = None;
         }
+        let mut tx = draft.to_transaction();
+        transactions::settle_for_preview(
+            vault,
+            &mut tx,
+            input.replaces.as_deref(),
+            draft.common().no_period_rule,
+        );
         Ok(preview::preview_transaction(
             &vault.books(),
-            draft.to_transaction(),
+            tx,
             input.replaces.as_deref(),
         ))
     })
@@ -220,4 +235,69 @@ pub async fn transaction_kinds_for_store_kind(
     Ok(TransactionKinds::for_store_kind(kind))
 }
 
-ipc_commands!(transactions_commands, TRANSACTIONS_NAMES, commands::transactions: [list_transactions, export_transactions_csv, list_transactions_page, get_tx_graph, add_transaction, preview_transaction, update_transaction, add_linked_transactions, get_adjustment_draft, tx_property_links, delete_transaction, transaction_kinds_for_store_kind]);
+// -- income distribution (spec op-period I8-I10) -------------------------------------
+
+/// The rows of a distribution against an income, the way a save would book them; writes nothing.
+#[tauri::command]
+pub async fn preview_distribution(
+    input: PreviewDistributionInput,
+    state: State<'_, AppState>,
+) -> Result<DistributionPreview, IpcError> {
+    with_vault(&state, |vault| {
+        income_distribution::preview_income_distribution(vault, input)
+    })
+}
+
+/// An income (a draft is saved first) and its distribution: the income, its transfers and its
+/// envelope moves are written together or not at all.
+#[tauri::command]
+pub async fn distribute_income(
+    input: DistributeIncomeInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<DistributedIncome, IpcError> {
+    let distributed = with_vault_mut::<_, IpcError>(&state, |vault| {
+        income_distribution::distribute_income(vault, input)
+    })?;
+    enrich_in_background(&app, distributed.income.meta().id.clone());
+    Ok(distributed)
+}
+
+/// The stored parts of an income, top to bottom, each with the record it produced; the marker
+/// «разложено на N» is the parts without the remainder.
+#[tauri::command]
+pub async fn get_income_distribution(
+    income_id: String,
+    state: State<'_, AppState>,
+) -> Result<IncomeTree, IpcError> {
+    with_vault(&state, |vault| {
+        income_distribution::income_tree(vault, &income_id)
+    })
+}
+
+/// «Изменить раскладку»: the effects of dropped or changed parts go, the new ones are booked.
+#[tauri::command]
+pub async fn update_distribution(
+    input: UpdateDistributionInput,
+    state: State<'_, AppState>,
+) -> Result<IncomeTree, IpcError> {
+    with_vault_mut(&state, |vault| {
+        distribution::replace_distribution(vault, &input.income_id, &input.rows)?;
+        income_distribution::income_tree(vault, &input.income_id)
+    })
+}
+
+/// Undo: every effect is removed and the income stores no distribution. Returns the income.
+#[tauri::command]
+pub async fn undo_distribution(
+    income_id: String,
+    state: State<'_, AppState>,
+) -> Result<Transaction, IpcError> {
+    with_vault_mut(&state, |vault| {
+        distribution::remove_distribution(vault, &income_id)?;
+        income_distribution::income_of(vault, &income_id)
+            .map(|topup| Transaction::Topup(topup.clone()))
+    })
+}
+
+ipc_commands!(transactions_commands, TRANSACTIONS_NAMES, commands::transactions: [list_transactions, export_transactions_csv, list_transactions_page, get_tx_graph, add_transaction, preview_transaction, update_transaction, add_linked_transactions, preview_distribution, distribute_income, get_income_distribution, update_distribution, undo_distribution, get_adjustment_draft, tx_property_links, delete_transaction, transaction_kinds_for_store_kind]);

@@ -485,6 +485,8 @@ mod tests {
         let mut meta = TxMeta::new("first buy");
         meta.categories = vec!["salary".into()];
         let tx = Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: store.id.clone(),
             asset: btc.clone(),
@@ -980,6 +982,56 @@ mod tests {
         }
     }
 
+    /// Every key an op-period field would write; none may appear in a record of the old fixture.
+    const OP_PERIOD_KEYS: [&str; 7] = [
+        "period",
+        "spread",
+        "parts",
+        "distribution",
+        "income_ref",
+        "operation_template_id",
+        "period_rule",
+    ];
+
+    fn keys_found(value: &Json, found: &mut Vec<String>) {
+        match value {
+            Json::Object(entries) => {
+                for (key, inner) in entries {
+                    if OP_PERIOD_KEYS.contains(&key.as_str()) {
+                        found.push(key.clone());
+                    }
+                    keys_found(inner, found);
+                }
+            }
+            Json::Array(items) => items.iter().for_each(|item| keys_found(item, found)),
+            _ => {}
+        }
+    }
+
+    /// M2: the old fixture opens in JSON and MessagePack with equal data, and re-saving it
+    /// writes no op-period key for old records.
+    #[test]
+    fn m2_old_fixture_opens_equal_and_writes_no_new_key() {
+        let [(json_name, _, json_bytes), (pack_name, _, pack_bytes)] = V4_FIXTURES;
+        let (from_json, _) = open_v4_fixture(json_name, json_bytes);
+        let (from_pack, _) = open_v4_fixture(pack_name, pack_bytes);
+        assert_eq!(from_json.doc, from_pack.doc);
+        assert!(from_json.doc.operation_templates.is_empty());
+        let written = serde_json::to_value(&from_json.doc).unwrap();
+        // Records that gain fields: operations, categories, automations (budgets have their own `period`).
+        let mut found = Vec::new();
+        for collection in ["transactions", "categories", "workflows"] {
+            keys_found(&written[collection], &mut found);
+        }
+        assert!(
+            found.is_empty(),
+            "new keys written for old records: {found:?}"
+        );
+        let packed = rmp_serde::to_vec_named(&from_pack.doc).unwrap();
+        let reread: mwt_model::VaultDoc = rmp_serde::from_slice(&packed).unwrap();
+        assert_eq!(reread, from_pack.doc);
+    }
+
     #[test]
     fn v4_fixture_is_refused_with_another_password() {
         for (name, _, bytes) in V4_FIXTURES {
@@ -997,7 +1049,12 @@ mod tests {
     fn v4_fixture_fills_every_collection() {
         let doc = v4_expected();
         let fields = doc.as_object().unwrap();
+        // Added after the fixture was sealed (op-period T1): the old file has none, by design.
+        let added_later = ["operation_templates"];
         for (field, value) in fields {
+            if added_later.contains(&field.as_str()) {
+                continue;
+            }
             let empty = match value {
                 Json::Array(items) => items.is_empty(),
                 Json::Object(entries) => entries.is_empty(),

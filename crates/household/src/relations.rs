@@ -18,7 +18,7 @@ use mwt_model::StoreScope;
 use mwt_model::VaultDoc;
 use mwt_model::Workflow;
 use mwt_model::{Budget, BudgetTarget, CalcScenario, PriceAlert};
-use mwt_model::{Transaction, TxOrigin};
+use mwt_model::{Transaction, TxOrigin, made_by};
 use mwt_money::search::main_amount;
 use mwt_money::tree::{find_store, resolve_scope};
 
@@ -672,11 +672,7 @@ fn workflow_relations(doc: &VaultDoc, id: &str) -> Vec<Option<RelationGroup>> {
     let created = newest_first(
         doc.transactions
             .iter()
-            .filter(|tx| match &tx.meta().origin {
-                TxOrigin::Automation { automation_id, .. } => automation_id == id,
-                TxOrigin::Workflow { workflow_id, .. } => workflow_id == id,
-                TxOrigin::Manual | TxOrigin::Import { .. } => false,
-            })
+            .filter(|tx| made_by(tx, id))
             .collect(),
     );
     let stores = doc
@@ -783,4 +779,63 @@ fn alert_item(alert: &PriceAlert) -> RelationItem {
     item.currency = Some(alert.currency.clone());
     item.archived = !alert.active;
     item
+}
+
+#[cfg(test)]
+mod tests {
+    use mwt_model::TxOrigin;
+    use mwt_testkit::builders::topup;
+
+    use super::*;
+
+    fn workflow(id: &str) -> Workflow {
+        Workflow {
+            id: id.into(),
+            name: "Salary".into(),
+            description: String::new(),
+            active: true,
+            graph: String::new(),
+            created_at: String::new(),
+            updated_at: String::new(),
+            react_to_workflows: false,
+            max_amount: None,
+            max_amount_currency: None,
+            versions: Vec::new(),
+            tests: Vec::new(),
+            draft: None,
+            automation: None,
+        }
+    }
+
+    fn made(workflow_id: &str, income_ref: Option<&str>) -> Transaction {
+        let mut tx = topup("card", "100");
+        tx.meta_mut().origin = TxOrigin::Workflow {
+            workflow_id: workflow_id.into(),
+            run_id: String::new(),
+            planned_at: None,
+            planned_date: None,
+            estimated: false,
+            run_key: None,
+        };
+        tx.meta_mut().income_ref = income_ref.map(str::to_string);
+        tx
+    }
+
+    #[test]
+    fn a_distributing_salary_run_lists_the_income_and_not_its_transfers() {
+        let mut doc = VaultDoc::default();
+        doc.workflows.push(workflow("salary"));
+        let income = made("salary", None);
+        let income_id = income.meta().id.clone();
+        let transfer = made("salary", Some(&income_id));
+        doc.transactions.push(income);
+        doc.transactions.push(transfer);
+        let groups = relations(&doc, &EntityRef::new(EntityKind::Workflow, "salary"));
+        let created = groups
+            .iter()
+            .find(|group| group.kind == RelationKind::Created)
+            .expect("a created group");
+        assert_eq!(created.total, 1);
+        assert_eq!(created.items[0].target.id, income_id);
+    }
 }

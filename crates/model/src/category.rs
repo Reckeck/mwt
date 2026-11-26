@@ -41,6 +41,11 @@ pub struct Category {
     // new data may lack it: `None` is the legitimate "take the default by key" value.
     #[serde(default)]
     pub passive: Option<bool>,
+    /// The default «за причину» of an operation in this category (spec D1);
+    /// applied at creation only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<crate::template::PeriodRule>,
 }
 
 impl Category {
@@ -52,6 +57,7 @@ impl Category {
             archived: false,
             essential: None,
             passive: None,
+            period_rule: None,
         }
     }
 

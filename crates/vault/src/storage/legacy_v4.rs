@@ -567,6 +567,7 @@ impl From<VaultDocV4> for VaultDoc {
             workflow_queue,
             workflow_state,
             workflow_waits: workflow_waits.into_iter().map(WorkflowWait::from).collect(),
+            operation_templates: Vec::new(),
             import_runs,
             discarded_imports,
             calc_scenarios,
@@ -667,6 +668,7 @@ impl From<SettingsV4> for Settings {
             onboarding_checklist_hidden,
             schedule_timezone,
             crypto_raise_pending,
+            migrations_done: Vec::new(),
         }
     }
 }
@@ -680,6 +682,7 @@ impl From<CategoryV4> for Category {
             archived: old.archived,
             essential: old.essential,
             passive: old.passive,
+            period_rule: None,
         }
     }
 }
