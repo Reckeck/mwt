@@ -17,7 +17,7 @@ import type { NetWorthProps, NetWorthSpan } from './net-worth.types'
  * The portfolio hero: capital total, its change over the last month, and the line over the chosen span
  * (`--chart-*` colours, so both themes follow). The span is the owner's (`v-model:span`), the report is theirs too.
  */
-const props = withDefaults(defineProps<NetWorthProps>(), { loading: false })
+const props = defineProps<NetWorthProps>()
 const span = defineModel<NetWorthSpan>('span', { required: true })
 
 const SPANS: NetWorthSpan[] = ['last3', 'last6', 'last12', 'all']

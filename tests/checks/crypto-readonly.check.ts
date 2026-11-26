@@ -7,32 +7,12 @@ import { join, relative } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CRYPTO_ALLOWED_CALLS, CRYPTO_MODULE_SLICES } from '../../src/entities/crypto-tx/model/readonly-lists'
 import { expectNone, ROOT } from './lib/report'
 import { walk } from './lib/walk'
 
-const MODULE = [
-  'src/entities/crypto-tx',
-  'src/entities/crypto-account',
-  'src/entities/crypto-token',
-  'src/entities/crypto-position',
-  'src/pages/crypto-positions',
-  'src/widgets/price-chart',
-].map((part) => join(ROOT, part))
-
-/**
- * Everything these screens may ask the backend for. A command that would add or drop an operation or position
- * has to be added here first, and that is the review.
- */
-const ALLOWED_CALLS = [
-  'crypto_list_accounts',
-  'crypto_sync_status',
-  'crypto_list_tokens',
-  'crypto_list_positions',
-  'crypto_confirm_token',
-  'crypto_reject_token',
-  'crypto_clear_token_verdict',
-  'get_candles',
-]
+const MODULE = CRYPTO_MODULE_SLICES.map((part) => join(ROOT, part))
+const ALLOWED_CALLS: readonly string[] = CRYPTO_ALLOWED_CALLS
 
 /** A fiat write surface: none of these belongs to a screen of the module. */
 const FIAT_WRITE =

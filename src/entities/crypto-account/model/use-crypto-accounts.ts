@@ -1,4 +1,3 @@
-import { type MaybeRefOrGetter, computed, toValue } from 'vue'
 import { keepPreviousData, useQuery } from '@tanstack/vue-query'
 
 import { call } from '@/shared/api/ipc'
@@ -12,16 +11,6 @@ export function useCryptoAccounts() {
     queryFn: () => call<CryptoAccountView[]>('crypto_list_accounts'),
     placeholderData: keepPreviousData,
   })
-}
-
-/** The account a wallet shows (`Store.crypto_account_id`), once the list is there. */
-export function useCryptoAccountOf(accountId: MaybeRefOrGetter<string | null | undefined>) {
-  const accounts = useCryptoAccounts()
-  const account = computed(() => {
-    const id = toValue(accountId)
-    return id ? (accounts.data.value ?? []).find((entry) => entry.id === id) : undefined
-  })
-  return { accounts, account }
 }
 
 /** When each account was last read and whether the module may talk to the providers at all. */

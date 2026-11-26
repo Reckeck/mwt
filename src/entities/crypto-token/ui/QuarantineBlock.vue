@@ -7,7 +7,7 @@ import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 
 import type { QuarantineRow } from '../crypto-token.types'
-import { shortContract } from '../lib/short-contract'
+import { shortHex } from '@/shared/lib/short-hex'
 
 /**
  * The tokens that came to an address by themselves and wait for a decision: not in the address's value, its
@@ -43,7 +43,7 @@ function reason(row: QuarantineRow): string {
         <div class="flex min-w-0 flex-col gap-0.5">
           <span class="truncate font-medium">{{ row.symbol }} · {{ formatQuantity(row.quantity, 2) }}</span>
           <span class="break-words text-xs text-muted-foreground">
-            {{ t('cryptoTrack.quarantine.meta', { contract: shortContract(row.contract), date: formatDate(row.firstSeen) }) }}
+            {{ t('cryptoTrack.quarantine.meta', { contract: shortHex(row.contract), date: formatDate(row.firstSeen) }) }}
             <template v-if="reason(row)"> · {{ reason(row) }}</template>
           </span>
         </div>

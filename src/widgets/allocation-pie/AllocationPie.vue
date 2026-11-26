@@ -36,8 +36,8 @@ const option = computed(() =>
         <li v-for="row in rows" :key="row.group" class="flex items-center gap-2 text-sm" data-allocation-row>
           <span aria-hidden="true" :class="cn('size-2 shrink-0 rounded-full', GROUP_STYLE[row.group].swatch)" />
           <span class="min-w-0 flex-1 truncate">{{ t(`money.wealth.group.${row.group}`) }}</span>
-          <span class="tabular-nums" :class="row.value < 0 && 'text-destructive'">
-            <Money :amount="row.value" :currency="props.currency" />
+          <span class="tabular-nums">
+            <Money :amount="row.value" :currency="props.currency" :colored="row.value < 0" />
           </span>
           <span class="w-10 text-right text-muted-foreground tabular-nums">{{ row.share === null ? '' : `${row.share} %` }}</span>
         </li>

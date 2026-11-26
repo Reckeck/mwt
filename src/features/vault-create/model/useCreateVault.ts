@@ -3,7 +3,6 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import { useBaseCurrencyChoice } from '@/features/vault-unlock/@x/vault-create'
-import { MIN_VAULT_PASSWORD } from '@/shared/lib/vault-password'
 import { vaultErrorMessage } from '@/shared/lib/vault-error'
 import { useVaultStore } from '@/shared/store/vault'
 
@@ -56,14 +55,6 @@ export function useCreateVault() {
     const target = path.value.trim()
     if (!target) {
       error.value = t(vault.appStorage ? 'auth.nameRequired' : 'auth.pathRequired')
-      return
-    }
-    if (withPassword.value && password.value.length < MIN_VAULT_PASSWORD) {
-      error.value = t('auth.passwordTooShort')
-      return
-    }
-    if (withPassword.value && password.value !== passwordRepeat.value) {
-      error.value = t('auth.passwordMismatch')
       return
     }
     busy.value = true

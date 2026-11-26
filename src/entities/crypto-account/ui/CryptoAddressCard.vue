@@ -8,7 +8,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Card } from '@/shared/ui/card'
 
 import { DEFAULT_SOURCE_LABEL, networkLabel } from '../crypto-account.constants'
-import { shortAddress } from '../lib/address'
+import { shortHex } from '@/shared/lib/short-hex'
 
 /**
  * A followed address: its name, the network, the read-only mark, the address in monospace, when it was last read
@@ -42,7 +42,7 @@ const source = computed(() => props.source ?? DEFAULT_SOURCE_LABEL)
         <Badge variant="outline">{{ t('cryptoTrack.accounts.readOnly') }}</Badge>
       </div>
       <span class="font-mono text-sm break-all text-muted-foreground" data-crypto-address :title="props.address">{{
-        phone ? shortAddress(props.address) : props.address
+        phone ? shortHex(props.address) : props.address
       }}</span>
       <span class="text-xs text-muted-foreground">{{ updated }} · {{ t('cryptoTrack.accounts.source', { source }) }}</span>
     </div>

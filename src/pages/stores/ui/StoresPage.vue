@@ -43,7 +43,8 @@ const groups = computed(() => groupByPurpose(tree.data.value ?? []))
           <NetWorth v-model:span="span" :points="worth.points.value" :currency="worth.currency.value" />
           <AllocationPie :points="worth.points.value" :currency="worth.currency.value" />
         </SectionState>
-        <Card v-for="group in groups" :key="group.purpose" class="grid gap-1 p-4 md:p-6" data-tour="stores-list" data-purpose-group>
+        <div class="grid gap-4" data-tour="stores-list">
+        <Card v-for="group in groups" :key="group.purpose" class="grid gap-1 p-4 md:p-6" data-purpose-group>
           <div class="flex items-baseline justify-between gap-3">
             <div class="min-w-0">
               <h3 class="heading-card">{{ t(`purpose.${group.purpose}`) }}</h3>
@@ -55,6 +56,7 @@ const groups = computed(() => groupByPurpose(tree.data.value ?? []))
             <template #value><Money :amount="node.subtree_base" /></template>
           </StoreRowLink>
         </Card>
+        </div>
       </div>
     </SectionState>
   </div>

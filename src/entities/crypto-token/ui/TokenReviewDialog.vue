@@ -6,7 +6,7 @@ import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
 
 import type { QuarantineRow } from '../crypto-token.types'
-import { shortContract } from '../lib/short-contract'
+import { shortHex } from '@/shared/lib/short-hex'
 import { useTokenReview } from '../model/use-token-review'
 
 /**
@@ -42,7 +42,7 @@ function recognize() {
       <div class="rounded-lg bg-muted p-3">
         <p class="font-semibold">{{ props.row.symbol }} · {{ formatQuantity(props.row.quantity, 2) }}</p>
         <p class="mt-1 break-all text-muted-foreground">
-          {{ t('cryptoTrack.review.contract', { contract: props.row.contract, short: shortContract(props.row.contract) }) }}
+          {{ t('cryptoTrack.review.contract', { contract: props.row.contract, short: shortHex(props.row.contract) }) }}
           {{ t('cryptoTrack.review.undo') }}
         </p>
       </div>

@@ -14,7 +14,7 @@ import {
   useTokenReview,
 } from '@/entities/crypto-token'
 import { settingsQuery } from '@/shared/lib/settings-link'
-import { buttonVariants } from '@/shared/ui/button/button.variants'
+import { buttonVariants } from '@/shared/ui/button'
 
 /**
  * The followed addresses under the positions: each one's card with the entry to the network settings (Settings,

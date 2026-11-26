@@ -5,6 +5,4 @@ export interface NetWorthProps {
   points: NetworthPoint[]
   /** Currency of the report (lower-case code). */
   currency: string
-  /** The report is on its way: the figure keeps its height. */
-  loading?: boolean
 }

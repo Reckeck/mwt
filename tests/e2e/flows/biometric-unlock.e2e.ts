@@ -27,9 +27,6 @@ for (const width of [1280, 390] as const) {
     test(`unlock screen, ${width}px ${theme}`, async ({ app }) => {
       await app.unlock()
       await app.at('/', { width, theme })
-      await app.page.eval(setDevice('enabled')).catch(() => undefined)
-      await app.unlock()
-      await app.at('/', { width, theme })
       await app.page.eval(setDevice('enabled'))
       await lock(app)
 

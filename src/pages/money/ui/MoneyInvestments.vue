@@ -29,20 +29,25 @@ const nodes = computed(() =>
 const total = computed(() => nodes.value.reduce((sum, node) => sum + Number(node.subtree_base), 0))
 const defi = computed(() => positionTotals(positions.data.value ?? []))
 const hasDefi = computed(() => (positions.data.value ?? []).length > 0)
+
+function retry() {
+  void tree.refetch()
+  void positions.refetch()
+}
 </script>
 
 <template>
   <div class="grid gap-4">
     <PageHeader :title="t('money.invest.title')" />
     <SectionState
-      :loading="tree.isPending.value"
-      :error="tree.error.value"
+      :loading="tree.isPending.value || positions.isPending.value"
+      :error="tree.error.value ?? positions.error.value"
       :empty="nodes.length === 0 && !hasDefi"
       :empty-title="t('money.invest.empty')"
       :empty-description="t('money.invest.emptyHint')"
       :empty-icon="TrendingUp"
       skeleton="report"
-      @retry="tree.refetch()"
+      @retry="retry"
     >
       <div class="grid gap-4">
         <Card v-if="nodes.length" class="grid gap-1 p-4 md:p-6" data-tour="invest-figures" data-invest-accounts>
