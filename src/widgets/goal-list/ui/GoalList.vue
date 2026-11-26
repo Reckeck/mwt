@@ -14,6 +14,7 @@ import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
+import { useEntityNav } from '@/shared/lib/entity-link'
 import { formatDate } from '@/shared/lib/format'
 import { useFocusRow } from '@/shared/lib/use-focus-row'
 import { PLANNING_KEYS } from '@/shared/lib/planning'
@@ -63,7 +64,7 @@ function issueText(issue: RealismIssue, currency: string): SumPart[] {
   return parts(t('goal.issue.surplus', { need: sum(data.need_total, data.currency), surplus: sum(data.surplus, data.currency) }))
 }
 
-const emit = defineEmits<{ open: [goalId: string] }>()
+const nav = useEntityNav()
 
 const dialogOpen = ref(false)
 const editing = ref<Goal | null>(null)
@@ -102,7 +103,7 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
           <div class="flex items-start justify-between gap-2">
             <div class="grid min-w-0 gap-1">
               <p class="flex min-w-0 items-center gap-2">
-                <Button variant="link" class="h-auto min-w-0 justify-start truncate p-0 font-medium" data-goal-open @click="emit('open', goal.id)">{{ goal.name }}</Button>
+                <Button variant="link" class="h-auto min-w-0 justify-start truncate p-0 font-medium" data-goal-open @click="nav.open({ kind: 'goal', id: goal.id })">{{ goal.name }}</Button>
                 <Badge v-if="!goal.active" variant="neutral">{{ t('goalCard.pausedBadge') }}</Badge>
               </p>
               <div class="flex items-center gap-0.5" :aria-label="t('goal.priorityValue', { value: goal.priority })">

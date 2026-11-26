@@ -8,9 +8,9 @@ import { Button } from '@/shared/ui/button'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
-import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
+import { useFormValidation } from '@/shared/lib/form'
 
-import { PAY_DAY_MAX } from '../model/utility-reminders.constants'
+import { payDayError } from '../lib/pay-day'
 import { useUtilityReminders } from '../model/use-utility-reminders'
 
 /**
@@ -31,7 +31,7 @@ watch(open, (isOpen) => {
 })
 
 const form = useFormValidation(() => ({
-  day: firstError(required(day.value), integerInRange(day.value, 1, PAY_DAY_MAX)),
+  day: payDayError(day.value),
 }))
 
 function save() {

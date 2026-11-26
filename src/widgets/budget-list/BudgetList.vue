@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Pencil, Plus, Trash2 } from 'lucide-vue-next'
 
 import { BudgetDeleteDialog, BudgetDialog } from '@/features/budget-edit'
@@ -10,6 +10,7 @@ import { Button, buttonVariants } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { SectionState } from '@/shared/ui/section-state'
 
+import { newLimitRequest, withoutNewLimit } from './lib/new-limit-link'
 import { useBudgetRows } from './model/use-budget-rows'
 import BudgetRow from './ui/BudgetRow.vue'
 
@@ -25,14 +26,32 @@ useFocusRow(ready)
 
 const dialogOpen = ref(false)
 const editing = ref<Budget | null>(null)
+const presetCategory = ref('')
 function openNew() {
   editing.value = null
+  presetCategory.value = ''
   dialogOpen.value = true
 }
 function openEdit(budget: Budget) {
   editing.value = budget
   dialogOpen.value = true
 }
+
+/** `?new=limit&category=` (the palette, the spent glance) opens the new-limit dialog, then leaves the address. */
+const route = useRoute()
+const router = useRouter()
+watch(
+  () => route.query,
+  (query) => {
+    const request = props.editable ? newLimitRequest(query) : null
+    if (!request) return
+    editing.value = null
+    presetCategory.value = request.category
+    dialogOpen.value = true
+    void router.replace({ query: withoutNewLimit(query) })
+  },
+  { immediate: true },
+)
 
 const deleting = ref<{ budget: Budget; name: string } | null>(null)
 const deleteOpen = ref(false)
@@ -85,7 +104,7 @@ defineExpose({ openNew })
     </div>
   </SectionState>
   <template v-if="props.editable">
-    <BudgetDialog v-model:open="dialogOpen" :budget="editing" />
+    <BudgetDialog v-model:open="dialogOpen" :budget="editing" :category="presetCategory" />
     <BudgetDeleteDialog v-model:open="deleteOpen" :budget="deleting?.budget ?? null" :name="deleting?.name ?? ''" />
   </template>
 </template>

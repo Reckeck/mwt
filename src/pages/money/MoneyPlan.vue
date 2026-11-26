@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 
 import { BudgetList } from '@/widgets/budget-list'
 import { BudgetSettings } from '@/widgets/budget-settings'
 import { FixedCosts } from '@/widgets/fixed-costs'
-import { GoalDetailsSheet } from '@/widgets/goal-details'
 import { GoalList } from '@/widgets/goal-list'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { Button } from '@/shared/ui/button'
@@ -25,14 +24,6 @@ import PlanGoals from './ui/plan/PlanGoals.vue'
 const { t } = useI18n()
 const settingsOpen = ref(false)
 const goalsOpen = ref(false)
-/** One goal page for the plan's goal rows and the full list. */
-const goalId = ref<string | null>(null)
-const goalCardOpen = computed({
-  get: () => goalId.value !== null,
-  set: (value) => {
-    if (!value) goalId.value = null
-  },
-})
 </script>
 
 <template>
@@ -43,7 +34,7 @@ const goalCardOpen = computed({
         <BudgetList editable />
       </section>
       <div class="grid gap-4">
-        <PlanGoals @open="goalId = $event" />
+        <PlanGoals />
         <PlanEmergencyFund />
         <PlanCarryOver />
       </div>
@@ -56,7 +47,7 @@ const goalCardOpen = computed({
           {{ t('money.plan.details') }} <ChevronDown :class="['transition-transform', goalsOpen && 'rotate-180']" />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent><GoalList v-if="goalsOpen" @open="goalId = $event" /></CollapsibleContent>
+      <CollapsibleContent><GoalList v-if="goalsOpen" /></CollapsibleContent>
     </Collapsible>
     <Collapsible v-model:open="settingsOpen" class="grid gap-3">
       <CollapsibleTrigger as-child>
@@ -66,6 +57,5 @@ const goalCardOpen = computed({
       </CollapsibleTrigger>
       <CollapsibleContent><BudgetSettings v-if="settingsOpen" /></CollapsibleContent>
     </Collapsible>
-    <GoalDetailsSheet v-model:open="goalCardOpen" :goal-id="goalId" />
   </div>
 </template>

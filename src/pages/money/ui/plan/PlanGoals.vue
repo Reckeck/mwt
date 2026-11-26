@@ -8,6 +8,7 @@ import { GoalDialog } from '@/features/goal-edit'
 import { Money } from '@/entities/currency'
 import { call } from '@/shared/api/ipc'
 import { formatDate } from '@/shared/lib/format'
+import { useEntityNav } from '@/shared/lib/entity-link'
 import { Button } from '@/shared/ui/button'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { ProgressBar } from '@/shared/ui/progress-bar'
@@ -25,7 +26,7 @@ const pct = (value: string) => Math.min(100, Math.max(0, Number(value)))
 const empty = computed(() => progress.isSuccess.value && !rows.value.length)
 
 const createOpen = ref(false)
-const emit = defineEmits<{ open: [goalId: string] }>()
+const nav = useEntityNav()
 </script>
 
 <template>
@@ -44,7 +45,7 @@ const emit = defineEmits<{ open: [goalId: string] }>()
             variant="ghost"
             class="grid h-auto w-full justify-items-stretch gap-1.5 px-2 py-2 text-left font-normal whitespace-normal max-md:min-h-11"
             data-goal-row
-            @click="emit('open', entry.goal.id)">
+            @click="nav.open({ kind: 'goal', id: entry.goal.id })">
             <span class="flex items-baseline justify-between gap-2 text-sm">
               <span class="min-w-0 truncate font-medium">{{ entry.goal.name }}</span>
               <span class="shrink-0 tabular-nums">
