@@ -967,7 +967,11 @@ pub fn history_series_filtered_in(
             if !in_scope(&leg.store_id) || leg.asset.is_derivative() {
                 continue;
             }
-            movements.push((leg.asset.key(), tx.meta().timestamp.clone(), leg.amount));
+            let stamp = leg
+                .timestamp
+                .clone()
+                .unwrap_or_else(|| tx.meta().timestamp.clone());
+            movements.push((leg.asset.key(), stamp, leg.amount));
         }
     }
     let mut stamps: Vec<String> = movements.iter().map(|(_, ts, _)| ts.clone()).collect();

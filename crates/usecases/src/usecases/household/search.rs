@@ -90,7 +90,13 @@ fn pinned_view(
 /// The pins with their short values.
 pub fn pinned(vault: &Session, now: i64, zone: &str) -> Vec<PinnedView> {
     let goals = crate::usecases::planning::goals::goal_progress(&vault.books(), now, zone);
-    let budgets = crate::usecases::planning::budget::budget_status(&vault.books(), now, zone);
+    // Search and pins stay on the money date (Q10, R4).
+    let budgets = crate::usecases::planning::budget::budget_status_by(
+        &vault.books(),
+        now,
+        zone,
+        Some(crate::planning::flows::Basis::MoneyDate),
+    );
     vault
         .doc
         .settings

@@ -22,7 +22,7 @@ use mwt_model::{DailyBudgetMode, VaultDoc};
 use mwt_money::books::Books;
 use mwt_money::worth::FlowClass;
 
-use super::flows::flows_between;
+use super::flows::{Basis, flows_for_basis};
 
 use super::goals::resolve_scope;
 
@@ -346,7 +346,18 @@ pub fn manual_month(books: &Books<'_>) -> Option<MonthAvg> {
 /// Income, mandatory spending, everyday spending and savings of a calendar
 /// month (`YYYY-MM`) in the budget currency (plan §7.3). `not_executed` stays
 /// zero: it comes from the automation runs, which sit above this layer.
+/// Read by the default basis (`period`, op-period R4).
 pub fn month_summary(books: &Books<'_>, month: &str, zone: &str) -> Result<MonthSummary> {
+    month_summary_by(books, month, zone, None)
+}
+
+/// `month_summary` read by `basis`; `None` means `period` (R1, R4).
+pub fn month_summary_by(
+    books: &Books<'_>,
+    month: &str,
+    zone: &str,
+    basis: Option<Basis>,
+) -> Result<MonthSummary> {
     let first = calendar::parse_month(month)
         .ok_or_else(|| Error::InvalidInput(format!("month {month}: expected YYYY-MM")))?;
     let cal = Calendar::new(zone);
@@ -358,7 +369,14 @@ pub fn month_summary(books: &Books<'_>, month: &str, zone: &str) -> Result<Month
         complete: true,
         ..MonthSummary::default()
     };
-    for flow in flows_between(books, &cal, &currency, from, to) {
+    for flow in flows_for_basis(
+        books,
+        &cal,
+        &currency,
+        from,
+        to,
+        basis.unwrap_or(Basis::Period),
+    ) {
         out.complete &= flow.priced();
         match flow.class {
             FlowClass::Income => out.income += flow.value,

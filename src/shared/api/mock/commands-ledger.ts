@@ -8,6 +8,9 @@ import { mockDebtTerms } from './catalog'
 import { contactBalancesWithEvents } from './shared-events/view'
 import { applySharedEdit, cascadeSharedDelete, planSharedTxEdit } from './shared-events/ledger-sync'
 import { mockSharedEvents } from './shared-events/state'
+import { periodCommands } from './commands-period'
+import { distributionCommands, prepareDelete, storeEdited } from './planning/distribution'
+import { templateCommands } from './planning/templates'
 import { emitMock } from '../mock-bus'
 import { resolve } from './core'
 import type { MockCommands } from './core'
@@ -133,6 +136,9 @@ export const contactsCommands: MockCommands = {
 
 /** Commands: transactions. */
 export const transactionsCommands: MockCommands = {
+  ...periodCommands,
+  ...distributionCommands,
+  ...templateCommands,
   transaction_kinds_for_store_kind: ({ args }) => {
     return resolve(mockKindsFor(args?.kind as StoreKind))
   },
@@ -194,18 +200,19 @@ export const transactionsCommands: MockCommands = {
     const input = body as UpdateTransactionInput
     const index = mockTransactions.findIndex((tx) => txId(tx) === input.id)
     if (index < 0) throw { code: 'MISSING', message: 'transaction' }
-    const kept = { id: input.id, origin: txMeta(mockTransactions[index]).origin }
+    const kept = { id: input.id, origin: txMeta(mockTransactions[index]).origin, stored: mockTransactions[index] }
     const next = mockTransactionFrom(input.transaction, priceOf, kept, (storeId, symbol) =>
       mockBalanceOf(storeId, symbol, input.id),
     )
     const followed = planSharedTxEdit(input.id, mockTransactions[index], next)
     if (typeof followed === 'string') return Promise.reject({ code: 'INVALID_INPUT', message: followed })
-    mockTransactions[index] = next
+    storeEdited(mockTransactions[index], next)
     if (followed) applySharedEdit(followed)
     mockLinkProperty(input.id, input.transaction.common.property_id)
-    return resolve(mockTransactions[index])
+    return resolve(next)
   },
   delete_transaction: ({ args }) => {
+    prepareDelete(String(args?.id))
     const idx = mockTransactions.findIndex((tx) => txId(tx) === String(args?.id))
     if (idx >= 0) {
       mockTransactions.splice(idx, 1)

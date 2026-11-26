@@ -270,6 +270,8 @@ fn seed(host: &TestHost, comment: &str) {
         let mut meta = TxMeta::new(comment);
         meta.categories = vec!["salary".into()];
         let tx = Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: vault.doc.stores[0].id.clone(),
             asset: AssetRef::fiat("USD", "US Dollar"),
@@ -1121,6 +1123,12 @@ fn trusting_pair(
     *client.0.versions.lock().unwrap() = odd_versions;
     seed(&main, "only on the laptop");
     (main, main_events, client, client_events)
+}
+
+/// Q19: the op-period fields are additive; the vault format stays at the version it had.
+#[test]
+fn q19_op_period_does_not_bump_the_vault_format_version() {
+    assert_eq!(mwt_model::VAULT_FORMAT_VERSION, 1);
 }
 
 async fn assert_refused_on_both_sides(odd_versions: (u32, u32)) {

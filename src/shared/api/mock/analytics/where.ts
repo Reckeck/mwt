@@ -41,7 +41,7 @@ export function whereReport(ctx: AnalyticsMockContext, months: string[], filter:
         ? (mockContacts.find((contact) => contact.id === account.contact.contact_id)?.name ?? '')
         : ''
   const priced = (qty: string, unit: string) => money(Math.abs(Number(qty)) * ctx.priceOf(unit))
-  const period = flows(ctx).filter((flow) => months.includes(flow.month))
+  const period = flows(ctx, filter.basis ?? 'period').filter((flow) => months.includes(flow.month))
   const income = period
     .filter((flow) => flow.incoming && flow.group === 'income')
     .reduce((sum, flow) => sum + flow.value, 0)

@@ -21,18 +21,21 @@ use mwt_model::StoreScope;
 use mwt_model::{
     AccountRef, AdjustmentLine, AdjustmentTx, AssetSellTx, ConvertSide, ConvertTx, DebtEffect,
     DefiAction, DefiTx, Fee, FuturesAction, FuturesCategory, FuturesDirection, KindDetails,
-    Liquidity, PaymentTx, PriceStamp, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction,
-    TransferTx, TxKind, TxMeta, allowed_kinds, default_kind,
+    Liquidity, OpPeriod, PaymentTx, PriceStamp, ReceivedPart, Spread, TopupTx, TradeFuturesTx,
+    TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind, TxMeta, allowed_kinds, default_kind,
 };
 use mwt_model::{AlertCondition, BudgetPeriod, BudgetTarget, Schedule, TransactionDraft};
 use mwt_model::{
     AssetRef, Binding, Custody, ExchangeProvider, LiabilityTerms, PropertyInfo, Purpose, StoreKind,
     SubType,
 };
+use mwt_model::{DistKind, DistributionPart, DistributionRow, EnvelopeMove, OnOtherAmount};
 use mwt_planning::agenda::PriceAlertDraft;
 use mwt_planning::automations::AutomationDraft;
 use mwt_planning::budget::BudgetDraft;
+use mwt_planning::distribution::ResolvedDistribution;
 use mwt_planning::goals::GoalDraft;
+use mwt_planning::templates::TemplateDraft;
 
 pub use mwt_household::shared_events::inputs::{
     AttachPaymentInput, SetShareOverrideInput, SetSharedDueInput, SetSharedItemSplitInput,
@@ -424,6 +427,18 @@ pub struct TxCommonInput {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub property_id: Option<String>,
+    /// What the operation is «for» (spec P1); none lets a rule decide (D3).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period: Option<OpPeriod>,
+    /// How an operation over several months is cut into months (spec P5).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub spread: Option<Spread>,
+    /// «Really no period»: a new operation without a period takes no rule (spec D3).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub no_period_rule: bool,
 }
 
 impl TxCommonInput {
@@ -438,6 +453,8 @@ impl TxCommonInput {
             .contact_id
             .clone()
             .filter(|contact| !contact.is_empty());
+        meta.period = self.period.clone();
+        meta.spread = self.spread.clone();
         meta
     }
 
@@ -447,6 +464,28 @@ impl TxCommonInput {
             price_base: self.price_base,
             price_base_currency: self.price_base_currency.clone(),
             fx_override: self.fx_override,
+        }
+    }
+}
+
+/// One receiving part of an income that arrived in parts (spec S1).
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ReceivedPartInput {
+    pub store_id: String,
+    pub amount: Amount,
+    /// The part's own date; `None` = the income's `timestamp`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub timestamp: Option<String>,
+}
+
+impl ReceivedPartInput {
+    fn to_part(&self) -> ReceivedPart {
+        ReceivedPart {
+            store_id: self.store_id.clone(),
+            amount: self.amount,
+            timestamp: self.timestamp.clone().filter(|stamp| !stamp.is_empty()),
         }
     }
 }
@@ -503,6 +542,10 @@ pub enum TransactionInput {
         fee: Option<FeeInput>,
         from: Option<AccountRef>,
         details: KindDetails,
+        /// «Arrived in parts» (spec S1): empty = a single-store income.
+        #[serde(default)]
+        #[cfg_attr(feature = "ts", ts(as = "Option<Vec<ReceivedPartInput>>", optional))]
+        parts: Vec<ReceivedPartInput>,
     },
     Payment {
         common: TxCommonInput,
@@ -662,7 +705,10 @@ impl TransactionInput {
                 fee,
                 from,
                 details,
+                parts,
             } => Transaction::Topup(TopupTx {
+                parts: parts.iter().map(ReceivedPartInput::to_part).collect(),
+                distribution: None,
                 meta: common.meta(),
                 store_id: store_id.clone(),
                 asset: asset.to_asset(),
@@ -888,6 +934,300 @@ pub struct UpdateTransactionInput {
 pub struct PreviewTransactionInput {
     pub transaction: TransactionInput,
     pub replaces: Option<String>,
+}
+
+/// One month of a period change: what the operation counts for in it before and after, in the
+/// budget currency (spec I7).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct MonthEffect {
+    /// Month key `YYYY-MM`.
+    pub month: String,
+    pub before: Amount,
+    pub after: Amount,
+}
+
+/// What a new period or spread would do to the months an operation counts in (spec I7).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PeriodEffect {
+    /// Oldest first; months the change leaves at zero on both sides are left out.
+    pub months: Vec<MonthEffect>,
+}
+
+// -- income distribution (spec op-period I8-I12) ----------------------------
+
+/// The income a distribution call is about: a draft not saved yet, or a stored one.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum IncomeSource {
+    /// A draft of an income (a `topup`); saved together with its distribution.
+    Draft { transaction: Box<TransactionInput> },
+    /// A stored income.
+    Stored { id: String },
+}
+
+/// `preview_distribution`: the rows against the income (spec I8).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct PreviewDistributionInput {
+    pub income: IncomeSource,
+    pub rows: Vec<DistributionRow>,
+    /// Least balance left on the card after the rows (spec D10).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub keep_on_card_min: Option<Amount>,
+}
+
+/// `distribute_income`: save the income (a draft) or take a stored one, and distribute it (spec I9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributeIncomeInput {
+    pub income: IncomeSource,
+    pub rows: Vec<DistributionRow>,
+}
+
+/// `update_distribution`: «Изменить раскладку» of a stored income (spec I10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct UpdateDistributionInput {
+    pub income_id: String,
+    pub rows: Vec<DistributionRow>,
+}
+
+/// `confirm_distribution`: the answer to an automation run that asks (spec I12).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ConfirmDistributionInput {
+    pub run_id: String,
+    pub amount: Amount,
+    /// How to distribute the confirmed amount; the rule's own way when omitted.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub mode: Option<OnOtherAmount>,
+}
+
+/// One row with the amount it resolved to.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct ResolvedDistributionRow {
+    pub row: DistributionRow,
+    pub amount: Amount,
+}
+
+/// A row cut by the floor on the card (spec D10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributionCut {
+    pub row_index: u32,
+    pub by: Amount,
+}
+
+/// What a distribution would book (spec I8, I11): the rows resolved, nothing written.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributionPreview {
+    /// The payout the rows were resolved against.
+    pub amount: Amount,
+    /// The next planned moment of a rule's payout (RFC3339); a rule preview only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub planned_at: Option<String>,
+    /// The period the template's rule gives the payout; a rule preview only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period: Option<OpPeriod>,
+    /// Every row in order, the remainder included; empty on `over` and `ask`.
+    pub rows: Vec<ResolvedDistributionRow>,
+    /// What the remainder row took.
+    pub remainder: Amount,
+    /// By how much the fixed and percent rows exceed the payout: nothing would be booked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub over: Option<Amount>,
+    /// The rule asks for a confirmation instead of distributing (spec D9).
+    pub ask: bool,
+    pub cut: Vec<DistributionCut>,
+}
+
+impl DistributionPreview {
+    /// The rows of `resolved` for a payout of `amount`.
+    pub fn of(
+        amount: Amount,
+        planned_at: Option<String>,
+        period: Option<OpPeriod>,
+        resolved: ResolvedDistribution,
+    ) -> Self {
+        Self {
+            amount,
+            planned_at,
+            period,
+            rows: resolved
+                .rows
+                .into_iter()
+                .map(|resolved| ResolvedDistributionRow {
+                    row: resolved.row,
+                    amount: resolved.amount,
+                })
+                .collect(),
+            remainder: resolved.remainder,
+            over: resolved.over,
+            ask: resolved.ask,
+            cut: resolved
+                .cut
+                .into_iter()
+                .map(|(index, by)| DistributionCut {
+                    row_index: u32::try_from(index).unwrap_or(u32::MAX),
+                    by,
+                })
+                .collect(),
+        }
+    }
+}
+
+// -- operation templates (spec op-period I13) -------------------------------------------
+
+/// An operation template as the form edits it; the id, the archive mark and the creation time
+/// are the vault's.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct OperationTemplateInput {
+    pub name: String,
+    pub kind: mwt_model::TemplateKind,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub store_id: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub asset: Option<AssetRef>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub amount: Option<Amount>,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default)]
+    pub comment: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub contact_id: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<mwt_model::PeriodRule>,
+    /// Income only.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub distribution: Option<mwt_model::DistributionRule>,
+}
+
+impl OperationTemplateInput {
+    pub fn to_draft(&self) -> TemplateDraft {
+        TemplateDraft {
+            name: self.name.clone(),
+            kind: self.kind,
+            store_id: self.store_id.clone(),
+            asset: self.asset.clone(),
+            amount: self.amount,
+            categories: self.categories.clone(),
+            comment: self.comment.clone(),
+            contact_id: self.contact_id.clone(),
+            period_rule: self.period_rule,
+            distribution: self.distribution.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct UpdateOperationTemplateInput {
+    pub id: String,
+    pub template: OperationTemplateInput,
+}
+
+/// Quick-add from a template; every field left out comes from the template.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct CreateFromTemplateInput {
+    pub template_id: String,
+    /// RFC3339; now by default.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub timestamp: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub amount: Option<Amount>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub store_id: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub comment: Option<String>,
+    /// «Really none»: the operation takes no period rule.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub no_period_rule: bool,
+}
+
+/// The operation a template made. `ask` means the distribution rule asks for a confirmation:
+/// the income is saved whole and nothing is distributed; the tree of an income that distributed
+/// is `get_income_distribution`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct TemplateOperation {
+    pub transaction: Transaction,
+    pub ask: bool,
+}
+
+/// An envelope move a distribution made (spec I9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct EnvelopeMoveRef {
+    pub envelope_id: String,
+    pub move_id: String,
+    pub amount: Amount,
+}
+
+/// An income distributed with the records it made (spec I9).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct DistributedIncome {
+    pub income: Transaction,
+    pub transfers: Vec<Transaction>,
+    pub envelope_moves: Vec<EnvelopeMoveRef>,
+}
+
+/// One stored part with the record it produced (spec I10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct IncomePart {
+    pub part: DistributionPart,
+    /// The transfer of a store part; `None` when the part has none or the record is gone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub transfer: Option<Transaction>,
+    /// The entry of an envelope or goal part.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub envelope_move: Option<EnvelopeMove>,
+}
+
+/// The stored distribution of an income, top to bottom (spec I10, S10).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+pub struct IncomeTree {
+    pub income: Transaction,
+    /// Empty when the income does not distribute.
+    pub parts: Vec<IncomePart>,
+}
+
+impl IncomeTree {
+    /// The marker «разложено на N»: the parts without the remainder (spec S10).
+    pub fn distributed_count(&self) -> usize {
+        self.parts
+            .iter()
+            .filter(|entry| !matches!(entry.part.kind, DistKind::Remainder))
+            .count()
+    }
 }
 
 /// Which transaction kinds a wallet of one kind accepts, split the way the
@@ -1172,6 +1512,10 @@ pub struct CreateCategoryInput {
     pub key: Option<String>,
     pub name: String,
     pub group: CategoryGroup,
+    /// The period an operation of the category gets when it has none (spec D3).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<mwt_model::PeriodRule>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1187,6 +1531,15 @@ pub struct UpdateCategoryInput {
     /// Passive income flag for `Income`; `None` keeps it.
     #[serde(default)]
     pub passive: Option<bool>,
+    /// The period rule of the category; `None` keeps the stored one (clear it with
+    /// `clear_period_rule`).
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period_rule: Option<mwt_model::PeriodRule>,
+    /// Remove the stored period rule; refused together with `period_rule`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
+    pub clear_period_rule: bool,
     /// The version the form loaded. When set, only the fields the user changed against it are
     /// applied onto the current document (an edit never overwrites a remote change to another
     /// field); `None` keeps the whole-input behaviour.
@@ -1452,6 +1805,10 @@ pub struct AutomationInput {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
+    /// The operation template whose period and distribution rules a run uses.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub operation_template_id: Option<String>,
 }
 
 impl AutomationInput {
@@ -1480,6 +1837,7 @@ impl AutomationInput {
             time: self.time.clone(),
             asks: self.asks,
             for_month_offset: self.for_month_offset,
+            operation_template_id: self.operation_template_id.clone(),
         })
     }
 }
@@ -3138,5 +3496,155 @@ mod secret_debug_tests {
             password: LEAK.into(),
         };
         assert!(!leaks(format!("{input:?}")));
+    }
+}
+
+#[cfg(test)]
+mod period_input_tests {
+    use super::*;
+    use mwt_model::{MonthShare, PeriodKind, SpreadMode};
+
+    fn topup(parts: Vec<ReceivedPartInput>) -> TransactionInput {
+        TransactionInput::Topup {
+            common: TxCommonInput::default(),
+            store_id: "card".into(),
+            asset: AssetIdent {
+                symbol: "USD".into(),
+                ..AssetIdent::default()
+            },
+            amount: Amount::parse("100").unwrap(),
+            fee: None,
+            from: None,
+            details: KindDetails::default(),
+            parts,
+        }
+    }
+
+    #[test]
+    fn a_template_input_without_no_period_rule_reads_as_false() {
+        let input: CreateFromTemplateInput =
+            serde_json::from_value(serde_json::json!({ "template_id": "t1" })).unwrap();
+        assert!(!input.no_period_rule);
+    }
+
+    #[test]
+    fn an_input_without_the_new_fields_reads_as_before() {
+        let mut json = serde_json::to_value(topup(Vec::new())).unwrap();
+        let object = json.as_object_mut().unwrap();
+        object.remove("parts");
+        let common = object.get_mut("common").unwrap().as_object_mut().unwrap();
+        for key in ["period", "spread", "no_period_rule"] {
+            common.remove(key);
+        }
+        let input: TransactionInput = serde_json::from_value(json).unwrap();
+        let tx = input.to_transaction();
+        assert_eq!(tx.meta().period, None);
+        assert_eq!(tx.meta().spread, None);
+        assert!(!input.common().no_period_rule);
+        let Transaction::Topup(topup) = tx else {
+            panic!("a top-up")
+        };
+        assert!(topup.parts.is_empty());
+    }
+
+    #[test]
+    fn period_spread_and_parts_reach_the_transaction() {
+        let part = ReceivedPartInput {
+            store_id: "card".into(),
+            amount: Amount::parse("60").unwrap(),
+            timestamp: Some(String::new()),
+        };
+        let mut input = topup(vec![part]);
+        input.common_mut().period = Some(OpPeriod {
+            kind: PeriodKind::Quarter,
+            start: "2026-10-01".into(),
+            end: "2026-12-31".into(),
+        });
+        input.common_mut().spread = Some(Spread {
+            mode: SpreadMode::Even,
+            shares: vec![MonthShare {
+                month: "2026-10".into(),
+                amount: Amount::parse("33.33").unwrap(),
+            }],
+        });
+        let tx = input.to_transaction();
+        assert_eq!(tx.meta().period, input.common().period);
+        assert_eq!(tx.meta().spread, input.common().spread);
+        let Transaction::Topup(topup) = tx else {
+            panic!("a top-up")
+        };
+        assert_eq!(topup.parts.len(), 1);
+        assert_eq!(topup.parts[0].timestamp, None);
+    }
+}
+
+#[cfg(test)]
+mod distribution_dto_tests {
+    use super::*;
+    use mwt_model::PartStatus;
+    use mwt_planning::distribution::ResolvedRow;
+
+    fn amount(raw: &str) -> Amount {
+        Amount::parse(raw).unwrap()
+    }
+
+    #[test]
+    fn a_resolved_rule_becomes_the_preview_rows() {
+        let row = DistributionRow {
+            kind: DistKind::Remainder,
+            target: mwt_model::DistTarget::None,
+        };
+        let resolved = ResolvedDistribution {
+            rows: vec![ResolvedRow {
+                row: row.clone(),
+                amount: amount("70"),
+            }],
+            remainder: amount("70"),
+            cut: vec![(0, amount("5"))],
+            ..ResolvedDistribution::default()
+        };
+        let preview = DistributionPreview::of(amount("100"), None, None, resolved);
+        assert_eq!(preview.rows[0].row, row);
+        assert_eq!(preview.rows[0].amount, amount("70"));
+        assert_eq!(preview.cut[0].row_index, 0);
+        assert_eq!(preview.cut[0].by, amount("5"));
+        assert!(!preview.ask);
+    }
+
+    #[test]
+    fn the_marker_counts_the_parts_without_the_remainder() {
+        let part = |kind| IncomePart {
+            part: DistributionPart {
+                kind,
+                target: mwt_model::DistTarget::None,
+                amount: amount("1"),
+                status: PartStatus::Done,
+                effect: None,
+            },
+            transfer: None,
+            envelope_move: None,
+        };
+        let income = TransactionInput::Topup {
+            common: TxCommonInput::default(),
+            store_id: "card".into(),
+            asset: AssetIdent::default(),
+            amount: amount("3"),
+            fee: None,
+            from: None,
+            details: KindDetails::default(),
+            parts: Vec::new(),
+        }
+        .to_transaction();
+        let tree = IncomeTree {
+            income,
+            parts: vec![
+                part(DistKind::Sum {
+                    amount: amount("1"),
+                }),
+                part(DistKind::Percent { pct: amount("5") }),
+                part(DistKind::Remainder),
+            ],
+        };
+        assert_eq!(tree.distributed_count(), 2);
     }
 }

@@ -1,6 +1,8 @@
 /** Analytics mock context, months of a filter and money flows. */
 
 import { txLegs, txMeta } from '@/shared/lib/transactions'
+import { monthShares } from '../period'
+import type { MockBasis } from '../period'
 
 export interface AnalyticsMockContext {
   transactions: Transaction[]
@@ -40,7 +42,8 @@ export interface MockFlow {
   unpriced: string | null
 }
 
-export function flows(ctx: AnalyticsMockContext): MockFlow[] {
+/** The flows read by `basis`: by the period an operation is for (default), or by the day the money moved. */
+export function flows(ctx: AnalyticsMockContext, basis: MockBasis = 'period'): MockFlow[] {
   return ctx.transactions.flatMap((tx) => {
     const meta = txMeta(tx)
     const key = meta.categories[0] ?? ''
@@ -50,18 +53,16 @@ export function flows(ctx: AnalyticsMockContext): MockFlow[] {
     if (!leg) return []
     const price = Number(leg.price_usd) || ctx.priceOf(leg.asset.symbol)
     const value = Math.abs(Number(leg.amount)) * price
-    return [
-      {
-        month: meta.timestamp.slice(0, 7),
-        date: meta.timestamp.slice(0, 10),
-        group,
-        key,
-        value,
-        incoming: 'topup' in tx,
-        txId: meta.id,
-        unpriced: price ? null : leg.asset.symbol.toUpperCase(),
-      },
-    ]
+    return monthShares(meta.period, meta.spread, meta.timestamp.slice(0, 7), value, basis).map((share) => ({
+      month: share.month,
+      date: meta.timestamp.slice(0, 10),
+      group,
+      key,
+      value: share.value,
+      incoming: 'topup' in tx,
+      txId: meta.id,
+      unpriced: price ? null : leg.asset.symbol.toUpperCase(),
+    }))
   })
 }
 

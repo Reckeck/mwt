@@ -25,6 +25,7 @@ pub mod shared_events;
 pub mod sources;
 pub mod stores;
 pub mod sync;
+pub mod templates;
 pub mod transactions;
 pub mod transactions_bulk;
 pub mod transfer;

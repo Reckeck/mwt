@@ -65,6 +65,7 @@ export const KEYS_OF: Record<string, Keys> = {
   goals: PLANNING_KEYS,
   envelopes: [['envelopes'], ...PLANNING_KEYS],
   debt_terms: [['debt-terms'], ['contacts'], ['dashboard-today']],
+  operation_templates: [['operation-templates']],
   shared_events: [['shared-events'], ['debt-terms'], ['contacts'], ['dashboard-today']],
   price_alerts: [['price-alerts']],
   categorization_rules: [['categorization-rules']],

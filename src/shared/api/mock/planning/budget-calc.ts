@@ -2,6 +2,8 @@
 
 import { isEssential } from '@/shared/lib/categories'
 import { txLegs, txMeta } from '@/shared/lib/transactions'
+import { monthShares } from '../period'
+import type { MockBasis } from '../period'
 import { estimateOf } from './automation-workflow'
 import { plannedNow } from './calculator'
 import { mockEnvelopes } from '../catalog'
@@ -39,20 +41,30 @@ function flowValue(tx: Transaction, ctx: PlanningMockContext, incoming: boolean)
     )
 }
 
-export function monthTotals(ctx: PlanningMockContext, month: string) {
+/**
+ * Totals of a month. The daily budget and the per-day spending read the money date; a summary
+ * may read `period` (R2): each operation counts in the months it is for, by its spread.
+ */
+export function monthTotals(ctx: PlanningMockContext, month: string, basis: MockBasis = 'money_date') {
   const totals = { income: 0, fixed: 0, daily: 0, essentialDaily: 0, perDay: new Map<string, number>() }
   for (const tx of ctx.transactions) {
-    const stamp = txMeta(tx).timestamp
-    if (!stamp.startsWith(month)) continue
+    const meta = txMeta(tx)
+    const stamp = meta.timestamp
     const group = groupOf(tx, ctx)
-    if ('topup' in tx && group === 'income') totals.income += flowValue(tx, ctx, true)
-    if ('payment' in tx && group === 'fixed') totals.fixed += flowValue(tx, ctx, false)
+    const counted = (value: number) =>
+      monthShares(meta.period, meta.spread, stamp.slice(0, 7), value, basis)
+        .filter((share) => share.month === month)
+        .reduce((sum, share) => sum + share.value, 0)
+    if ('topup' in tx && group === 'income') totals.income += counted(flowValue(tx, ctx, true))
+    if ('payment' in tx && group === 'fixed') totals.fixed += counted(flowValue(tx, ctx, false))
     if ('payment' in tx && group !== 'fixed' && group !== 'service' && group !== 'income') {
-      const spent = flowValue(tx, ctx, false)
+      const spent = counted(flowValue(tx, ctx, false))
       totals.daily += spent
       if (essentialSpending(tx, ctx)) totals.essentialDaily += spent
-      const day = stamp.slice(0, 10)
-      totals.perDay.set(day, (totals.perDay.get(day) ?? 0) + spent)
+      if (stamp.startsWith(month)) {
+        const day = stamp.slice(0, 10)
+        totals.perDay.set(day, (totals.perDay.get(day) ?? 0) + spent)
+      }
     }
   }
   return totals
@@ -61,8 +73,13 @@ export function monthTotals(ctx: PlanningMockContext, month: string) {
 export const currentMonth = () => iso(now()).slice(0, 7)
 export const money = (value: number) => String(Math.round(value * 100) / 100)
 
-export function monthSummary(ctx: PlanningMockContext, month: string, savingsRate: number): MonthSummary {
-  const totals = monthTotals(ctx, month)
+export function monthSummary(
+  ctx: PlanningMockContext,
+  month: string,
+  savingsRate: number,
+  basis: MockBasis = 'period',
+): MonthSummary {
+  const totals = monthTotals(ctx, month, basis)
   const fact = totals.income - totals.fixed - totals.daily
   const plan = totals.income * savingsRate
   return {

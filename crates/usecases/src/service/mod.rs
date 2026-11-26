@@ -133,6 +133,12 @@ pub struct Session {
     pub(crate) session: crate::kernel::session::Write,
     /// What the session knows of the device secrets file (see `exchange_keys`).
     pub(crate) device_keys: exchange_keys::DeviceKeys,
+    /// The answer being given to the question of an automation run that asks; set only while
+    /// that one answer runs (see `confirm_distribution`).
+    pub(crate) confirmation: Option<crate::usecases::planning::automation_rules::Confirmation>,
+    /// Notices a booking made while a run was in progress (an income booked undistributed);
+    /// the run's caller takes them into its pass.
+    pub(crate) run_notices: Vec<crate::model::notify::NoticeRecord>,
 }
 
 impl Session {
@@ -188,7 +194,9 @@ impl Session {
         // A secrets file left by a vault that once had this name is not ours.
         crate::vault_io::device_secrets::remove(&path)?;
         let lock = crate::storage::VaultLock::acquire(&path)?;
-        let doc = VaultDoc::default();
+        let mut doc = VaultDoc::default();
+        // A new vault has nothing to convert: the one-time conversion is done from the start.
+        crate::usecases::planning::conversion::mark_done(&mut doc);
         let fmt = SnapshotFormat::for_profile();
         let mut vault = Self {
             path,
@@ -206,6 +214,8 @@ impl Session {
             key: Some(std::sync::Arc::new(key)),
             session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
+            run_notices: Vec::new(),
         };
         crate::usecases::sync::peer_sync::start_tracking(&mut vault)?;
         crate::usecases::money::stores::ensure_cash_wallet(&mut vault, "Cash")?;
@@ -236,6 +246,8 @@ impl Session {
             key: Some(std::sync::Arc::new(SealKey::plain())),
             session: crate::kernel::session::Write::with_store(store),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
+            run_notices: Vec::new(),
         }
     }
 
@@ -305,6 +317,8 @@ impl Session {
             key: Some(std::sync::Arc::new(key)),
             session: crate::kernel::session::Write::default(),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
+            run_notices: Vec::new(),
         };
         if let Some(device_id) = device_id {
             crate::usecases::sync::peer_sync::set_device(&mut vault, device_id);
@@ -322,6 +336,9 @@ impl Session {
         // Built-in categories added in later versions reach old vaults too.
         let categories_added =
             crate::usecases::planning::passive::ensure_default_categories(&mut vault);
+        // The old salary -> deposit automation becomes a template's rule, once (M6, Q14).
+        let salary_converted =
+            crate::usecases::planning::conversion::convert_salary_to_rule(&mut vault)?;
         // A field became required after the workflow was switched on: off, and said so.
         let incomplete = crate::usecases::workflow::records::disable_incomplete_workflows(
             &mut vault,
@@ -349,6 +366,7 @@ impl Session {
             || keys_moved
             || envelopes_settled
             || categories_added
+            || salary_converted
             || incomplete
             || attachments_pruned
             || repaired
@@ -424,6 +442,8 @@ impl Session {
             key: None,
             session: crate::kernel::session::Write::sandboxed(),
             device_keys: exchange_keys::DeviceKeys::default(),
+            confirmation: None,
+            run_notices: Vec::new(),
         }
     }
 
@@ -987,6 +1007,8 @@ mod tests {
         };
         let buy = |unit_price: Option<&str>| {
             Transaction::Topup(TopupTx {
+                parts: Vec::new(),
+                distribution: None,
                 meta: meta("bought", &["income_other"]),
                 store_id: flat.clone(),
                 asset: thing.clone(),
@@ -3164,6 +3186,7 @@ mod persist_tests {
             onboarding_checklist_hidden: true,
             schedule_timezone: Some("Asia/Bangkok".into()),
             crypto_raise_pending: true,
+            migrations_done: vec!["m6".into()],
         };
 
         // Applied the way `update_settings` does it: mutate, then persist.

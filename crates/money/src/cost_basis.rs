@@ -372,6 +372,7 @@ mod tests {
             price_base: None,
             price_base_currency: None,
             fx_override: None,
+            timestamp: None,
         }
     }
 

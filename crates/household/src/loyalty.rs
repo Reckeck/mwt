@@ -216,6 +216,8 @@ pub fn plan_adjust_points(
     Ok(if delta.is_positive() {
         meta.categories = vec![CASHBACK_CATEGORY.to_string()];
         Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: store.id.clone(),
             asset,

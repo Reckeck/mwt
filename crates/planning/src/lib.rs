@@ -15,9 +15,12 @@ mod budget_props;
 pub mod daily_budget;
 pub mod datasources;
 pub mod debt_load;
+pub mod distribution;
 pub mod emergency;
 pub mod envelopes;
 pub mod flows;
+#[cfg(test)]
+mod flows_basis_tests;
 pub mod goals;
 pub mod health;
 pub mod my_automations;
@@ -26,7 +29,9 @@ pub mod passive;
 pub mod period;
 #[cfg(test)]
 mod period_props;
+pub mod period_rule;
 pub mod recurring;
 pub mod scenarios;
 pub mod schedule;
+pub mod templates;
 pub mod upcoming;

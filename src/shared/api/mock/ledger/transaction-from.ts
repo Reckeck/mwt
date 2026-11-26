@@ -1,6 +1,9 @@
 /** A transaction built from form input, like the backend would store it. */
 
-import { mockRules } from './seed'
+import { isFiatCode } from '@/shared/lib/format'
+import { txMeta } from '@/shared/lib/transactions'
+import { checkPeriodMeta, periodForNew, settleParts, settleSpread } from '../period'
+import { mockCategories, mockRules } from './seed'
 
 export function asset(ident: AssetIdent): AssetRef {
   const symbol = ident.symbol.trim().toUpperCase()
@@ -59,6 +62,38 @@ function categorize(tx: Transaction) {
   if (rule) record.meta.categories = [rule.category]
 }
 
+type Spendable = { meta: TxMeta; amount: string; asset: AssetRef }
+
+/** The income or expense body of `tx`, the only kinds with a period. */
+function spendableOf(tx: Transaction): Spendable | null {
+  return 'topup' in tx ? tx.topup : 'payment' in tx ? tx.payment : null
+}
+
+/** What the stored operation looked like before an edit (P8). */
+function spreadBefore(stored?: Transaction) {
+  const old = stored && spendableOf(stored)
+  const meta = stored && txMeta(stored)
+  return old && meta ? { amount: old.amount, period: meta.period, spread: meta.spread } : undefined
+}
+
+/** P1-P8, S1-S2: the period, spread and parts of the input, checked like the core and stored on `tx`. */
+function applyPeriod(tx: Transaction, input: TransactionInput, stored?: Transaction) {
+  const body = spendableOf(tx)
+  const { period: given, spread, no_period_rule: declined } = input.common
+  if (!body) return checkPeriodMeta(false, given, spread, null)
+  const rule = stored ? undefined : mockCategories.find((entry) => entry.key === body.meta.categories[0])?.period_rule
+  const period = periodForNew(given, Boolean(declined), rule, body.meta.timestamp.slice(0, 10))
+  const places = isFiatCode(body.asset.symbol) ? 2 : 8
+  const settled = settleSpread(period, spread, body.amount, places, Boolean(given), spreadBefore(stored))
+  checkPeriodMeta(true, period, settled, body.amount)
+  if (period) body.meta.period = period
+  if (settled) body.meta.spread = settled
+  if (input.type === 'topup' && 'topup' in tx && input.parts?.length) {
+    const parts = settleParts(input.parts, body.amount)
+    if (parts.length) Object.assign(tx.topup, { parts, store_id: parts[0].store_id })
+  }
+}
+
 /**
  * `TransactionInput::to_transaction` plus the service's autocategorize and
  * category check. `priceOf` stands in for the cached quotes.
@@ -66,7 +101,7 @@ function categorize(tx: Transaction) {
 export function mockTransactionFrom(
   input: TransactionInput,
   priceOf: (symbol: string) => number,
-  keep?: { id: string; origin: TxOrigin },
+  keep?: { id: string; origin: TxOrigin; stored?: Transaction },
   balanceOf: (storeId: string, symbol: string) => number = () => 0,
 ): Transaction {
   // The mock has no FX: a typed price is taken as USD whatever its currency.
@@ -223,5 +258,6 @@ export function mockTransactionFrom(
   }
   categorize(tx)
   check(tx)
+  applyPeriod(tx, input, keep?.stored)
   return tx
 }

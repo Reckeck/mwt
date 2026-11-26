@@ -532,6 +532,7 @@ fn savers_are_active_ordinary_workflows_paying_into_an_unshared_wallet() {
         time: None,
         asks: false,
         for_month_offset: None,
+        operation_template_id: None,
     };
     let mut saver = new_automation_workflow(&draft, "wf", "2026-01-01T00:00:00Z").unwrap();
     // An automation is the form's, not an ordinary workflow: it is no saver.

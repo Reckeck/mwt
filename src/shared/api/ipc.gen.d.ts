@@ -507,7 +507,12 @@ asks: boolean,
  * An income only: the month it is for, in months from the one it is
  * planned in (-1 — the previous, 0 — this one); `None` — not set.
  */
-for_month_offset?: number, };
+for_month_offset?: number, 
+/**
+ * The operation template whose period and distribution rules a run
+ * uses; `None` — the old behaviour (spec T5).
+ */
+operation_template_id?: string, };
 
 /**
  * The card of a scheme or a repeat.
@@ -574,7 +579,11 @@ asks: boolean,
  * An income only: the month it is for, in months from the one it is
  * planned in (-1 — the previous, 0 — this one); `None` — not set.
  */
-for_month_offset?: number, };
+for_month_offset?: number, 
+/**
+ * The operation template whose period and distribution rules a run uses.
+ */
+operation_template_id?: string, };
 
 type AutomationOutcome = { "created": { tx_id: string, } } | { "rejected": { reason: RejectReason, } } | "skipped";
 
@@ -651,7 +660,12 @@ asks: boolean,
  * An income only: the month it is for, in months from the one it is
  * planned in (-1 — the previous, 0 — this one); `None` — not set.
  */
-for_month_offset?: number, };
+for_month_offset?: number, 
+/**
+ * The operation template whose period and distribution rules a run
+ * uses; `None` — the old behaviour (spec T5).
+ */
+operation_template_id?: string, };
 
 /**
  * What a dashboard number is measured against (plan H1, decision 57): the
@@ -1089,7 +1103,12 @@ type CashflowRow = { month: string, income: Amount, fixed: Amount, daily: Amount
 /**
  * `income − fixed − daily`.
  */
-net: Amount, };
+net: Amount, 
+/**
+ * The month's income by the money date, next to `income` (which follows
+ * the report's basis); equal to it under the `money_date` basis.
+ */
+income_by_money_date: Amount, };
 
 type CategoriesReport = { meta: ReportMeta, groups: Array<CategoryGroupBlock>, 
 /**
@@ -1142,7 +1161,12 @@ essential: boolean | null,
  * `None` takes the default by key ([`DEFAULT_PASSIVE`]); only `Income`
  * reads it.
  */
-passive: boolean | null, };
+passive: boolean | null, 
+/**
+ * The default «за причину» of an operation in this category (spec D1);
+ * applied at creation only.
+ */
+period_rule?: PeriodRule, };
 
 type CategoryGroup = "income" | "fixed" | "daily" | "savings" | "service";
 
@@ -1249,6 +1273,15 @@ gain: Amount, };
  * A number with its base; `base` is `None` when there is nothing to compare.
  */
 type Comparison = { value: Amount, base: Amount | null, base_kind: BaseKind, };
+
+/**
+ * `confirm_distribution`: the answer to an automation run that asks (spec I12).
+ */
+type ConfirmDistributionInput = { run_id: string, amount: Amount, 
+/**
+ * How to distribute the confirmed amount; the rule's own way when omitted.
+ */
+mode?: OnOtherAmount, };
 
 /**
  * The real amount of an operation booked approximately.
@@ -1478,7 +1511,24 @@ type CreateCategoryInput = {
 /**
  * Wanted key; derived from the name when empty.
  */
-key: string | null, name: string, group: CategoryGroup, };
+key: string | null, name: string, group: CategoryGroup, 
+/**
+ * The period an operation of the category gets when it has none (spec D3).
+ */
+period_rule?: PeriodRule, };
+
+/**
+ * Quick-add from a template; every field left out comes from the template.
+ */
+type CreateFromTemplateInput = { template_id: string, 
+/**
+ * RFC3339; now by default.
+ */
+timestamp?: string, amount?: Amount, store_id?: string, comment?: string, 
+/**
+ * «Really none»: the operation takes no period rule.
+ */
+no_period_rule?: boolean, };
 
 /**
  * Create a bonus programme with its points in one action.
@@ -2978,6 +3028,87 @@ exec_ids: Array<string>, };
 type DiscardPendingImportsOutput = { discarded: number, };
 
 /**
+ * What the user (or the rule) asked for in a distribution part (spec S6).
+ */
+type DistKind = { "sum": { amount: Amount, } } | { "percent": { pct: Amount, } } | "remainder";
+
+/**
+ * Where a distribution part goes; `None` only for the remainder (spec S6).
+ */
+type DistTarget = { "store": { id: string, } } | { "envelope": { id: string, } } | { "goal": { goal_id: string, store_id: string, } } | "none";
+
+/**
+ * `distribute_income`: save the income (a draft) or take a stored one, and distribute it (spec I9).
+ */
+type DistributeIncomeInput = { income: IncomeSource, rows: Array<DistributionRow>, };
+
+/**
+ * An income distributed with the records it made (spec I9).
+ */
+type DistributedIncome = { income: Transaction, transfers: Array<Transaction>, envelope_moves: Array<EnvelopeMoveRef>, };
+
+/**
+ * A row cut by the floor on the card (spec D10).
+ */
+type DistributionCut = { row_index: number, by: Amount, };
+
+/**
+ * One stored part of a distributed income (spec S6).
+ */
+type DistributionPart = { kind: DistKind, target: DistTarget, 
+/**
+ * Resolved amount in the income's asset, a stored snapshot.
+ */
+amount: Amount, status: PartStatus, effect?: EffectRef, };
+
+/**
+ * What a distribution would book (spec I8, I11): the rows resolved, nothing written.
+ */
+type DistributionPreview = { 
+/**
+ * The payout the rows were resolved against.
+ */
+amount: Amount, 
+/**
+ * The next planned moment of a rule's payout (RFC3339); a rule preview only.
+ */
+planned_at?: string, 
+/**
+ * The period the template's rule gives the payout; a rule preview only.
+ */
+period?: OpPeriod, 
+/**
+ * Every row in order, the remainder included; empty on `over` and `ask`.
+ */
+rows: Array<ResolvedDistributionRow>, 
+/**
+ * What the remainder row took.
+ */
+remainder: Amount, 
+/**
+ * By how much the fixed and percent rows exceed the payout: nothing would be booked.
+ */
+over?: Amount, 
+/**
+ * The rule asks for a confirmation instead of distributing (spec D9).
+ */
+ask: boolean, cut: Array<DistributionCut>, };
+
+/**
+ * One row of a distribution rule: what is asked and where it goes (spec S6, D7).
+ */
+type DistributionRow = { kind: DistKind, target: DistTarget, };
+
+/**
+ * «Куда раскладывать»: the rows applied to a regular income (spec D6).
+ */
+type DistributionRule = { rows: Array<DistributionRow>, on_other_amount: OnOtherAmount, 
+/**
+ * Least balance left on the card after the rows (spec D10).
+ */
+keep_on_card_min?: Amount, };
+
+/**
  * Emulate a graph — saved or still in the editor — on a copy of the vault.
  */
 type DryRunWorkflowInput = { 
@@ -2994,6 +3125,11 @@ trigger_node: string | null,
  * without one pauses the emulation (outcome `asking`).
  */
 answers?: { [key in string]: boolean }, };
+
+/**
+ * The record a distribution part produced; a back-pointer for integrity checks (spec S6).
+ */
+type EffectRef = { "transfer": { tx_id: string, } } | { "envelope_move": { envelope_id: string, move_id: string, } };
 
 /**
  * The emergency fund (plan C1): savings accounts set aside for bad times,
@@ -3228,7 +3364,17 @@ id: string, delta: Amount,
 /**
  * RFC3339.
  */
-at: string, };
+at: string, 
+/**
+ * The income whose distribution made this entry: a back-reference for
+ * integrity checks only (spec S9).
+ */
+income_ref?: string, };
+
+/**
+ * An envelope move a distribution made (spec I9).
+ */
+type EnvelopeMoveRef = { envelope_id: string, move_id: string, amount: Amount, };
 
 /**
  * An envelope with what its store can still give it.
@@ -3930,6 +4076,33 @@ type ImportedTransactions = { total: number, items: Array<Transaction>, };
  * Monthly income bracket of the ПДС co-financing ratio.
  */
 type IncomeBracket = "low" | "mid" | "high";
+
+/**
+ * One stored part with the record it produced (spec I10).
+ */
+type IncomePart = { part: DistributionPart, 
+/**
+ * The transfer of a store part; `None` when the part has none or the record is gone.
+ */
+transfer?: Transaction, 
+/**
+ * The entry of an envelope or goal part.
+ */
+envelope_move?: EnvelopeMove, };
+
+/**
+ * The income a distribution call is about: a draft not saved yet, or a stored one.
+ */
+type IncomeSource = { "source": "draft", transaction: TransactionInput, } | { "source": "stored", id: string, };
+
+/**
+ * The stored distribution of an income, top to bottom (spec I10, S10).
+ */
+type IncomeTree = { income: Transaction, 
+/**
+ * Empty when the income does not distribute.
+ */
+parts: Array<IncomePart>, };
 
 /**
  * One indicator on the terminal chart.
@@ -4695,6 +4868,16 @@ change_pct?: Amount,
 since: string, };
 
 /**
+ * One month of a period change: what the operation counts for in it before and after, in the
+ * budget currency (spec I7).
+ */
+type MonthEffect = { 
+/**
+ * Month key `YYYY-MM`.
+ */
+month: string, before: Amount, after: Amount, };
+
+/**
  * The month so far against the previous month to the same date.
  */
 type MonthPace = { currency: string, 
@@ -4730,6 +4913,15 @@ forecast_spent: Amount,
  * Up to three categories that grew most, largest growth first.
  */
 growth: Array<CategoryGrowth>, };
+
+/**
+ * One month's share of a spread operation.
+ */
+type MonthShare = { 
+/**
+ * Month key `YYYY-MM`.
+ */
+month: string, amount: Amount, };
 
 /**
  * Totals of one calendar month in the budget currency.
@@ -5028,6 +5220,17 @@ multiplier: Amount,
 strip: string, };
 
 /**
+ * What to do when the payout differs from the expected amount (spec D9).
+ */
+type OnOtherAmount = "shrink_remainder" | "shrink_all" | "ask";
+
+/**
+ * What an operation is «for»: a span of days in the user's zone (spec P1).
+ * `start` and `end` are plain dates `YYYY-MM-DD`, both inclusive.
+ */
+type OpPeriod = { kind: PeriodKind, start: string, end: string, };
+
+/**
  * What a new wallet already holds. Booked as a top-up in the service
  * category `opening_balance`, so it is neither income nor spending.
  */
@@ -5037,6 +5240,26 @@ type OpeningBalance = { asset: AssetRef, amount: Amount,
  * wallet's history from starting with today's balance.
  */
 at?: string, };
+
+/**
+ * A saved operation shape with its period rule and, for an income, its
+ * distribution rule (spec 5.0). Store, asset and amount only prefill quick-add.
+ */
+type OperationTemplate = { id: string, name: string, archived: boolean, created_at: string, kind: TemplateKind, store_id?: string, asset?: AssetRef, amount?: Amount, categories: Array<string>, comment: string, contact_id?: string, period_rule?: PeriodRule, 
+/**
+ * Income only (spec T2).
+ */
+distribution?: DistributionRule, };
+
+/**
+ * An operation template as the form edits it; the id, the archive mark and the creation time
+ * are the vault's.
+ */
+type OperationTemplateInput = { name: string, kind: TemplateKind, store_id?: string, asset?: AssetRef, amount?: Amount, categories: Array<string>, comment: string, contact_id?: string, period_rule?: PeriodRule, 
+/**
+ * Income only.
+ */
+distribution?: DistributionRule, };
 
 /**
  * A field of a correction.
@@ -5096,6 +5319,11 @@ required: boolean, };
  * What kind of field edits a parameter.
  */
 type ParamKind = { "kind": "number" } | { "kind": "text" } | { "kind": "long_text" } | { "kind": "bool" } | { "kind": "store" } | { "kind": "account" } | { "kind": "asset" } | { "kind": "currency" } | { "kind": "category" } | { "kind": "day" } | { "kind": "weekday" } | { "kind": "time" } | { "kind": "date" } | { "kind": "budget" } | { "kind": "goal" } | { "kind": "workflow" } | { "kind": "source" } | { "kind": "select", options: Array<[string, LocalizedText]>, } | { "kind": "targets" };
+
+/**
+ * State of a distribution part; `planned` is an additive variant of v3.4 (spec S15).
+ */
+type PartStatus = "done";
 
 /**
  * A person in the event: a contact of the directory, or a guest (no
@@ -5316,6 +5544,43 @@ closed_pnl: Amount | null, kind: ImportKind,
  */
 from_account: string | null, to_account: string | null, };
 
+/**
+ * What a new period or spread would do to the months an operation counts in (spec I7).
+ */
+type PeriodEffect = { 
+/**
+ * Oldest first; months the change leaves at zero on both sides are left out.
+ */
+months: Array<MonthEffect>, };
+
+/**
+ * A span of days the list is for, both ends `YYYY-MM-DD`, inclusive: the
+ * period an operation is «for», not the day the money moved (spec I3).
+ */
+type PeriodFilter = { from: string, to: string, };
+
+/**
+ * The kind of an operation period (spec op-period P1, P2).
+ */
+type PeriodKind = "month" | "half" | "quarter" | "year" | "range";
+
+/**
+ * A default «за что» for an operation, resolved from its money date (spec D1, D2).
+ */
+type PeriodRule = "prev_month" | "prev_half_second" | "this_half_first" | "this_month" | "next_month" | { "custom": { 
+/**
+ * `month`, `half`, `quarter` or `year`; `range` is not a rule kind.
+ */
+kind: PeriodKind, 
+/**
+ * Units from the unit of the money date (half-months for `half`).
+ */
+offset: number, 
+/**
+ * For `half`: which half; none keeps the half the date is in.
+ */
+half?: RuleHalf, } };
+
 type PersonKind = "me" | "contact" | "guest";
 
 /**
@@ -5479,6 +5744,15 @@ type PositionChange = { store_id: string, store_name: string, asset: AssetRef, b
 delta_base: Amount, };
 
 type PresetInfo = { preset: AutomationPreset, tx_kind: TxKind, category: string | null, };
+
+/**
+ * `preview_distribution`: the rows against the income (spec I8).
+ */
+type PreviewDistributionInput = { income: IncomeSource, rows: Array<DistributionRow>, 
+/**
+ * Least balance left on the card after the rows (spec D10).
+ */
+keep_on_card_min?: Amount, };
 
 /**
  * What the address returned, as the picker shows it.
@@ -5821,6 +6095,24 @@ type RealizedPnl = { total_base: Amount,
 fees_base: Amount, legs: Array<PnlLeg>, };
 
 /**
+ * One receiving part of an income that arrived in parts (spec S1).
+ */
+type ReceivedPart = { store_id: string, amount: Amount, 
+/**
+ * The part's own date; `None` = the income's `timestamp`.
+ */
+timestamp?: string, };
+
+/**
+ * One receiving part of an income that arrived in parts (spec S1).
+ */
+type ReceivedPartInput = { store_id: string, amount: Amount, 
+/**
+ * The part's own date; `None` = the income's `timestamp`.
+ */
+timestamp?: string, };
+
+/**
  * A recently opened vault file.
  */
 type RecentVault = { path: string, last_opened: string, exists: boolean, 
@@ -6008,7 +6300,13 @@ currency: string | null,
 /**
  * Restate each month in today's money by the reference inflation.
  */
-real_terms: boolean, };
+real_terms: boolean, 
+/**
+ * Which date the cashflow, year, categories and where-it-went reports
+ * count by; default `period`. Stores, PnL, portfolio, net-worth,
+ * inflation and loss reports have no basis (R3): they read money moments.
+ */
+basis?: "period" | "money_date" | null, };
 
 type ReportKind = "cashflow" | "year" | "categories" | "networth" | "stores" | "pnl" | "portfolio" | "inflation" | "losses" | "where";
 
@@ -6043,6 +6341,11 @@ type ResolveVaultConflictInput = { path: string, keep: ConflictSide,
  * The vault's password: keeping the remote copy trial-opens it first.
  */
 password: string, };
+
+/**
+ * One row with the amount it resolved to.
+ */
+type ResolvedDistributionRow = { row: DistributionRow, amount: Amount, };
 
 /**
  * Input to put a forgotten vault back into recents.
@@ -6081,6 +6384,11 @@ pct_per_year: Amount | null,
  * The value the rule stops at; required when the percent is negative.
  */
 floor: RevalueFloor | null, };
+
+/**
+ * Which half of a month a custom period rule picks (spec D1).
+ */
+type RuleHalf = "first" | "second";
 
 type RunMode = "live" | "dry_run";
 
@@ -6477,7 +6785,11 @@ schedule_timezone: string | null,
  * by an open. The device's own: a peer's mark says nothing about a raise
  * that was cut short here (`sync::registry::SETTINGS_SCOPE`).
  */
-crypto_raise_pending: boolean, };
+crypto_raise_pending: boolean, 
+/**
+ * One-time fixups already run on this vault, by name (spec M6, Q14).
+ */
+migrations_done?: Array<string>, };
 
 /**
  * Which way the money of a settlement went, relative to the organizer.
@@ -6843,6 +7155,17 @@ week_total: Comparison,
  * Everyday allowance of a day, when the budget has one.
  */
 allowance: Amount | null, };
+
+/**
+ * An operation spread over the months of its period. `shares` is always
+ * stored, so a later reading never depends on a changed rounding rule.
+ */
+type Spread = { mode: SpreadMode, shares: Array<MonthShare>, };
+
+/**
+ * How the user got the shares of a spread (spec P5).
+ */
+type SpreadMode = "even" | "by_days" | "manual";
 
 type StepStatus = "ok" | "skipped" | "queued" | "error" | "stopped" | "waiting";
 
@@ -7480,6 +7803,18 @@ default: string, };
 type TemplateFieldKind = "store" | "category" | "number" | "currency" | "budget" | "weekday" | "day";
 
 /**
+ * The kind of operation a template makes: topup or payment only.
+ */
+type TemplateKind = "income" | "expense";
+
+/**
+ * The operation a template made. `ask` means the distribution rule asks for a confirmation:
+ * the income is saved whole and nothing is distributed; the tree of an income that distributed
+ * is `get_income_distribution`.
+ */
+type TemplateOperation = { transaction: Transaction, ask: boolean, };
+
+/**
  * Terminal panels' layout, as the UI left it.
  */
 type TerminalLayout = { show_watchlist: boolean, 
@@ -7661,7 +7996,16 @@ type TopupTx = { meta: TxMeta, store_id: string, asset: AssetRef, amount: Amount
 /**
  * Who paid; never one of the user's stores (that is a transfer).
  */
-from: AccountRef | null, details: KindDetails, price: PriceStamp, };
+from: AccountRef | null, details: KindDetails, price: PriceStamp, 
+/**
+ * «Arrived in parts» (spec S1): empty = a single-store income. When set,
+ * `amount` is the total and `store_id` is the first part's store.
+ */
+parts?: Array<ReceivedPart>, 
+/**
+ * «Distribute myself» (spec S6): `None` = not distributed.
+ */
+distribution?: Array<DistributionPart>, };
 
 /**
  * One node of a run, in words.
@@ -7743,7 +8087,11 @@ type TransactionDraft = { "topup": TopupTx } | { "payment": PaymentTx } | { "tra
 /**
  * What the form sends for any kind of transaction.
  */
-type TransactionInput = { "type": "topup", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, from: AccountRef | null, details: KindDetails, } | { "type": "payment", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, to: AccountRef | null, details: KindDetails, } | { "type": "transfer", common: TxCommonInput, from: AccountRef, to: AccountRef, asset: AssetIdent, amount: Amount, fee: FeeInput | null, network: Chain | null, tx_hash: string | null, debt: DebtEffect | null, } | { "type": "convert", common: TxCommonInput, from: ConvertSideInput, to: ConvertSideInput, fee: FeeInput | null, rate_override: Amount | null, } | { "type": "trade_spot", common: TxCommonInput, store_id: string, sold: TradeSideInput, bought: TradeSideInput, fee: FeeInput | null, liquidity: Liquidity | null, order_id: string | null, } | { "type": "trade_futures", common: TxCommonInput, store_id: string, 
+type TransactionInput = { "type": "topup", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, from: AccountRef | null, details: KindDetails, 
+/**
+ * «Arrived in parts» (spec S1): empty = a single-store income.
+ */
+parts?: Array<ReceivedPartInput>, } | { "type": "payment", common: TxCommonInput, store_id: string, asset: AssetIdent, amount: Amount, fee: FeeInput | null, to: AccountRef | null, details: KindDetails, } | { "type": "transfer", common: TxCommonInput, from: AccountRef, to: AccountRef, asset: AssetIdent, amount: Amount, fee: FeeInput | null, network: Chain | null, tx_hash: string | null, debt: DebtEffect | null, } | { "type": "convert", common: TxCommonInput, from: ConvertSideInput, to: ConvertSideInput, fee: FeeInput | null, rate_override: Amount | null, } | { "type": "trade_spot", common: TxCommonInput, store_id: string, sold: TradeSideInput, bought: TradeSideInput, fee: FeeInput | null, liquidity: Liquidity | null, order_id: string | null, } | { "type": "trade_futures", common: TxCommonInput, store_id: string, 
 /**
  * Exchange the contract trades on, e.g. `bybit`.
  */
@@ -7879,7 +8227,19 @@ price_currency: string | null,
 /**
  * The property the operation belongs to (plan G4); empty — none.
  */
-property_id?: string, };
+property_id?: string, 
+/**
+ * What the operation is «for» (spec P1); none lets a rule decide (D3).
+ */
+period?: OpPeriod, 
+/**
+ * How an operation over several months is cut into months (spec P5).
+ */
+spread?: Spread, 
+/**
+ * «Really no period»: a new operation without a period takes no rule (spec D3).
+ */
+no_period_rule?: boolean, };
 
 /**
  * A single field suggestion for the trade form.
@@ -7954,7 +8314,12 @@ with_attachments: boolean,
  * Only operations the budget could not value: a side had no rate
  * (Currency-1 · 7).
  */
-unpriced: boolean, };
+unpriced: boolean, 
+/**
+ * Only operations whose period (or, with none, the month of their date)
+ * intersects this span; it combines with `from`/`to` by AND (Q17).
+ */
+period?: PeriodFilter | null, };
 
 type TxGraph = { currency: string, lanes: Array<GraphLane>, nodes: Array<GraphNode>, edges: Array<GraphEdge>, 
 /**
@@ -8041,7 +8406,20 @@ utility_item_id?: string,
  * merged it away, so the dedupe never removes it again. Synced like any
  * other field; only «Allow merging» (or deleting the record) clears it.
  */
-keep?: boolean, };
+keep?: boolean, 
+/**
+ * What the operation is «for» (spec P1); none means the month of the date.
+ */
+period?: OpPeriod, 
+/**
+ * Per-month shares of the amount over `period` (spec P5).
+ */
+spread?: Spread, 
+/**
+ * The income whose distribution made this operation: a back-reference
+ * for integrity checks only (spec S9).
+ */
+income_ref?: string, };
 
 /**
  * How a transaction came to exist.
@@ -8254,6 +8632,15 @@ essential: boolean | null,
  */
 passive: boolean | null, 
 /**
+ * The period rule of the category; `None` keeps the stored one (clear it with
+ * `clear_period_rule`).
+ */
+period_rule?: PeriodRule, 
+/**
+ * Remove the stored period rule; refused together with `period_rule`.
+ */
+clear_period_rule?: boolean, 
+/**
  * The version the form loaded. When set, only the fields the user changed against it are
  * applied onto the current document (an edit never overwrites a remote change to another
  * field); `None` keeps the whole-input behaviour.
@@ -8267,6 +8654,11 @@ type UpdateContactInput = { id: string, contact: ContactDraft,
  * field); `None` keeps the whole-input behaviour.
  */
 base?: ContactDraft, };
+
+/**
+ * `update_distribution`: «Изменить раскладку» of a stored income (spec I10).
+ */
+type UpdateDistributionInput = { income_id: string, rows: Array<DistributionRow>, };
 
 type UpdateEnvelopeInput = { id: string, draft: EnvelopeDraft, 
 /**
@@ -8301,6 +8693,8 @@ day: number | null, };
  * What the UI shows when a newer version exists.
  */
 type UpdateOffer = { version: string, notes: string | null, release_url: string | null, download_url: string | null, can_self_update: boolean, hint: ManualHint, };
+
+type UpdateOperationTemplateInput = { id: string, template: OperationTemplateInput, };
 
 /**
  * Where the update check stands (event `update-state` carries the whole
@@ -8715,6 +9109,10 @@ workflows: Array<Workflow>, workflow_runs: Array<WorkflowRun>, workflow_vars: Ar
  * Runs asleep at a "Wait" node.
  */
 workflow_waits: Array<WorkflowWait>, 
+/**
+ * Saved operation shapes with their period and distribution rules (spec T1).
+ */
+operation_templates: Array<OperationTemplate>, 
 /**
  * Syncs with exchanges, newest last.
  */

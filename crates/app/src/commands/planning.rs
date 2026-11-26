@@ -11,30 +11,33 @@ use mwt_household::utilities as utility_reads;
 use mwt_household::utilities::{
     PayUtilityBillInput, PropertySummary, UtilityBill, UtilityPaymentDraft, UtilityTrend,
 };
-use mwt_model::Store;
 use mwt_model::StoreId;
 use mwt_model::Transaction;
 use mwt_model::{
-    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, PriceAlert, Reminder,
-    UtilityItem,
+    Automation, AutomationRun, Budget, EmergencyFund, Goal, MeterReading, OperationTemplate,
+    PriceAlert, Reminder, UtilityItem,
 };
+use mwt_model::{MonthShare, OpPeriod, PeriodRule, Spread, SpreadMode, Store};
 use mwt_money::interest as interest_reads;
 use mwt_money::interest::{DepositReport, InterestTaxReport};
 use mwt_planning::agenda::UpcomingItem;
 use mwt_planning::automations::AutomationSimulation;
 use mwt_planning::budget::{BudgetStatus, DailyBudget, MonthSummary};
 use mwt_planning::emergency::EmergencyStatus;
+use mwt_planning::flows::Basis;
 use mwt_planning::goals::{GoalCalendar, GoalDeleted, GoalProgress};
 use mwt_planning::{
     agenda as agenda_reads, budget as budget_reads, daily_budget as daily_reads,
     goals as goal_reads, upcoming as upcoming_reads,
 };
 use mwt_usecases::ipc_contract::{
-    AdjustPointsInput, AutomationInput, BudgetInput, ConfirmEstimatedInput,
-    CreateLoyaltyProgramInput, GoalInput, MeterReadingInput, PriceAlertInput, ReminderInput,
-    SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput, SnoozeReminderInput,
-    UpdateAutomationInput, UpdateBudgetInput, UpdateGoalInput, UpdateMeterReadingInput,
-    UpdatePriceAlertInput, UpdateReminderInput, UpdateUtilityInput, UtilityInput,
+    AdjustPointsInput, AssetIdent, AutomationInput, BudgetInput, ConfirmDistributionInput,
+    ConfirmEstimatedInput, CreateFromTemplateInput, CreateLoyaltyProgramInput, DistributionPreview,
+    GoalInput, MeterReadingInput, OperationTemplateInput, PeriodEffect, PriceAlertInput,
+    ReminderInput, SetDepositTermsInput, SetLoyaltyInfoInput, SimulateAutomationsInput,
+    SnoozeReminderInput, TemplateOperation, UpdateAutomationInput, UpdateBudgetInput,
+    UpdateGoalInput, UpdateMeterReadingInput, UpdateOperationTemplateInput, UpdatePriceAlertInput,
+    UpdateReminderInput, UpdateUtilityInput, UtilityInput,
 };
 use mwt_usecases::service::Session;
 use mwt_usecases::usecases::household::{loyalty, utilities};
@@ -42,11 +45,13 @@ use mwt_usecases::usecases::money::interest;
 use mwt_usecases::usecases::money::rebase;
 use mwt_usecases::usecases::planning::{
     agenda, auto_reminders, automation_card, automation_rules, automations, budget, emergency,
-    goals, my_automations, scenarios,
+    goals, my_automations, period_preview, scenarios, templates as template_usecases,
 };
 use mwt_workflow::Workflow;
 
 use crate::commands::app_settings::current_zone;
+use crate::commands::enrichment::enrich_in_background;
+use crate::commands::templates;
 use crate::commands::{AppState, with_vault, with_vault_mut};
 use crate::ipc::IpcError;
 use crate::ipc::commands::ipc_commands;
@@ -208,12 +213,18 @@ pub async fn delete_budget(id: String, state: State<'_, AppState>) -> Result<(),
 
 #[tauri::command]
 pub async fn get_budget_status(
+    basis: Option<Basis>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Vec<BudgetStatus>, IpcError> {
     let zone = current_zone(&app);
     with_vault(&state, |vault| {
-        Ok(budget::budget_status(&vault.books(), now_secs(), &zone))
+        Ok(budget::budget_status_by(
+            &vault.books(),
+            now_secs(),
+            &zone,
+            basis,
+        ))
     })
 }
 
@@ -232,6 +243,7 @@ pub async fn get_daily_budget(
 #[tauri::command]
 pub async fn get_month_summary(
     month: Option<String>,
+    basis: Option<Basis>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<MonthSummary, IpcError> {
@@ -241,8 +253,162 @@ pub async fn get_month_summary(
         mwt_base::calendar::month_key(date)
     });
     with_vault(&state, |vault| {
-        budget::month_summary(&vault.books(), &month, &zone)
+        budget::month_summary_with_basis(&vault.books(), &month, &zone, basis)
     })
+}
+
+// -- periods ---------------------------------------------------------------------
+
+/// The period a rule gives an operation of `money_date` (`YYYY-MM-DD`); fills the chip.
+#[tauri::command]
+pub async fn resolve_period_rule(
+    rule: PeriodRule,
+    money_date: String,
+) -> Result<OpPeriod, IpcError> {
+    Ok(period_preview::resolve_period_rule(rule, &money_date)?)
+}
+
+/// The shares of a spread over a period; `shares` are the manual ones. Writes nothing.
+#[tauri::command]
+pub async fn preview_spread(
+    amount: Amount,
+    asset: AssetIdent,
+    period: OpPeriod,
+    mode: SpreadMode,
+    shares: Option<Vec<MonthShare>>,
+) -> Result<Vec<MonthShare>, IpcError> {
+    Ok(period_preview::preview_spread(
+        amount,
+        &asset.to_asset(),
+        &period,
+        mode,
+        shares,
+    )?)
+}
+
+/// The months an operation counts in before and after a new period or spread; `None` keeps the
+/// stored one. Writes nothing; the change itself is `update_transaction`.
+#[tauri::command]
+pub async fn preview_period_change(
+    id: String,
+    period: Option<OpPeriod>,
+    spread: Option<Spread>,
+    state: State<'_, AppState>,
+) -> Result<PeriodEffect, IpcError> {
+    with_vault(&state, |vault| {
+        period_preview::preview_period_change(vault, &id, period, spread)
+    })
+}
+
+// -- distribution rule (spec op-period I11, I12) -----------------------------------
+
+/// The rows of the automation's next payout under its template's rule, for the given or the
+/// expected amount. Writes nothing.
+#[tauri::command]
+pub async fn preview_distribution_rule(
+    automation_id: String,
+    amount: Option<Amount>,
+    state: State<'_, AppState>,
+) -> Result<DistributionPreview, IpcError> {
+    with_vault(&state, |vault| {
+        let preview =
+            automations::preview_distribution_rule(vault, &automation_id, amount, now_secs())?;
+        Ok(DistributionPreview::of(
+            preview.amount,
+            Some(preview.planned_at),
+            preview.period,
+            preview.resolved,
+        ))
+    })
+}
+
+/// The answer «yes» to the confirmation of an automation run that asks: the income is booked at
+/// the confirmed amount and distributed by the rule. Returns the income as stored.
+#[tauri::command]
+pub async fn confirm_distribution(
+    input: ConfirmDistributionInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Transaction, IpcError> {
+    let zone = current_zone(&app);
+    with_vault_mut(&state, |vault| {
+        automations::confirm_distribution(
+            vault,
+            &input.run_id,
+            input.amount,
+            input.mode,
+            now_secs(),
+            &zone,
+        )
+    })
+}
+
+// -- operation templates (spec op-period I13) ------------------------------------------
+
+/// Every template, live and archived, by name.
+#[tauri::command]
+pub async fn list_operation_templates(
+    state: State<'_, AppState>,
+) -> Result<Vec<OperationTemplate>, IpcError> {
+    with_vault(&state, |vault| {
+        Ok(template_usecases::list_operation_templates(vault))
+    })
+}
+
+#[tauri::command]
+pub async fn create_operation_template(
+    input: OperationTemplateInput,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::create_operation_template(vault, input.to_draft())
+    })
+}
+
+#[tauri::command]
+pub async fn update_operation_template(
+    input: UpdateOperationTemplateInput,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::update_operation_template(vault, &input.id, input.template.to_draft())
+    })
+}
+
+/// Archive or bring back; allowed while automations use the template.
+#[tauri::command]
+pub async fn archive_operation_template(
+    id: String,
+    archived: bool,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::archive_operation_template(vault, &id, archived)
+    })
+}
+
+/// Refused while an automation refers to the template; returns the deleted one.
+#[tauri::command]
+pub async fn delete_operation_template(
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<OperationTemplate, IpcError> {
+    with_vault_mut(&state, |vault| {
+        template_usecases::delete_operation_template(vault, &id)
+    })
+}
+
+/// Quick-add: the template's operation with explicit fields winning, its period by the rule, and
+/// for an income with a distribution rule the rows applied in the same write.
+#[tauri::command]
+pub async fn create_transaction_from_template(
+    input: CreateFromTemplateInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TemplateOperation, IpcError> {
+    let done = with_vault_mut::<_, IpcError>(&state, |vault| templates::quick_add(vault, input))?;
+    enrich_in_background(&app, templates::operation_id(&done));
+    Ok(done)
 }
 
 // -- goals -----------------------------------------------------------------------
@@ -808,4 +974,4 @@ pub async fn get_utility_payment_draft(
     })
 }
 
-ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);
+ipc_commands!(planning_commands, PLANNING_NAMES, commands::planning: [list_automations, create_automation, update_automation, delete_automation, run_automation, simulate_automations, list_automation_runs, retry_automation_run, skip_automation_run, confirm_estimated_amount, detach_automation, list_budgets, create_budget, update_budget, delete_budget, get_budget_status, get_daily_budget, get_month_summary, resolve_period_rule, preview_spread, preview_period_change, preview_distribution_rule, confirm_distribution, list_operation_templates, create_operation_template, update_operation_template, archive_operation_template, delete_operation_template, create_transaction_from_template, list_goals, create_goal, update_goal, delete_goal, restore_goal, get_goal_progress, get_goal_calendar, goal_from_scenario, emergency_fund_get, emergency_fund_set, emergency_fund_toggle, list_reminders, create_reminder, update_reminder, delete_reminder, set_reminder_done, finish_reminder_series, snooze_reminder, list_price_alerts, create_price_alert, update_price_alert, delete_price_alert, get_upcoming, list_my_automations, set_my_automation_active, get_automation_card, preview_automation_dates, list_automation_journal, set_loyalty_info, create_loyalty_program, adjust_points, get_cashback_report, set_deposit_terms, get_deposit_report, get_interest_tax, list_utility_items, create_utility_item, update_utility_item, delete_utility_item, add_meter_reading, delete_meter_reading, update_meter_reading, get_utility_bill, pay_utility_bill, preview_utility_formula, get_meter_trend, get_property_summary, get_utility_payment_draft]);

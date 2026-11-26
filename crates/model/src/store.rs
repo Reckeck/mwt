@@ -867,6 +867,11 @@ impl AssetRef {
         self.chain == Some(Chain::Fiat)
     }
 
+    /// Minor-unit digits an amount of this asset is rounded to: 2 for fiat, 8 otherwise.
+    pub fn minor_places(&self) -> u32 {
+        if self.is_fiat() { 2 } else { 8 }
+    }
+
     pub fn is_crypto(&self) -> bool {
         !self.is_fiat()
     }

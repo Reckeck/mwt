@@ -172,6 +172,10 @@ pub struct Settings {
     /// that was cut short here (`sync::registry::SETTINGS_SCOPE`).
     #[serde(default)]
     pub crypto_raise_pending: bool,
+    /// One-time fixups already run on this vault, by name (spec M6, Q14).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<Vec<String>>", optional))]
+    pub migrations_done: Vec<String>,
 }
 
 /// How the daily budget is computed (plan D18).
@@ -257,6 +261,7 @@ impl Default for Settings {
             onboarding_checklist_hidden: false,
             schedule_timezone: None,
             crypto_raise_pending: false,
+            migrations_done: Vec::new(),
         }
     }
 }
@@ -552,6 +557,9 @@ pub struct VaultDoc {
     /// Runs asleep at a "Wait" node.
     #[serde(default)]
     pub workflow_waits: Vec<crate::workflow::WorkflowWait>,
+    /// Saved operation shapes with their period and distribution rules (spec T1).
+    #[serde(default)]
+    pub operation_templates: Vec<crate::template::OperationTemplate>,
     /// Syncs with exchanges, newest last.
     #[serde(default)]
     pub import_runs: Vec<ImportRun>,
@@ -710,6 +718,7 @@ impl Default for VaultDoc {
             workflow_queue: Vec::new(),
             workflow_state: Vec::new(),
             workflow_waits: Vec::new(),
+            operation_templates: Vec::new(),
             import_runs: Vec::new(),
             discarded_imports: Vec::new(),
             calc_scenarios: Vec::new(),
@@ -903,6 +912,7 @@ mod json_schema_tests {
             "meter_readings",
             "enrichments",
             "manual_prices",
+            "operation_templates",
         ] {
             assert!(
                 root.contains_key(collection),
@@ -913,6 +923,7 @@ mod json_schema_tests {
             "Contact",
             "Category",
             "AutomationSpec",
+            "OperationTemplate",
             "Goal",
             "LiabilityTerms",
             "EnrichmentRecord",

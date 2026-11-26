@@ -26,6 +26,7 @@ fn mine_lists_everything_that_fires_the_soonest_first() {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
             name: "Salary".into(),
             active: true,
             preset: None,

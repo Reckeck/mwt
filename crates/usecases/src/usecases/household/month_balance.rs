@@ -12,6 +12,7 @@ use crate::money::month_balance::{
 };
 use crate::money::worth::FlowClass;
 use crate::service::Session;
+use mwt_planning::flows::Basis;
 use mwt_reports::overview::ReportFilter;
 
 /// The vault as the month balance's source for the reports area: it holds the
@@ -91,16 +92,22 @@ impl ReportSource for VaultReports<'_> {
 }
 
 /// The balance of the filter's months (the last twelve by default). The
-/// carry starts at `settings.carry_since`, even before the period does.
+/// carry starts at `settings.carry_since`, even before the period does. The
+/// balance is a time-bound reader: it counts by the money date whatever the
+/// filter's basis (R3).
 pub fn month_balance(
     vault: &Session,
     filter: &ReportFilter,
     now: i64,
     zone: &str,
 ) -> Result<MonthBalance> {
+    let money_date = ReportFilter {
+        basis: Some(Basis::MoneyDate),
+        ..filter.clone()
+    };
     let source = VaultReports {
         vault,
-        filter,
+        filter: &money_date,
         now,
         zone,
     };

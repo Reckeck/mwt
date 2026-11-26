@@ -64,13 +64,7 @@ pub fn store_months(
         month = next_month(month);
     }
     for tx in &doc.transactions {
-        let secs = secs_or_now(&tx.meta().timestamp);
-        let Some((_, _, row)) = rows
-            .iter_mut()
-            .find(|(from, to, _)| secs >= *from && secs < *to)
-        else {
-            continue;
-        };
+        let tx_secs = secs_or_now(&tx.meta().timestamp);
         let legs: Vec<_> = tx
             .legs()
             .into_iter()
@@ -80,12 +74,22 @@ pub fn store_months(
             && legs.iter().any(|leg| leg.amount.is_negative())
             && legs.iter().any(|leg| leg.amount.is_positive())
             && tx.store_ids().len() > 1;
-        let mut touched = false;
+        let mut counted: Vec<usize> = Vec::new();
         for leg in legs.iter().filter(|leg| scope.contains(&leg.store_id)) {
-            touched = true;
+            let secs = leg.secs(tx_secs);
+            let Some(slot) = rows
+                .iter()
+                .position(|(from, to, _)| secs >= *from && secs < *to)
+            else {
+                continue;
+            };
+            if !counted.contains(&slot) {
+                counted.push(slot);
+            }
             if internal {
                 continue;
             }
+            let row = &mut rows[slot].2;
             let value = leg_value(leg, base, secs).unwrap_or(Amount::ZERO);
             if leg.amount.is_negative() {
                 row.outflow += value;
@@ -93,8 +97,8 @@ pub fn store_months(
                 row.inflow += value;
             }
         }
-        if touched {
-            row.tx_count += 1;
+        for slot in counted {
+            rows[slot].2.tx_count += 1;
         }
     }
     rows.into_iter()

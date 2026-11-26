@@ -22,6 +22,8 @@ pub fn topup(store_id: &str, raw: &str) -> Transaction {
     let mut meta = TxMeta::new("salary");
     meta.categories = vec!["salary".into()];
     Transaction::Topup(TopupTx {
+        parts: Vec::new(),
+        distribution: None,
         meta,
         store_id: store_id.into(),
         asset: AssetRef::fiat("USD", "US Dollar"),

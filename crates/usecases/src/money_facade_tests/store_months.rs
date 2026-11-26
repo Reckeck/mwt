@@ -1,11 +1,14 @@
 //! Tests of the store_months area that need the vault (`Session`): moved from
 //! `money/store_months_tests.rs` with their assertions unchanged (crate-split T13).
 
+use crate::Amount;
 use crate::model::ids::StoreId;
 use crate::model::store::StoreKind;
+use crate::model::transaction::Transaction;
 use crate::money::store_months::*;
 use crate::service::Session;
 use crate::service::test_support::*;
+use mwt_model::ReceivedPart;
 
 #[test]
 fn store_months_split_inflow_and_outflow_by_month() {
@@ -101,4 +104,69 @@ fn zero_months_gives_the_current_one_and_the_delegate_equals_the_function() {
             "UTC"
         )
     );
+}
+
+/// op-period A5: a part moves its store on the part's own date, not the operation's.
+#[test]
+fn a_part_moves_its_store_in_its_own_month() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
+    let mut salary = income_of(&card, usd(), "120", "1", "salary");
+    at(&mut salary, "2026-09-30T12:00:00Z");
+    let Transaction::Topup(inner) = &mut salary else {
+        unreachable!()
+    };
+    inner.parts = vec![
+        ReceivedPart {
+            store_id: card.clone(),
+            amount: amount("100"),
+            timestamp: None,
+        },
+        ReceivedPart {
+            store_id: cash.clone(),
+            amount: amount("20"),
+            timestamp: Some("2026-10-02T12:00:00Z".into()),
+        },
+    ];
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+
+    let now = crate::time::secs_or_now("2026-10-19T12:00:00Z");
+    let cash_rows = rows(&vault, &cash, false, 2, now);
+    assert_eq!(cash_rows[0].inflow, Amount::ZERO);
+    assert_eq!(cash_rows[1].inflow, amount("20"));
+    let card_rows = rows(&vault, &card, false, 2, now);
+    assert_eq!(card_rows[0].inflow, amount("100"));
+    assert_eq!(card_rows[1].inflow, Amount::ZERO);
+}
+
+/// op-period A5: a part moves its store's balance curve on the part's own date.
+#[test]
+fn a_part_moves_its_store_history_on_its_own_date() {
+    let (_dir, mut vault) = empty_vault();
+    let card = store(&mut vault, "Card", StoreKind::Bank, None);
+    let cash = store(&mut vault, "Wallet", StoreKind::Cash, None);
+    let mut salary = income_of(&card, usd(), "120", "1", "salary");
+    at(&mut salary, "2026-09-30T12:00:00Z");
+    let Transaction::Topup(inner) = &mut salary else {
+        unreachable!()
+    };
+    inner.parts = vec![
+        ReceivedPart {
+            store_id: card.clone(),
+            amount: amount("100"),
+            timestamp: None,
+        },
+        ReceivedPart {
+            store_id: cash.clone(),
+            amount: amount("20"),
+            timestamp: Some("2026-10-02T12:00:00Z".into()),
+        },
+    ];
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+
+    let points = crate::money::portfolio::store_history(&vault.books(), &cash, false, "usd");
+    let stamps: Vec<&str> = points.iter().map(|point| point.ts.as_str()).collect();
+    assert!(stamps.contains(&"2026-10-02T12:00:00Z"));
+    assert!(!stamps.contains(&"2026-09-30T12:00:00Z"));
 }

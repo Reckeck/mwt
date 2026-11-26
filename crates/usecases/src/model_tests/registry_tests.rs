@@ -21,6 +21,15 @@ fn every_vault_field_has_a_sync_rule() {
     }
 }
 
+/// The serialized `Settings` with the fields that are left out when empty set.
+fn full_settings() -> serde_json::Value {
+    let settings = crate::model::vault::Settings {
+        migrations_done: vec!["m6".into()],
+        ..Default::default()
+    };
+    serde_json::to_value(settings).expect("settings")
+}
+
 /// The value at a dotted path (`a.b`) of the serialized `Settings`, if any.
 fn setting_at<'a>(settings: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
     name.split('.')
@@ -28,8 +37,7 @@ fn setting_at<'a>(settings: &'a serde_json::Value, name: &str) -> Option<&'a ser
 }
 
 fn settings_keys() -> Vec<String> {
-    let settings =
-        serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
+    let settings = full_settings();
     settings
         .as_object()
         .expect("object")
@@ -47,8 +55,7 @@ fn every_setting_has_a_scope() {
             "Settings.{name} has no scope: decide Group or Device in model::registry::SETTINGS_SCOPE"
         );
     }
-    let settings =
-        serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
+    let settings = full_settings();
     for (name, _) in SETTINGS_SCOPE {
         assert!(
             setting_at(&settings, name).is_some(),
@@ -60,8 +67,7 @@ fn every_setting_has_a_scope() {
 /// An object setting that is split (`flatten`) decides each of its parts.
 #[test]
 fn every_part_of_a_split_setting_has_a_scope() {
-    let settings =
-        serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
+    let settings = full_settings();
     let rule = find("settings").expect("settings rule");
     for head in rule.flatten {
         let Some(inner) = settings.get(head).and_then(|part| part.as_object()) else {
@@ -270,8 +276,7 @@ fn registry_paths_exist_in_the_model() {
 
 #[test]
 fn device_settings_exist() {
-    let settings =
-        serde_json::to_value(crate::model::vault::Settings::default()).expect("settings");
+    let settings = full_settings();
     for name in DEVICE_SETTINGS {
         assert!(
             setting_at(&settings, name).is_some(),

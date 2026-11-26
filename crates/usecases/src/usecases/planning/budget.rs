@@ -9,15 +9,15 @@ use std::collections::HashSet;
 use crate::Amount;
 use crate::calendar::{self, Calendar};
 use crate::error::Result;
-use crate::model::planning::{Budget, BudgetTarget};
+use crate::model::planning::{Budget, BudgetPeriod, BudgetTarget};
 use crate::money::books::Books;
 use crate::money::worth::FlowClass;
 use crate::planning::automation_plan::automation_runs;
 use crate::planning::budget::{
-    BudgetDraft, BudgetStatus, MonthSummary, budget_currency, not_executed, period_dates,
-    plan_create_budget, plan_delete_budget, plan_update_budget, used_of,
+    BudgetDraft, BudgetStatus, MonthSummary, budget_currency, month_summary_by, not_executed,
+    period_dates, plan_create_budget, plan_delete_budget, plan_update_budget, used_of,
 };
-use crate::planning::flows::{Flow, flows_between};
+use crate::planning::flows::{Basis, Flow, flows_between, flows_for_basis};
 use crate::planning::goals::resolve_scope;
 use crate::service::Session;
 
@@ -74,7 +74,20 @@ pub(crate) fn unpriced_tx_ids(books: &Books<'_>) -> HashSet<String> {
 /// Every active limit with what its current period used (plan §7.3):
 /// mandatory and everyday spending of the budget stores, by category, by
 /// wallet or in total, in the limit's own currency at each day's rate.
+///
+/// `Month` limits read by the default basis (`period`, op-period R4).
 pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatus> {
+    budget_status_by(books, now, zone, None)
+}
+
+/// `budget_status` read by `basis`; `None` means `period`. Only `Month`
+/// limits follow it: `Day` and `Week` limits stay on the money date (R3).
+pub fn budget_status_by(
+    books: &Books<'_>,
+    now: i64,
+    zone: &str,
+    basis: Option<Basis>,
+) -> Vec<BudgetStatus> {
     let cal = Calendar::new(zone);
     let today = cal.date_of(now);
     books
@@ -88,12 +101,17 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
                 BudgetTarget::Store(scope) => Some(resolve_scope(books, scope)),
                 _ => None,
             };
-            let counted: Vec<Flow> = flows_between(
+            let basis = match budget.period {
+                BudgetPeriod::Month => basis.unwrap_or(Basis::Period),
+                _ => Basis::MoneyDate,
+            };
+            let counted: Vec<Flow> = flows_for_basis(
                 books,
                 &cal,
                 &budget.currency,
                 cal.start_of(start),
                 cal.start_of(end),
+                basis,
             )
             .into_iter()
             .filter(|flow| matches!(flow.class, FlowClass::Fixed | FlowClass::Daily))
@@ -129,7 +147,17 @@ pub fn budget_status(books: &Books<'_>, now: i64, zone: &str) -> Vec<BudgetStatu
 /// month (`YYYY-MM`) in the budget currency (plan §7.3): the books' figures
 /// plus the automation runs that did not execute.
 pub fn month_summary(books: &Books<'_>, month: &str, zone: &str) -> Result<MonthSummary> {
-    let mut out = crate::planning::budget::month_summary(books, month, zone)?;
+    month_summary_with_basis(books, month, zone, None)
+}
+
+/// `month_summary` read by `basis`; `None` means `period` (R4).
+pub fn month_summary_with_basis(
+    books: &Books<'_>,
+    month: &str,
+    zone: &str,
+    basis: Option<Basis>,
+) -> Result<MonthSummary> {
+    let mut out = month_summary_by(books, month, zone, basis)?;
     let first = calendar::parse_month(month).ok_or_else(|| {
         crate::error::Error::InvalidInput(format!("month {month}: expected YYYY-MM"))
     })?;

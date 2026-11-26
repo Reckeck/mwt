@@ -161,6 +161,11 @@ pub struct AutomationSpec {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
+    /// The operation template whose period and distribution rules a run
+    /// uses; `None` — the old behaviour (spec T5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub operation_template_id: Option<String>,
 }
 
 /// An automation as the app shows it: a workflow built from an
@@ -205,6 +210,11 @@ pub struct Automation {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(optional))]
     pub for_month_offset: Option<i8>,
+    /// The operation template whose period and distribution rules a run
+    /// uses; `None` — the old behaviour (spec T5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub operation_template_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -800,6 +810,11 @@ pub struct EnvelopeMove {
     pub delta: Amount,
     /// RFC3339.
     pub at: String,
+    /// The income whose distribution made this entry: a back-reference for
+    /// integrity checks only (spec S9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub income_ref: Option<String>,
 }
 
 impl EnvelopeMove {
@@ -827,6 +842,7 @@ impl Envelope {
             id: uuid::Uuid::new_v4().to_string(),
             delta,
             at: at.to_string(),
+            income_ref: None,
         });
         self.allocated = self.moves_sum();
     }
@@ -844,6 +860,7 @@ impl Envelope {
                 id: EnvelopeMove::opening_id(&self.id),
                 delta: self.allocated,
                 at: self.created_at.clone(),
+                income_ref: None,
             });
             return true;
         }

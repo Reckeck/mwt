@@ -11,6 +11,8 @@ use mwt_base::error::{Error, Result};
 use mwt_model::{HealthColor, HealthReasonCode};
 use mwt_money::books::Books;
 
+use crate::flows::Basis;
+
 /// DTI above this (percent) is red.
 pub const DTI_HIGH_PCT: u32 = 50;
 /// DTI above this (percent) is yellow.
@@ -94,8 +96,13 @@ pub fn months_average(
     let mut income = Amount::ZERO;
     let mut spent = Amount::ZERO;
     for month in months {
-        let summary =
-            crate::budget::month_summary(books, &calendar::month_key(*month), zone).ok()?;
+        let summary = crate::budget::month_summary_by(
+            books,
+            &calendar::month_key(*month),
+            zone,
+            Some(Basis::MoneyDate),
+        )
+        .ok()?;
         if summary.income.is_zero() && summary.fixed.is_zero() && summary.daily.is_zero() {
             return None;
         }
@@ -112,7 +119,12 @@ pub fn savings_series(books: &Books<'_>, now: i64, zone: &str) -> Result<Vec<Sav
     finished_months(today, SAVINGS_MONTHS)
         .into_iter()
         .map(|month| {
-            let summary = crate::budget::month_summary(books, &calendar::month_key(month), zone)?;
+            let summary = crate::budget::month_summary_by(
+                books,
+                &calendar::month_key(month),
+                zone,
+                Some(Basis::MoneyDate),
+            )?;
             Ok(SavingsMonth {
                 saved_pct: percent(summary.savings_fact, summary.income),
                 month: summary.month,

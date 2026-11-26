@@ -30,6 +30,7 @@ fn card_follows_the_salary_and_the_journal_shows_the_asked_share() {
             time: None,
             asks: false,
             for_month_offset: None,
+            operation_template_id: None,
             name: "Salary".into(),
             active: true,
             preset: None,
