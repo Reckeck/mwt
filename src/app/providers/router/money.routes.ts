@@ -5,6 +5,7 @@ import { routePlaceholder } from './route-placeholder'
 /** «Money»: spending, where it went, the plan and the shared events, then five behind «More». */
 export const moneyRoutes: RouteRecordRaw = {
   path: 'money',
+  component: () => import('@/pages/money').then((page) => page.MoneySection),
   children: [
     {
       path: '',
@@ -21,7 +22,7 @@ export const moneyRoutes: RouteRecordRaw = {
     {
       path: 'plan',
       name: 'money-plan',
-      component: routePlaceholder,
+      component: () => import('@/pages/money').then((page) => page.MoneyPlan),
       meta: { i18n: 'nav.money', group: 'plan' },
     },
     {
@@ -39,7 +40,7 @@ export const moneyRoutes: RouteRecordRaw = {
     {
       path: 'month',
       name: 'money-month',
-      component: routePlaceholder,
+      component: () => import('@/pages/money').then((page) => page.MoneyMonth),
       meta: { i18n: 'nav.money', group: 'month' },
     },
     {
