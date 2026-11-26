@@ -119,13 +119,12 @@ function clearHistory() {
       <VaultUnlockForm v-if="current" :path="current.path" :plain="plain" :disabled="missing" />
     </template>
 
-    <div v-else-if="vault.recentsError" class="grid justify-items-start gap-2" data-recents-error>
-      <p class="text-sm text-destructive">{{ t('auth.recentsFailed') }}</p>
-      <Button variant="outline" data-recents-retry @click="load">{{ t('actions.retry') }}</Button>
-    </div>
-
     <template v-else>
-      <p class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>
+      <div v-if="vault.recentsError" class="grid justify-items-start gap-2" data-recents-error>
+        <p class="text-sm text-destructive">{{ t('auth.recentsFailed') }}</p>
+        <Button variant="outline" data-recents-retry @click="load">{{ t('actions.retry') }}</Button>
+      </div>
+      <p v-else class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>
       <Button variant="outline" class="w-full justify-start gap-2" @click="openUnlock(null)">
         <FolderOpen class="size-4" />
         {{ t(vault.appStorage ? 'auth.importFile' : 'auth.openOther') }}
