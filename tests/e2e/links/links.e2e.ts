@@ -25,9 +25,19 @@ const ROOT = new URL('../../..', import.meta.url).pathname
 const BASELINE = join(ROOT, 'scripts/check-links.baseline.json')
 const update = process.env.E2E_UPDATE === '1'
 const quick = process.env.E2E_QUICK === '1'
-// The home page and the shared route placeholder: every other route renders it (spec D14). A screen's own
+// The home page, the rebuilt screens and the shared route placeholder (spec D14). A screen's own
 // pages come back with its W4 task.
-const PAGES = ['/', '/transactions']
+const PAGES = [
+  '/',
+  '/transactions',
+  '/transactions/calendar',
+  '/transactions/bonuses',
+  '/automations',
+  '/automations/reminders',
+  '/automations/alerts',
+  '/automations/workflows',
+  '/automations/journal',
+]
 // Errors are keyed by page and message minus ids that change nothing; the baseline holds the known ones.
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 const key = (text: string) => text.replace(UUID, '<id>')

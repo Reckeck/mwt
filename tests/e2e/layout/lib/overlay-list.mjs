@@ -13,6 +13,9 @@
 //   focus / touch / modalShift — false/false/true to switch a check off for a layer that is not modal, small, or locks scrolling
 const overlay = (id) => `[data-overlay="${id}"]`
 
+/** A «⋯» button of an action menu, and an item of the menu it opens (a menu on a desktop, a sheet on a phone). */
+const MENU_ITEM = '[role="menuitem"], [data-action-sheet] button'
+
 /** Sets a field of a pinia store. */
 const PINIA = (name, assign) => `const store = document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('${name}'); store.${assign}; return true`
 const flag = (module, code) => `const mod = await import('${module}'); ${code}; return true`
@@ -70,5 +73,17 @@ export const OVERLAYS = [
   { id: 'goal', route: '/money/plan', phone: true, open: [{ click: '[data-plan-goal]' }], layer: overlay('goal') },
   { id: 'calc-compare', route: '/money/calculator', phone: true, open: [{ click: '[data-calc-compare]' }], layer: overlay('calc-compare') },
   { id: 'sync-pairing', route: '/', phone: true, open: [{ eval: SYNC_SESSION('pairing'), wait: 600 }], layer: overlay('sync-pairing'), cleanup: SYNC_RESET },
+  { id: 'entity-automation', route: '/automations', phone: true, open: [{ query: { card: '{automation}' } }], layer: '[data-automation-card]', keys: ['card'] },
+
+  // Automations
+  { id: 'automation-wizard', route: '/automations', phone: true, open: [{ query: { new: 'blank' } }], layer: overlay('automation-wizard'), keys: ['new'] },
+  { id: 'automation-salary', route: '/automations', phone: true, open: [{ query: { new: 'salary' } }], layer: overlay('automation-salary'), keys: ['new'] },
+  { id: 'automation-save-share', route: '/automations', phone: true, open: [{ query: { new: 'save_share' } }], layer: overlay('automation-save-share'), keys: ['new'] },
+  { id: 'reminder', route: '/automations/reminders', phone: true, open: [{ query: { new: 'reminder' } }], layer: overlay('reminder'), keys: ['new'] },
+  { id: 'price-alert', route: '/automations/alerts', phone: true, open: [{ query: { new: 'alert' } }], layer: overlay('price-alert'), keys: ['new'] },
+  { id: 'automation-edit', route: '/automations?edit={automation}', phone: true, fresh: true, open: [{ wait: 900 }], layer: overlay('automation-edit'), keys: ['edit'] },
+  { id: 'confirm', route: '/automations/reminders', phone: true, open: [{ click: '[data-slot="confirm-button"]' }], layer: overlay('confirm') },
+  { id: 'workflow-import', route: '/automations', open: [{ click: '[data-tour="automations-import"]' }], layer: overlay('workflow-import') },
+  { id: 'workflow-vars', route: '/automations', phone: true, open: [{ click: '[data-tour="workflow-vars-open"]' }], phoneOpen: [{ click: '[aria-label="Действия раздела"]', wait: 700 }, { click: MENU_ITEM, text: 'Переменные' }], layer: overlay('workflow-vars') },
   { id: 'sync-plan', route: '/', phone: 'only', open: [{ eval: SYNC_SESSION('awaiting_confirm'), wait: 600 }], layer: overlay('sync-plan'), cleanup: SYNC_RESET },
 ]

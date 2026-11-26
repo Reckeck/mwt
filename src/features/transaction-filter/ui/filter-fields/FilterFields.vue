@@ -32,8 +32,21 @@ function setAmount(key: 'amount_min' | 'amount_max', value: string | number) {
   <div class="grid content-start gap-1.5">
     <Label :for="`${idPrefix}-min`">{{ t('filter.amount') }}</Label>
     <div class="flex items-center gap-2">
-      <Input :id="`${idPrefix}-min`" inputmode="decimal" :model-value="draft.amount_min ?? ''" :placeholder="t('filter.amountFrom')" @update:model-value="setAmount('amount_min', $event)" />
-      <Input :id="`${idPrefix}-max`" inputmode="decimal" :model-value="draft.amount_max ?? ''" :placeholder="t('filter.amountTo')" :aria-label="t('filter.amountTo')" @update:model-value="setAmount('amount_max', $event)" />
+      <Input
+        :id="`${idPrefix}-min`"
+        inputmode="decimal"
+        :model-value="draft.amount_min ?? ''"
+        :placeholder="t('filter.amountFrom')"
+        @update:model-value="setAmount('amount_min', $event)"
+      />
+      <Input
+        :id="`${idPrefix}-max`"
+        inputmode="decimal"
+        :model-value="draft.amount_max ?? ''"
+        :placeholder="t('filter.amountTo')"
+        :aria-label="t('filter.amountTo')"
+        @update:model-value="setAmount('amount_max', $event)"
+      />
     </div>
   </div>
   <div class="grid gap-2 sm:col-span-2 @4xl:col-span-4">

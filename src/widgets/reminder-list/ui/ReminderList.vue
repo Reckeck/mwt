@@ -53,7 +53,7 @@ function openDialog(reminder: Reminder | null) {
 </script>
 
 <template>
-  <div class="grid gap-3">
+  <div class="grid grid-cols-[minmax(0,1fr)] gap-3">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-sm text-muted-foreground">{{ t('reminder.intro') }}</p>
       <Button size="sm" data-tour="reminder-new" @click="openDialog(null)">
@@ -69,7 +69,7 @@ function openDialog(reminder: Reminder | null) {
       :rows="4"
       @retry="reminders.refetch()"
     >
-      <section v-for="group in groups" :key="group.key" class="grid gap-1.5" :data-reminder-group="group.key">
+      <section v-for="group in groups" :key="group.key" class="grid grid-cols-[minmax(0,1fr)] gap-1.5" :data-reminder-group="group.key">
         <h3 class="text-xs font-medium text-muted-foreground">{{ t(`reminder.group.${group.key}`) }}</h3>
         <Card size="sm">
           <ul class="divide-y divide-border">

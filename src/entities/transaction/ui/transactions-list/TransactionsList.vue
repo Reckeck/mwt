@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { Money } from '@/entities/currency'
 import { Button } from '@/shared/ui/button'
 import { txId } from '@/shared/lib/transactions'
 import { provideTxContext } from '@/shared/lib/tx-context'
@@ -16,13 +15,24 @@ import { TX_PAGE } from './use-tx-pages'
 
 const props = withDefaults(defineProps<TransactionsListProps>(), { losses: null, fxPerUsd: null, baseCurrency: undefined, loadingMore: false })
 const emit = defineEmits<{ open: [tx: Transaction, list: Transaction[]]; more: [] }>()
+/** The day's net total in the base currency: the host renders it (an entity does not import `currency`). */
+defineSlots<{ 'day-total'?(props: { amount: number; partial: boolean }): unknown }>()
 
 const { t } = useI18n()
 const context = provideTxContext()
 
 /** The day totals are in the base currency: they wait for its code and its rate. */
 const ratesReady = computed(() => Boolean(props.baseCurrency) && props.fxPerUsd !== null && props.fxPerUsd !== undefined)
-const days = computed(() => groupByDay(props.transactions, Number(props.fxPerUsd ?? 1), context.rootOf))
+/** Each row carries its id and loss once, so the template does not recompute them per binding. */
+const days = computed(() =>
+  groupByDay(props.transactions, Number(props.fxPerUsd ?? 1), context.rootOf).map((day) => ({
+    ...day,
+    rows: day.txs.map((tx) => {
+      const id = txId(tx)
+      return { tx, id, loss: props.losses?.[id] ?? null }
+    }),
+  })),
+)
 const rest = computed(() => props.total - props.transactions.length)
 </script>
 
@@ -37,18 +47,18 @@ const rest = computed(() => props.total - props.transactions.length)
         <span>{{ dayLabel(`${day.date}T12:00:00`) }}</span>
         <!-- No total until the summary brought the base code and rate: a USD sum under «₽» would be a lie. -->
         <span v-if="ratesReady" class="tabular-nums" :title="day.partial ? t('tx.dayTotalPartial') : t('tx.dayTotal')">
-          <Money :amount="day.totalBase" :currency="props.baseCurrency" :decimals="2" signed />
+          <slot name="day-total" :amount="day.totalBase" :partial="day.partial" />
           <template v-if="day.partial">*</template>
         </span>
       </h3>
       <div class="divide-y divide-border">
         <TransactionRow
-          v-for="tx in day.txs"
-          :key="txId(tx)"
-          :data-tx-row="txId(tx)"
+          v-for="row in day.rows"
+          :key="row.id"
+          :data-tx-row="row.id"
           class="min-w-0 px-1"
-          :tx="tx"
-          :loss="props.losses?.[txId(tx)] ?? null"
+          :tx="row.tx"
+          :loss="row.loss"
           :dated="false"
           openable
           @open="emit('open', $event, props.transactions)"

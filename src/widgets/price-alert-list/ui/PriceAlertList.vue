@@ -58,7 +58,7 @@ function openDialog(alert: PriceAlert | null) {
     >
       <Card size="sm">
         <ul class="divide-y divide-border">
-          <li v-for="alert in alerts.data.value" :key="alert.id" class="flex items-center gap-1" :class="!alert.active && 'opacity-60'" :data-alert="alert.id">
+          <li v-for="alert in alerts.data.value" :key="alert.id" class="flex items-center gap-2" :class="!alert.active && 'opacity-60'" :data-alert="alert.id">
             <div class="min-w-0 flex-1">
               <ListRow
                 :title="`${alert.asset.symbol} ${alert.condition === 'above' ? t('alert.above') : t('alert.below')}`"

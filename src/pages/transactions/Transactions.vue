@@ -5,7 +5,9 @@ import { useRoute } from 'vue-router'
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { Search } from 'lucide-vue-next'
 
+import { TransactionsExportButton } from '@/features/report-export'
 import { TransactionFilter, useFilterChips } from '@/features/transaction-filter'
+import { Money } from '@/entities/currency'
 import { TransactionsList, useTxPages } from '@/entities/transaction'
 import { call } from '@/shared/api/ipc'
 import { useBackendEvent } from '@/shared/api/use-backend-event'
@@ -64,14 +66,17 @@ useBackendEvent<RefreshResult>('prices-updated', () => {
     <div data-tour="tx-filter">
       <TransactionFilter v-model="filter">
         <template #trail>
-          <ResultTotal
-            v-if="!txs.isPending.value"
-            :rows="rows"
-            :total="total"
-            :narrowed="activeFilterCount(filter) > 0"
-            :fx-per-usd="summary.data.value?.fx_per_usd"
-            :base-currency="summary.data.value?.base_currency"
-          />
+          <div class="flex items-center gap-2">
+            <TransactionsExportButton :filter="filter" />
+            <ResultTotal
+              v-if="!txs.isPending.value"
+              :rows="rows"
+              :total="total"
+              :narrowed="activeFilterCount(filter) > 0"
+              :fx-per-usd="summary.data.value?.fx_per_usd"
+              :base-currency="summary.data.value?.base_currency"
+            />
+          </div>
         </template>
       </TransactionFilter>
     </div>
@@ -99,7 +104,11 @@ useBackendEvent<RefreshResult>('prices-updated', () => {
         :base-currency="summary.data.value?.base_currency"
         @open="openTxDetails"
         @more="txs.fetchNextPage()"
-      />
+      >
+        <template #day-total="{ amount }">
+          <Money :amount="amount" :currency="summary.data.value?.base_currency" :decimals="2" signed />
+        </template>
+      </TransactionsList>
     </SectionState>
   </div>
 </template>

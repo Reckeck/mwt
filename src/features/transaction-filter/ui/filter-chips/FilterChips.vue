@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { X } from 'lucide-vue-next'
 
 import { Badge } from '@/shared/ui/badge'
+import { Button } from '@/shared/ui/button'
 import { emptyTxFilter } from '@/shared/lib/tx-filter'
 
 import { useFilterChips } from '../../lib/filter-chips'
@@ -19,20 +20,21 @@ const chipsOf = useFilterChips()
     <li v-for="chip in chipsOf(filter)" :key="chip.key">
       <Badge variant="neutral" class="gap-1 pe-1" data-filter-chip>
         <span class="max-w-48 truncate">{{ chip.label }}</span>
-        <button
-          type="button"
-          class="touch-min-square flex size-5 items-center justify-center rounded-full hover:bg-border"
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          class="rounded-full hover:bg-border"
           :aria-label="t('filter.chipRemove', { name: chip.label })"
           @click="filter = { ...filter, ...chip.clear }"
         >
           <X class="size-3" />
-        </button>
+        </Button>
       </Badge>
     </li>
     <li v-if="chipsOf(filter).length > 1">
-      <button type="button" class="text-xs text-muted-foreground underline-offset-2 hover:underline" @click="filter = emptyTxFilter({ text: filter.text })">
+      <Button variant="link" size="sm" class="h-auto p-0 text-xs text-muted-foreground" @click="filter = emptyTxFilter({ text: filter.text })">
         {{ t('period.reset') }}
-      </button>
+      </Button>
     </li>
   </ul>
 </template>

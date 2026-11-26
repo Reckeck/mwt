@@ -47,6 +47,7 @@ export const router = createRouter({
         },
         {
           path: 'transactions',
+          component: () => import('@/pages/transactions').then((page) => page.TransactionsSection),
           children: [
             {
               path: '',

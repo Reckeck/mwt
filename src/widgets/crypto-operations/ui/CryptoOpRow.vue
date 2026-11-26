@@ -8,6 +8,7 @@ import { Badge } from '@/shared/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { ListRow } from '@/shared/ui/list-row'
 import { formatDateTime } from '@/shared/lib/format'
+import { type MoneyFlow, flowOfAmount } from '@/shared/lib/money-flow'
 
 import { cryptoOpIcon, legAmount, opPlace, opTitle, shortAddress } from '../lib/op-view'
 
@@ -27,6 +28,9 @@ const other = computed(() => {
   if (props.row.contact_name) return props.row.contact_name
   return address ? t(incoming.value ? 'cryptoTrack.operations.from' : 'cryptoTrack.operations.to', { address: shortAddress(address) }) : ''
 })
+/** D7: ink out, green in; the legs of an exchange or a swap are muted without a sign (as `txLegFlow`). */
+const exchange = computed(() => Boolean(props.row.flow_id) || props.row.kind === 'swap')
+const legFlow = (leg: CryptoOpLeg): MoneyFlow => (exchange.value ? 'move' : flowOfAmount(legAmount(leg)))
 const subtitle = computed(() => [other.value, opPlace(props.row)].filter(Boolean).join(' · '))
 const reference = computed(() =>
   props.row.reference ? t(props.row.exchange ? 'cryptoTrack.operations.fill' : 'cryptoTrack.operations.hash', { id: props.row.reference }) : '',
@@ -38,8 +42,8 @@ const reference = computed(() =>
     <CollapsibleTrigger class="flex w-full items-center gap-2 px-1 text-left" data-crypto-op-open>
       <ListRow class="min-w-0 flex-1" :title="title" :subtitle="subtitle" :icon="cryptoOpIcon(props.row)">
         <template #value>
-          <span v-for="leg in props.row.legs" :key="leg.asset_key + leg.direction" class="block" :class="leg.direction === 'in' ? 'text-success' : 'text-destructive'">
-            <Money :amount="legAmount(leg)" :currency="leg.symbol" :at="props.row.time" signed :convert="false" />
+          <span v-for="leg in props.row.legs" :key="leg.asset_key + leg.direction" class="block">
+            <Money :amount="legAmount(leg)" :currency="leg.symbol" :at="props.row.time" :flow="legFlow(leg)" :convert="false" />
           </span>
           <span v-if="props.row.value_usd" class="block text-xs font-normal text-muted-foreground">
             <Money :amount="props.row.value_usd" currency="usd" signed />
