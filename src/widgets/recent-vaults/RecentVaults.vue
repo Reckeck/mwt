@@ -30,8 +30,13 @@ const deleteOpen = ref(false)
 onMounted(async () => {
   // `status` doubles as "is the default location free?" for the create dialog.
   await vault.refreshStatus().catch(() => {})
-  await vault.loadRecents()
+  await load()
 })
+
+/** A failed read shows the error with a retry, never the first-run welcome. */
+async function load() {
+  await vault.loadRecents().catch(() => {})
+}
 
 /** The vault in the field: the one picked, else the last opened whose file is still there. */
 const current = computed(
@@ -113,6 +118,11 @@ function clearHistory() {
       />
       <VaultUnlockForm v-if="current" :path="current.path" :plain="plain" :disabled="missing" />
     </template>
+
+    <div v-else-if="vault.recentsError" class="grid justify-items-start gap-2" data-recents-error>
+      <p class="text-sm text-destructive">{{ t('auth.recentsFailed') }}</p>
+      <Button variant="outline" data-recents-retry @click="load">{{ t('actions.retry') }}</Button>
+    </div>
 
     <template v-else>
       <p class="text-sm text-muted-foreground">{{ t('auth.noRecentVaults') }}</p>

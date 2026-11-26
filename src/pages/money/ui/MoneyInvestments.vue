@@ -6,9 +6,8 @@ import { TrendingUp } from 'lucide-vue-next'
 
 import { positionTotals, useCryptoPositions } from '@/entities/crypto-position'
 import { Money } from '@/entities/currency'
-import { StoreRowLink } from '@/entities/store'
+import { purposeGroup, StoreRowLink } from '@/entities/store'
 import { useStoreTree } from '@/shared/api/queries'
-import { withoutLoyalty } from '@/shared/lib/store-tree'
 import { Button } from '@/shared/ui/button'
 import { Card } from '@/shared/ui/card'
 import { PageHeader } from '@/shared/ui/page-header'
@@ -23,10 +22,9 @@ const router = useRouter()
 const tree = useStoreTree()
 const positions = useCryptoPositions()
 
-const nodes = computed(() =>
-  withoutLoyalty(tree.data.value ?? []).filter((node) => !node.store.archived && node.store.purpose === 'investment'),
-)
-const total = computed(() => nodes.value.reduce((sum, node) => sum + Number(node.subtree_base), 0))
+const group = computed(() => purposeGroup(tree.data.value ?? [], 'investment'))
+const nodes = computed(() => group.value.nodes)
+const total = computed(() => group.value.total)
 const defi = computed(() => positionTotals(positions.data.value ?? []))
 const hasDefi = computed(() => (positions.data.value ?? []).length > 0)
 

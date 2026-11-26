@@ -39,3 +39,18 @@ describe('Unlock', () => {
     expect(wrapper.get('[data-unlock-title]').text()).toContain('Добро пожаловать')
   })
 })
+
+describe('Unlock after a failed read', () => {
+  it('does not show the welcome when recent_vaults rejects', async () => {
+    vi.mocked(call).mockImplementation((command: string) =>
+      command === 'recent_vaults' ? (Promise.reject(new Error('boom')) as never) : (Promise.resolve(null) as never),
+    )
+    const wrapper = mount(Unlock, { global: { stubs: { RecentVaults: true, VaultCreateDialog: true } } })
+    mounted.push(wrapper)
+    await expect(useVaultStore().loadRecents()).rejects.toThrow('boom')
+    await flushPromises()
+    expect(useVaultStore().recentsLoaded).toBe(false)
+    expect(useVaultStore().recentsError).toBe('boom')
+    expect(wrapper.find('[data-unlock-title]').exists()).toBe(false)
+  })
+})
