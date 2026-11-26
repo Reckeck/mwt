@@ -362,7 +362,21 @@ mod tests {
             "ftp://example.com/t.css",
             "not a url",
         ] {
-            assert!(fetch(url, &Limits::PRODUCTION).await.is_err(), "{url}");
+            let err = fetch(url, &Limits::PRODUCTION).await.unwrap_err();
+            assert!(matches!(err, Error::InvalidInput(_)), "{url}: {err}");
+        }
+    }
+
+    #[test]
+    fn embedded_ipv4_and_site_local_addresses_are_internal() {
+        for ip in [
+            "64:ff9b::a00:1",
+            "::10.0.0.1",
+            "2002:a00:1::",
+            "fec0::1",
+            "64:ff9b:1::1",
+        ] {
+            assert!(is_internal(ip.parse().unwrap()), "{ip}");
         }
     }
 
@@ -398,10 +412,8 @@ mod tests {
             "https://[fec0::1]/x",
         ] {
             let (base, limits, _) = stub(SECS, move |_| redirect_to(target)).await;
-            assert!(
-                fetch(&format!("{base}/a"), &limits).await.is_err(),
-                "{target}"
-            );
+            let err = fetch(&format!("{base}/a"), &limits).await.unwrap_err();
+            assert!(matches!(err, Error::InvalidInput(_)), "{target}: {err}");
         }
     }
 
