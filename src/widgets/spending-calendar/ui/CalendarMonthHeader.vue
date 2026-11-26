@@ -21,7 +21,7 @@ const { t } = useI18n()
     <Button variant="outline" size="icon-sm" class="touch-min" :aria-label="t('calendar.next')" @click="emit('shift', 1)">
       <ChevronRight class="size-4" />
     </Button>
-    <p class="flex min-h-5 min-w-0 flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+    <p class="flex min-h-5 w-full min-w-0 flex-wrap md:w-auto items-center gap-x-2 text-sm text-muted-foreground">
       <template v-if="props.left !== null">
         {{ t('calendar.left') }}
         <RouterLink :to="{ name: 'money-month' }" class="font-semibold text-primary">

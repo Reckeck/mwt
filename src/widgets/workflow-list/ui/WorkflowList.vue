@@ -16,8 +16,11 @@ import { Card } from '@/shared/ui/card'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { ListRow } from '@/shared/ui/list-row'
 import { SectionState } from '@/shared/ui/section-state'
+import { Skeleton } from '@/shared/ui/skeleton'
 import { Switch } from '@/shared/ui/switch'
 import { buttonVariants } from '@/shared/ui/button'
+
+const LOADING_ROWS = 4
 
 /** The user's workflows: a switch, the way into the editor, delete. */
 const { t } = useI18n()
@@ -62,9 +65,18 @@ const remove = useMutation({
       :error="list.error.value"
       :empty="!list.data.value?.length"
       :empty-title="t('workflow.list.empty')"
-      :rows="3"
       @retry="list.refetch()"
     >
+      <!-- the card's own shape and row height: the gallery below does not move when the list arrives (rule 17) -->
+      <template #loading>
+        <Card size="sm">
+          <div class="divide-y divide-border">
+            <div v-for="row in LOADING_ROWS" :key="row" class="flex h-16 items-center">
+              <Skeleton class="h-10 w-full" />
+            </div>
+          </div>
+        </Card>
+      </template>
       <Card size="sm">
         <ul class="divide-y divide-border">
           <li v-for="workflow in list.data.value" :key="workflow.id" class="flex items-center gap-2" :data-workflow="workflow.id">

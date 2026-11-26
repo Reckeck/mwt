@@ -43,7 +43,7 @@ const label = computed(() => {
       cn(
         'h-auto min-w-0 flex-col items-stretch justify-start gap-0.5 rounded-none px-2 py-1.5 text-left font-normal',
         HEAT_CLASSES[props.heat],
-        props.compact ? 'min-h-11 items-center' : 'min-h-[92px]',
+        props.compact ? 'min-h-10 items-center' : 'min-h-[92px]',
         props.day.forecast && 'opacity-60',
         (isToday && !props.compact) || props.selected ? 'shadow-[inset_0_0_0_2px_var(--color-primary)]' : '',
       )

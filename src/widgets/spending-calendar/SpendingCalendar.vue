@@ -85,7 +85,7 @@ const totals = computed(() => {
     spent: past.reduce((sum, day) => sum + Number(day.spent), 0),
   }
 })
-const cellHeight = computed(() => (isPhone.value ? 'min-h-11' : 'min-h-[92px]'))
+const cellHeight = computed(() => (isPhone.value ? 'min-h-10' : 'min-h-[92px]'))
 </script>
 
 <template>
@@ -128,7 +128,14 @@ const cellHeight = computed(() => (isPhone.value ? 'min-h-11' : 'min-h-[92px]'))
       </div>
     </div>
 
-    <CalendarLegend v-if="calendar.data.value" :currency="currency" :income="totals.income" :spent="totals.spent" :per-day="latest?.per_day_left ?? null" />
+    <!-- always laid out, hidden until the month arrives: the day list below keeps its place (rule 17) -->
+    <CalendarLegend
+      :class="!calendar.data.value && 'invisible'"
+      :currency="currency"
+      :income="totals.income"
+      :spent="totals.spent"
+      :per-day="calendar.data.value ? (latest?.per_day_left ?? null) : '0'"
+    />
 
     <section v-if="selected" class="grid grid-cols-[minmax(0,1fr)] gap-2" data-calendar-day-list>
       <p class="text-sm text-muted-foreground">

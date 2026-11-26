@@ -27,6 +27,7 @@ const narrowed = computed(() => cryptoOpFilterCount(route.filter.value) > 0)
 <template>
   <div class="grid gap-4" data-tour="crypto-operations">
     <CryptoOpFilterBar :model-value="route.filter.value" :facets="facets" @update:model-value="route.setFilter" />
+    <p class="text-sm text-muted-foreground">{{ t('cryptoTrack.operations.readonlyNote') }}</p>
     <Card>
       <SectionState
         skeleton="operations"
@@ -41,6 +42,5 @@ const narrowed = computed(() => cryptoOpFilterCount(route.filter.value) > 0)
         <CryptoOpList :rows="rows" :total="total" :loading-more="query.isFetchingNextPage.value" @more="query.fetchNextPage()" />
       </SectionState>
     </Card>
-    <p class="text-sm text-muted-foreground">{{ t('cryptoTrack.operations.readonlyNote') }}</p>
   </div>
 </template>
