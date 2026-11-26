@@ -48,7 +48,7 @@ snow = "0.10"
 # Vault transfer: the one-time code is checked by a PAKE (no offline guessing).
 spake2 = "0.4"
 serde_bytes = "0.11"
-mdns-sd = "0.21"
+mdns-sd = "0.22"
 # Own data sources: elements of a web page, CSV and XLSX files.
 scraper = { version = "0.29", default-features = false }
 csv = "1"
