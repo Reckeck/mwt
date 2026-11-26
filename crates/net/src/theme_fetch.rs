@@ -222,6 +222,28 @@ fn is_internal_v6(ip: Ipv6Addr) -> bool {
         || ip.is_multicast()
         || first & 0xfe00 == 0xfc00
         || first & 0xffc0 == 0xfe80
+        || first & 0xffc0 == 0xfec0
+        || embedded_v4(ip).is_some_and(is_internal_v4)
+}
+
+/// The IPv4 address a transition format carries: NAT64 (64:ff9b::/96),
+/// IPv4-compatible (::/96) and 6to4 (2002::/16). The local-use NAT64 prefix
+/// (64:ff9b:1::/48) is never public, so it yields an internal address.
+fn embedded_v4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    let seg = ip.segments();
+    let join = |upper: u16, lower: u16| {
+        let [first, second] = upper.to_be_bytes();
+        let [third, fourth] = lower.to_be_bytes();
+        Ipv4Addr::new(first, second, third, fourth)
+    };
+    match seg {
+        [0x64, 0xff9b, 0, 0, 0, 0, high, tail] | [0, 0, 0, 0, 0, 0, high, tail] => {
+            Some(join(high, tail))
+        }
+        [0x64, 0xff9b, 1, ..] => Some(Ipv4Addr::LOCALHOST),
+        [0x2002, high, tail, ..] => Some(join(high, tail)),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -332,6 +354,10 @@ mod tests {
             "https://[fe80::1]/t.css",
             "https://[fd00::1]/t.css",
             "https://[::ffff:10.0.0.1]/t.css",
+            "https://[64:ff9b::a00:1]/t.css",
+            "https://[::10.0.0.1]/t.css",
+            "https://[2002:0a00:0001::]/t.css",
+            "https://[fec0::1]/t.css",
             "https://user:pass@example.com/t.css",
             "ftp://example.com/t.css",
             "not a url",
@@ -342,7 +368,13 @@ mod tests {
 
     #[test]
     fn public_addresses_pass_the_address_check() {
-        for ip in ["1.1.1.1", "93.184.216.34", "2606:4700::1111"] {
+        for ip in [
+            "1.1.1.1",
+            "93.184.216.34",
+            "2606:4700::1111",
+            "64:ff9b::808:808",
+            "2002:808:808::",
+        ] {
             assert!(!is_internal(ip.parse().unwrap()), "{ip}");
         }
     }
@@ -360,6 +392,10 @@ mod tests {
             "https://10.0.0.5/t.css",
             "https://169.254.169.254/x",
             "https://localhost/x",
+            "https://[64:ff9b::a00:1]/x",
+            "https://[::10.0.0.1]/x",
+            "https://[2002:0a00:0001::]/x",
+            "https://[fec0::1]/x",
         ] {
             let (base, limits, _) = stub(SECS, move |_| redirect_to(target)).await;
             assert!(
