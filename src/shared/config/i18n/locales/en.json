@@ -6813,7 +6813,7 @@
   "goalCard.pausedHint": "Paused: not counted in the plan",
   "goalCard.pausedBadge": "Paused",
   "quickAdd.moreChip": "More",
-  "quickAdd.frequent": "Frequent",
+  "quickAdd.recent": "Recent",
   "quickAdd.save.payment": "Save",
   "quickAdd.save.topup": "Save",
   "quickAdd.save.transfer": "Transfer",

@@ -15,6 +15,8 @@ export interface WalletRow {
   subtitle: string
   /** The balance in the wallet's own currency when it holds one, else in the base currency. */
   balance: string
+  /** `≈ 220 700 ₽` under a balance in another currency than the base one (board 984555); empty otherwise. */
+  baseHint: string
   icon: Component
   color: string | undefined
   /** Lower-case text a search looks in. */
@@ -38,6 +40,7 @@ export function walletRow(node: StoreTreeNode, t: (key: string) => string, baseC
     fullName: node.path.join(' · '),
     subtitle: binding,
     balance,
+    baseHint: only && only.asset.symbol.toLowerCase() !== baseCurrency.toLowerCase() ? `≈ ${baseBalance}` : '',
     icon: storeIcon(node.store),
     color: node.store.color || undefined,
     haystack: `${node.path.join(' ')} ${binding}`.toLowerCase(),

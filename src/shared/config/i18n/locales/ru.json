@@ -6813,7 +6813,7 @@
   "goalCard.pausedHint": "Приостановлена: не учитывается в плане",
   "goalCard.pausedBadge": "Приостановлена",
   "quickAdd.moreChip": "Ещё",
-  "quickAdd.frequent": "Частые",
+  "quickAdd.recent": "Недавние",
   "quickAdd.save.payment": "Сохранить",
   "quickAdd.save.topup": "Сохранить",
   "quickAdd.save.transfer": "Перевести",
