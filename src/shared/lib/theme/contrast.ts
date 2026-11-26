@@ -65,12 +65,23 @@ function parseAlpha(token: string | undefined, color: string): number {
   return token === undefined ? 1 : clamp01(parseNumber(token, color))
 }
 
+/** Legacy comma syntax (3 or 4 parts) or modern space syntax (3 channels, optional `/ alpha`); any other shape is rejected. */
 function splitArguments(body: string): { channels: string[]; alpha: string | undefined } {
-  const [main, slashAlpha] = body.split('/').map((part) => part.trim())
-  const parts = main.split(/[\s,]+/).filter(Boolean)
-  if (slashAlpha !== undefined) return { channels: parts, alpha: slashAlpha }
-  if (parts.length > 4) throw new ColorParseError(body)
-  return { channels: parts.slice(0, 3), alpha: parts[3] }
+  if (body.includes(',')) {
+    const parts = body.split(',').map((part) => part.trim())
+    if (body.includes('/') || (parts.length !== 3 && parts.length !== 4) || parts.some((part) => part === '')) {
+      throw new ColorParseError(body)
+    }
+    return { channels: parts.slice(0, 3), alpha: parts[3] }
+  }
+  const slashParts = body.split('/').map((part) => part.trim())
+  if (slashParts.length > 2) throw new ColorParseError(body)
+  const channels = slashParts[0].split(/\s+/).filter(Boolean)
+  const alpha = slashParts[1]
+  if (channels.length !== 3 || (alpha !== undefined && (alpha === '' || /\s/.test(alpha)))) {
+    throw new ColorParseError(body)
+  }
+  return { channels, alpha }
 }
 
 function hslToRgb(hue: number, saturation: number, lightness: number): [number, number, number] {

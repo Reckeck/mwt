@@ -92,12 +92,21 @@ describe('validateTheme', () => {
     expect(messages(`:root { --primary: ${value}; }`)).toEqual([])
   })
 
-  it.each(['#abcde', 'rgb(1 2)', 'rgb(a b c)', 'currentColor', 'notacolour', '12px', 'oklch(1 0 0 0 0)'])(
-    'rejects colour %s',
-    (value) => {
-      expect(messages(`:root { --primary: ${value}; }`)).toHaveLength(1)
-    },
-  )
+  it.each([
+    '#abcde',
+    'rgb(1 2)',
+    'rgb(a b c)',
+    'currentColor',
+    'notacolour',
+    '12px',
+    'oklch(1 0 0 0 0)',
+    'rgb(1,, 2, 3)',
+    'rgb(1, 2 3)',
+    'rgb(1 2 3 4)',
+    'rgb(1 2 3 / 4 / 5)',
+  ])('rejects colour %s', (value) => {
+    expect(messages(`:root { --primary: ${value}; }`)).toHaveLength(1)
+  })
 
   it.each(['0', '0px', '8px', '0.5rem', '2rem', '32px'])('accepts radius %s', (value) => {
     expect(messages(`:root { --radius: ${value}; }`)).toEqual([])

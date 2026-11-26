@@ -115,6 +115,18 @@ function declarationProblem({ name, value }: ParsedDeclaration): string | null {
 }
 
 /** Validates the text of a custom theme file; `fileName` feeds the name fallback (Q6). */
+/** The source before the first `{` that is not inside a comment, so a name may contain braces. */
+function headerBeforeRule(text: string): string {
+  let index = 0
+  while (index < text.length && text[index] !== '{') {
+    if (text.startsWith('/*', index)) {
+      const end = text.indexOf('*/', index + 2)
+      index = end === -1 ? text.length : end + 2
+    } else index += 1
+  }
+  return text.slice(0, index)
+}
+
 export function validateTheme(text: string, fileName?: string): ValidationResult {
   const errors: ValidationIssue[] = []
   const warnings: ValidationIssue[] = []
@@ -148,7 +160,7 @@ export function validateTheme(text: string, fileName?: string): ValidationResult
   }
   if (errors.length > 0) return result()
 
-  const header = text.slice(0, text.indexOf('{'))
+  const header = headerBeforeRule(text)
   const declaredMode = readComment(header, 'mode')?.toLowerCase()
   const modeDeclared = declaredMode === 'light' || declaredMode === 'dark'
   if (declaredMode !== undefined && !modeDeclared) {

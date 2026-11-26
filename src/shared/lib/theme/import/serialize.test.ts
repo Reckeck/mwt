@@ -25,6 +25,15 @@ describe('serializeTheme', () => {
     expect(result.theme?.name).not.toContain('\n')
   })
 
+  it('keeps a name with braces, a comment end and a newline through the round trip', () => {
+    const name = 'a { b } */ c\nd'
+    const result = validateTheme(serializeTheme({ ...builtinThemes[0], name }, '1'))
+    expect(result.errors).toEqual([])
+    expect(result.theme?.name).toBe('a { b } * / c d')
+    expect(result.theme?.mode).toBe(builtinThemes[0].mode)
+    expect(result.theme?.modeGuessed).toBe(false)
+  })
+
   it.each(builtinThemes.map((theme) => [theme.id, theme] as const))('round-trips %s', (_id, theme) => {
     const result = validateTheme(serializeTheme(theme, '0.1.0'))
     expect(result.errors).toEqual([])
