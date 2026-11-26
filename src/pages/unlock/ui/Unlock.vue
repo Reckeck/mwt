@@ -21,8 +21,8 @@ const firstRun = computed(() => vault.recentsLoaded && vault.recents.length === 
 </script>
 
 <template>
-  <div class="flex h-full flex-col items-center overflow-y-auto bg-background px-4 pt-safe pb-safe md:justify-center md:px-6">
-    <main class="grid w-full max-w-sm justify-items-start gap-6 py-8">
+  <div class="flex h-full flex-col items-center overflow-y-auto bg-background px-4 pt-safe pb-safe md:px-6">
+    <main class="grid w-full max-w-sm justify-items-start gap-6 py-8 md:my-auto">
       <header v-if="vault.recentsLoaded" class="grid gap-3">
         <BrandMark class="size-10" />
         <h1 class="text-hero text-balance md:text-display" data-unlock-title>{{ t(firstRun ? 'unlock.welcomeTitle' : 'auth.card.title') }}</h1>
@@ -31,7 +31,7 @@ const firstRun = computed(() => vault.recentsLoaded && vault.recents.length === 
       <!-- Same height as the header: the title is not known before the list is, and must not jump. -->
       <div v-else class="grid gap-3" data-unlock-skeleton>
         <BrandMark class="size-10" />
-        <Skeleton class="h-10 w-64" />
+        <Skeleton class="h-10 w-[min(16rem,100vw-2rem)]" />
         <Skeleton class="h-5 w-48" />
       </div>
       <RecentVaults @create="createOpen = true">
