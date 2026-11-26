@@ -1,70 +1,69 @@
 import type { RouteRecordRaw } from 'vue-router'
 
-const page = () => import('@/pages/money')
+import { routePlaceholder } from './route-placeholder'
 
 /** «Money»: spending, where it went, the plan and the shared events, then five behind «More». */
 export const moneyRoutes: RouteRecordRaw = {
   path: 'money',
-  component: () => page().then((module) => module.MoneySection),
   children: [
     {
       path: '',
       name: 'money',
-      component: () => page().then((module) => module.MoneySpending),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'spending' },
     },
     {
       path: 'where',
       name: 'money-where',
-      component: () => page().then((module) => module.MoneyWhere),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'where' },
     },
     {
       path: 'plan',
       name: 'money-plan',
-      component: () => page().then((module) => module.MoneyPlan),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'plan' },
     },
     {
       path: 'wealth',
       name: 'money-wealth',
-      component: () => page().then((module) => module.MoneyWealth),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'wealth' },
     },
     {
       path: 'investments',
       name: 'money-investments',
-      component: () => page().then((module) => module.MoneyInvestments),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'investments' },
     },
     {
       path: 'month',
       name: 'money-month',
-      component: () => page().then((module) => module.MoneyMonth),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'month' },
     },
     {
       path: 'health',
       name: 'money-health',
-      component: () => page().then((module) => module.MoneyHealth),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'health' },
     },
     {
       path: 'calculator',
       name: 'money-calculator',
-      component: () => page().then((module) => module.MoneyCalculator),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'calculator' },
     },
     {
       path: 'together',
       name: 'money-together',
-      component: () => import('@/pages/money-together').then((module) => module.MoneyTogether),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'together' },
     },
     {
       path: 'together/:id',
       name: 'money-together-event',
-      component: () => import('@/pages/money-together-event').then((module) => module.MoneyTogetherEvent),
+      component: routePlaceholder,
       meta: { i18n: 'nav.money', group: 'together', tab: 'money-together' },
     },
   ],

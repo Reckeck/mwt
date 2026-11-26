@@ -6,7 +6,7 @@ import { appSettingsOutsideCommands } from '@/shared/api/mock/commands-app'
 import { mockAppSettings } from '@/shared/api/mock/vault-data'
 import { useSettingsStore } from '@/shared/store/settings'
 
-import AppSettingsModal from './AppSettingsModal.vue'
+import AppearanceSettings from './AppearanceSettings.vue'
 
 vi.mock('@/shared/api/ipc', () => ({
   call: vi.fn(async (cmd: string, args?: { input?: unknown }) => {
@@ -16,8 +16,6 @@ vi.mock('@/shared/api/ipc', () => ({
   }),
 }))
 
-vi.mock('@/shared/lib/notify', () => ({ notify: { saved: vi.fn(), error: vi.fn() } }))
-
 const flush = () => new Promise((resolve) => setTimeout(resolve))
 
 async function mountModal(settings: Record<string, unknown>) {
@@ -25,7 +23,11 @@ async function mountModal(settings: Record<string, unknown>) {
   Object.assign(mockAppSettings, { theme_id: null, theme_light_id: null, theme_dark_id: null }, settings)
   const store = useSettingsStore()
   await store.loadApp()
-  const wrapper = mount(AppSettingsModal, { attachTo: document.body })
+  const wrapper = mount(AppearanceSettings, {
+    attachTo: document.body,
+    // The host persists the patch; here the store stands in for it.
+    props: { onChange: (patch: Partial<UpdateAppSettingsInput>) => void store.updateApp(patch) },
+  })
   await flush()
   return { wrapper, store }
 }

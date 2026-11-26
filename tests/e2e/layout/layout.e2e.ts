@@ -29,7 +29,6 @@ import { flushTimings, shardOwner, timed } from '../harness/shard'
 import { overlayIds, overlays } from './lib/overlays.mjs'
 import {
   backCloses,
-  confirmStable,
   DESKTOP,
   dialogJump,
   listenerLeak,
@@ -53,14 +52,11 @@ const onlyOverlays = process.env.E2E_OVERLAYS !== undefined
 // Unit sizes. A sweep unit is a theme x width cut into chunks of about VIEWS_PER_CHUNK views; the number of
 // chunks is fixed here (the unit names are the keys of weights.json) and the views are divided evenly between
 // them when the unit runs, so a new view makes a chunk bigger, never lost. Counts come from scenario.mjs
-// (`views()`): 8 main screens at the sizes that are not in FULL_AT (and in the light theme), all the rest at FULL_AT.
+// (`views()`): the home page and the route placeholder at every size and theme, until the screens come back (W4).
 const VIEWS_PER_CHUNK = 5
-const MAIN_VIEWS = 8
-const FULL_VIEWS = 50
-const FULL_WIDTHS = new Set([1280, 1024, 768, 560, 390, 360])
+const VIEWS = 2
 const OVERLAYS_PER_CHUNK = 10
-const viewChunks = (theme: string, width: number) =>
-  Math.ceil((theme === 'dark' && FULL_WIDTHS.has(width) ? FULL_VIEWS : MAIN_VIEWS) / VIEWS_PER_CHUNK)
+const viewChunks = () => Math.ceil(VIEWS / VIEWS_PER_CHUNK)
 
 /** Problems are the test's failure; --report prints them instead. */
 function settle(where: string, problems: string[]) {
@@ -86,7 +82,7 @@ describe('check-layout', () => {
     await login(page)
     // On a clean checkout the first visit to a route is Vite compiling it, and may reload the page: not the app.
     // Several processes warm one Vite at once, so a reload can cut in more than once: try each view again.
-    for (const view of await views(page, '1280x720')) {
+    for (const view of views()) {
       for (let attempt = 1; ; attempt++) {
         try {
           await open(page, view)
@@ -120,7 +116,7 @@ describe('check-layout', () => {
     for (const theme of ['dark', 'light']) {
       for (const [width, height] of sizes) {
         if (theme === 'light' && width !== 1280 && width !== 390) continue
-        const chunks = viewChunks(theme, width)
+        const chunks = viewChunks()
         for (let chunk = 1; chunk <= chunks; chunk++) sweeps.push({ theme, width, height, touch, chunk })
       }
     }
@@ -168,10 +164,8 @@ describe('check-layout', () => {
           await setTheme(page, theme)
           await page.viewport(width, height, touch)
           const size = `${width}x${height}`
-          const all: string[] = await views(page, size)
-          // Light theme: colours only change, so the main screens are enough.
-          const list = theme === 'light' ? all.slice(0, 8) : all
-          const chunks = viewChunks(theme, width)
+          const list: string[] = views()
+          const chunks = viewChunks()
           const per = Math.ceil(list.length / chunks)
           const problems: string[] = []
           for (const view of list.slice((chunk - 1) * per, chunk * per)) {
@@ -229,10 +223,6 @@ describe('check-layout', () => {
     runOnce('no listener leaks', async () => {
       await sized(1280, 720, false)
       if (!onlyOverlays) settle('listeners', await listenerLeak(page))
-    })
-    runOnce('confirm button is stable', async () => {
-      await sized(1280, 720, false)
-      if (!onlyOverlays) settle('confirm', await confirmStable(page))
     })
     runOnce('toast over a dialog can be clicked', async () => {
       await sized(1280, 720, false)

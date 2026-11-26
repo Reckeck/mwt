@@ -17,8 +17,6 @@ const syncState = {
   connected: ref(false),
   label: ref(''),
 }
-const unreadCount = ref(0)
-vi.mock('@/widgets/notification-bell', () => ({ useUnreadNotices: () => ({ unread: unreadCount, notices: ref({}) }) }))
 vi.mock('@/features/vault-sync', () => ({ useSyncIndicator: () => syncState }))
 
 function setup() {
@@ -51,10 +49,10 @@ describe('useProfileMenu', () => {
     i18n.global.locale.value = 'ru'
   })
 
-  it('holds the notifications and tour rows that left the top bar', () => {
+  it('holds the tour rows that left the top bar', () => {
     const menu = setup()
     const ids = menu.statusEntries.value.map((entry) => entry.id)
-    expect(ids).toEqual(expect.arrayContaining(['notifications', 'tour', 'tours']))
+    expect(ids).toEqual(expect.arrayContaining(['tour', 'tours']))
     expect(menu.attention.value).toBe(false)
   })
 
@@ -84,12 +82,9 @@ describe('useProfileMenu', () => {
     expect(syncRow()?.iconClass).toBe('text-warning')
   })
 
-  it('lights the dot for unread notices or unreliable sync, only with sync enabled', () => {
+  it('lights the dot for unreliable sync, only with sync enabled', () => {
     const menu = setup()
     syncState.unreliable.value = false
-    unreadCount.value = 2
-    expect(menu.attention.value).toBe(true)
-    unreadCount.value = 0
     expect(menu.attention.value).toBe(false)
     syncState.enabled.value = true
     syncState.unreliable.value = true

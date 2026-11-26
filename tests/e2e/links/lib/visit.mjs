@@ -62,7 +62,7 @@ async function openOne(page, entity, at, errors) {
   const { current: from, label: where } = at
   const label = `${where} ${entity.key} (${entity.open})`
   if (!(await page.eval(CLICK_ENTITY(entity.key, entity.open)))) return errors.push(`${label}: the link is gone after a re-render`)
-  if (entity.open === 'card' || entity.open === 'tx') {
+  if (entity.open === 'card') {
     if (!(await wait(page, HAS_CARD(entity.key)))) errors.push(`${label}: no card [data-entity-card="${entity.key}"]`)
     await escape(page)
   } else {
@@ -169,7 +169,6 @@ export async function visitPage(page, at, errors, warnings, reopen) {
     seen.add(link.href)
     checked++
     if (link.broken) errors.push(`${from}: link ${link.href} does not resolve in the router`)
-    if (/^\/(stores\/|automations\/workflows\/)/.test(link.href) && !link.tagged) warnings.push(`${from}: ${link.href}`)
   }
   for (const entity of sample(found.entities)) {
     checked++

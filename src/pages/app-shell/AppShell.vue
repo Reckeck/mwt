@@ -5,16 +5,11 @@ import { useEventListener } from '@vueuse/core'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
-import { ContactEditDialog, useContactCreation } from '@/features/contact-edit'
 import { EnrichmentConsentDialog } from '@/features/enrichment-consent'
 import { ConverterDialog } from '@/features/currency-convert'
-import { QuickAddDialog } from '@/widgets/quick-add'
 import { AutomationGlance, WalletGlance } from '@/widgets/quick-glance'
 import { UpdateNotice, useUpdateEvents } from '@/features/app-update'
 import { SyncBanner, SyncPairingDialog, SyncPlanDialog, useSyncEvents } from '@/features/vault-sync'
-import { SettingsShell } from '@/widgets/settings-shell'
-import { TourOffer } from '@/widgets/tour-offer'
-import { WhatsNewDialog } from '@/widgets/whats-new'
 import { MoneyCardHost, MoneyTooltipHost } from '@/entities/currency'
 import { SidebarInset, SidebarProvider } from '@/shared/ui/sidebar'
 import { registerDefaultBack } from '@/shared/lib/drill'
@@ -23,7 +18,6 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { SECTION_HOTKEYS, useHotkey } from '@/shared/lib/hotkeys'
 import { useIsPhone } from '@/shared/lib/phone'
 import { useTheme } from '@/shared/lib/theme'
-import { provideContactCreator } from '@/shared/lib/contact-create'
 import { provideTxGlances } from '@/shared/lib/tx-glances'
 import { useSettingsStore } from '@/shared/store/settings'
 import { useVaultStore } from '@/shared/store/vault'
@@ -54,9 +48,6 @@ import { useStoreTree } from '@/shared/api/queries'
  */
 // Every list of operations below makes a wallet's name and `Auto` a glance.
 provideTxGlances({ wallet: WalletGlance, automation: AutomationGlance })
-// A contact typed into any picker is made in one form hosted here, over whatever is open.
-const contactCreation = useContactCreation()
-provideContactCreator(contactCreation.create)
 const { t } = useI18n()
 const route = useRoute()
 const settingsStore = useSettingsStore()
@@ -71,7 +62,7 @@ useUpdateEvents()
 useBackButton()
 
 const { isOnline } = useConnectivity()
-const { tour, routeTour, offer } = useTourAutostart()
+const { tour, routeTour } = useTourAutostart()
 const { quickAddOpen, openSettings, lock } = useShellActions()
 
 /** On a wallet page the bar names the wallet; elsewhere the screen. */
@@ -152,7 +143,6 @@ const pageClass = computed(() => {
             <UpdateNotice />
           </div>
         </div>
-        <TourOffer v-if="offer" :id="offer" @close="offer = null" />
         <!-- Keyed by the page and its params, not the path: /stores/a → /stores/b gets a fresh
              page (its widgets keep local state per wallet), while a sub-tab of a section
              (/transactions → /transactions/calendar) keeps the section mounted (rule 17). -->
@@ -163,18 +153,10 @@ const pageClass = computed(() => {
       <AppBottomNav v-if="bottomNav" @quick-add="quickAddOpen = true" />
     </SidebarInset>
 
-    <SettingsShell />
     <MoneyTooltipHost />
     <MoneyCardHost />
-    <QuickAddDialog v-model:open="quickAddOpen" />
     <EntityHost />
     <ConverterDialog />
-    <ContactEditDialog
-      v-model:open="contactCreation.open.value"
-      :initial-name="contactCreation.name.value"
-      @saved="contactCreation.saved"
-    />
-    <WhatsNewDialog />
     <SyncPairingDialog />
     <SyncPlanDialog />
     <EnrichmentConsentDialog v-model:open="settingsStore.enrichmentConsentOpen" />

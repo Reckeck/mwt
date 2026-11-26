@@ -19,16 +19,15 @@ import { connect } from '../harness/app'
 import type { Page } from '../harness/cdp.mjs'
 import { flushTimings, isPartial, noteTiming, shardOwner } from '../harness/shard'
 import { login, open } from '../layout/lib/scenario.mjs'
-import { IDS, ROUTES, WORKFLOW_IDS } from './lib/probes.mjs'
 import { stats, visitPage } from './lib/visit.mjs'
 
 const ROOT = new URL('../../..', import.meta.url).pathname
 const BASELINE = join(ROOT, 'scripts/check-links.baseline.json')
 const update = process.env.E2E_UPDATE === '1'
 const quick = process.env.E2E_QUICK === '1'
-const SKIP = new Set(['unlock', 'settings'])
-// Phone width: the pages whose mentions differ most.
-const PHONE_PAGES = new Set(['/', '/transactions'])
+// The home page and the shared route placeholder: every other route renders it (spec D14). A screen's own
+// pages come back with its W4 task.
+const PAGES = ['/', '/transactions']
 // Errors are keyed by page and message minus ids that change nothing; the baseline holds the known ones.
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 const key = (text: string) => text.replace(UUID, '<id>')
@@ -43,25 +42,6 @@ describe('check-links', () => {
   let pages = 0
   let links = 0
   let list: string[] = []
-
-  async function routesToVisit() {
-    const named: { name: string; path: string; params: string[] }[] = await page.eval(ROUTES)
-    const stores: string[] = await page.eval(IDS)
-    await open(page, '/automations/workflows')
-    const flows: string[] = await page.eval(WORKFLOW_IDS)
-    const out: string[] = []
-    for (const route of named) {
-      if (SKIP.has(route.name)) continue
-      if (!route.params.length) {
-        out.push(route.path.startsWith('/') ? route.path : `/${route.path}`)
-        continue
-      }
-      const pool = route.name === 'workflow-edit' ? flows.slice(0, 2) : stores.slice(0, 2)
-      for (const id of pool) out.push(route.path.replace(':id', id))
-      if (!pool.length) errors.push(`route ${route.name}: no id in the mock to open it with`)
-    }
-    return [...new Set(out)]
-  }
 
   /** A page at a width, named for weights.json: ids that change from run to run are `<id>`, repeats get `~n`. */
   const unitNames = (paths: string[], width: number) => {
@@ -94,9 +74,8 @@ describe('check-links', () => {
     await page.viewport(1280, 720, false)
     await page.goto(inject('e2e').url)
     await login(page)
-    list = await routesToVisit()
-    const phonePages = list.filter((path) => PHONE_PAGES.has(path))
-    mine = shardOwner('links', [...unitNames(list, 1280), ...(quick ? [] : unitNames(phonePages, 390))])
+    list = PAGES
+    mine = shardOwner('links', [...unitNames(list, 1280), ...(quick ? [] : unitNames(list, 390))])
   }, 120_000)
 
   afterAll(async () => {
@@ -109,13 +88,9 @@ describe('check-links', () => {
   }, 600_000)
 
   it.skipIf(quick)(
-    'visits the main pages at 390',
+    'visits the pages at 390',
     async () => {
-      await sweep(
-        list.filter((path) => PHONE_PAGES.has(path)),
-        390,
-        844,
-      )
+      await sweep(list, 390, 844)
     },
     600_000,
   )

@@ -1,5 +1,7 @@
 {
   "app.title": "Multi Wallet Tracker",
+  "routePlaceholder.title": "Этот экран переделывается",
+  "routePlaceholder.description": "Он вернётся в новом дизайне.",
   "nav.dashboard": "Главная",
   "nav.section.home": "Главная",
   "nav.section.operations": "Операции",

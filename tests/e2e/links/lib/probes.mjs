@@ -2,34 +2,6 @@
 
 const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`
 
-/** Named routes of the router; `params` lists the dynamic segments. */
-export const ROUTES = `${APP}
-  return gp.$router.getRoutes().filter((route) => route.name).map((route) => ({
-    name: String(route.name),
-    path: route.path,
-    params: [...route.path.matchAll(/:(\\w+)/g)].map((match) => match[1]),
-  }))`
-
-/** Ids of the mock: wallets of each kind, workflows (from the list screen). */
-export const IDS = `
-  const { call } = await import('/src/shared/api/ipc.ts')
-  const tree = await call('get_store_tree')
-  const seen = new Set()
-  const stores = []
-  for (const node of tree) {
-    const kind = node.store?.kind ?? node.kind
-    if (seen.has(kind)) continue
-    seen.add(kind)
-    stores.push(node.store?.id ?? node.id)
-  }
-  return stores`
-
-export const WORKFLOW_IDS = `
-  const ids = [...document.querySelectorAll('a[href^="/automations/workflows/"]')]
-    .map((link) => link.getAttribute('href').split('/')[3].split('?')[0])
-    .filter((id) => id && id !== 'new')
-  return [...new Set(ids)]`
-
 /** Where we are, and whether the page shows something and not an error. */
 export const PAGE_STATE = `${APP}
   const main = document.querySelector('main')
@@ -43,8 +15,6 @@ export const COLLECT = `${APP}
     key: el.getAttribute('data-entity'),
     open: el.getAttribute('data-entity-open'),
   }))
-  // A transaction row has no id in the DOM: one row stands for all, its card is tx:any.
-  if (document.querySelector('[data-tx-open]')) entities.push({ key: 'tx:*', open: 'tx' })
   const links = [...document.querySelectorAll('a[href]')].map((el) => {
     const href = el.getAttribute('href')
     let broken = false
@@ -61,12 +31,6 @@ export const COLLECT = `${APP}
   return { entities, links, glances, backLinks }`
 
 export const CLICK_ENTITY = (key, open) => `
-  if (${JSON.stringify(open)} === 'tx') {
-    const row = [...document.querySelectorAll('[data-tx-open]')].find((node) => node.getBoundingClientRect().width > 0)
-    if (!row) return false
-    row.click()
-    return true
-  }
   const el = [...document.querySelectorAll('[data-entity-open="${open}"]')].find((node) => node.getAttribute('data-entity') === ${JSON.stringify(key)})
   if (!el) return false
   el.click()
