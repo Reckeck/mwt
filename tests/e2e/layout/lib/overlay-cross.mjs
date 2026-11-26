@@ -1,6 +1,8 @@
 // Layer over layer (docs/ui-overlays.md §4, items 2, 4): Ctrl K over a dialog. Each closes one layer per Esc / Back.
-// The sheet and glance cases (dialog in a sheet, toast over a sheet or a glance) return with their screens (W4).
-import { FIND, LAYER, closeLayer, openLayer, press } from './overlay-steps.mjs'
+// The toast cases (over a sheet or a glance) return with their screens (W4).
+import { FIND, LAYER, closeLayer, openLayer, press, step } from './overlay-steps.mjs'
+
+const GOAL_CARD = '[data-goal-card]'
 
 /** The topmost element at the middle of the layer's `inner` (or of the layer itself) is inside the layer. */
 const ON_TOP = (selector, inner) => `${FIND(selector)}
@@ -45,7 +47,26 @@ async function paletteOverDialog(page, touch) {
   return problems
 }
 
+/** Item 6: the delete question over a goal's card; one Esc / Back closes the question, the next the card. */
+async function dialogInSheet(page, touch) {
+  const problems = []
+  await openLayer(page, { route: '/money/plan' })
+  await step(page, { query: { open: 'goal:{goal}' } })
+  if (!(await waitFor(page, GOAL_CARD))) return ['the goal card did not open']
+  await page.sleep(500)
+  if ((await step(page, { click: '[data-goal-delete]' })) || !(await waitFor(page, '[data-overlay="goal-delete"]'))) return ['the delete question did not open over the card']
+  await page.sleep(500)
+  if (!(await page.eval(ON_TOP('[data-overlay="goal-delete"]')))) problems.push('the delete question is under the card')
+  if (!(await closeLayer(page, '[data-overlay="goal-delete"]', touch))) problems.push('the question over the card does not close')
+  // Its slide-out ends before the next Back means the card.
+  for (let tries = 0; tries < 40 && (await page.eval(`return Boolean(document.querySelector('[data-overlay="goal-delete"]'))`)); tries++) await page.sleep(50)
+  if (!(await page.eval(LAYER(GOAL_CARD)))) problems.push('the card closed together with the question over it')
+  if (!(await closeLayer(page, GOAL_CARD, touch))) problems.push('the card does not close after the question')
+  return problems
+}
+
 const CROSS = [
+  { id: 'dialog-in-sheet', run: dialogInSheet },
   { id: 'palette-over-dialog', run: paletteOverDialog },
 ]
 

@@ -55,6 +55,7 @@ export const OVERLAYS = [
     layer: overlay('enrichment-consent'),
   },
   { id: 'profile-menu', route: '/', phone: true, open: [{ click: '[data-profile-trigger]' }], layer: overlay('profile-menu') },
+  { id: 'entity-goal', route: '/money/plan', phone: true, open: [{ query: { open: 'goal:{goal}' } }], layer: '[data-goal-card]', keys: ['open'] },
   { id: 'entity-card', route: '/', phone: true, open: [{ query: { open: 'category:taxi' } }], layer: overlay('entity-card'), keys: ['open'] },
   {
     id: 'sandbox-reset', route: '/', phone: true,
@@ -64,6 +65,10 @@ export const OVERLAYS = [
   // 3.2 Unlock screen (T41). vault-receive and app-settings-unlock return with T42.
   { id: 'vault-create', route: '/unlock', locked: true, phone: true, open: [{ click: '[data-unlock-create]' }], layer: overlay('vault-create') },
   { id: 'vault-unlock', route: '/unlock', locked: true, phone: true, open: [{ click: '[data-recents-other]' }], layer: overlay('vault-unlock') },
+  // Money: the rebuilt plan and calculator
+  { id: 'budget', route: '/money/plan', phone: true, open: [{ click: '[data-budget-new]' }], layer: overlay('budget') },
+  { id: 'goal', route: '/money/plan', phone: true, open: [{ click: '[data-plan-goal]' }], layer: overlay('goal') },
+  { id: 'calc-compare', route: '/money/calculator', phone: true, open: [{ click: '[data-calc-compare]' }], layer: overlay('calc-compare') },
   { id: 'sync-pairing', route: '/', phone: true, open: [{ eval: SYNC_SESSION('pairing'), wait: 600 }], layer: overlay('sync-pairing'), cleanup: SYNC_RESET },
   { id: 'sync-plan', route: '/', phone: 'only', open: [{ eval: SYNC_SESSION('awaiting_confirm'), wait: 600 }], layer: overlay('sync-plan'), cleanup: SYNC_RESET },
 ]

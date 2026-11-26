@@ -38,13 +38,14 @@ export function useEntityHost() {
       if (gone) nav.back()
     },
   )
-  /** Until the screens return in W4 every kind shares the generic card. */
-  const cardOpen = computed({
-    get: () => top.value !== null,
-    set: (value: boolean) => {
-      if (!value) nav.back()
-    },
-  })
+  /** A goal has its own sheet; until the other screens return in W4 the rest share the generic card. */
+  const sheetOpen = (isGoal: boolean) =>
+    computed({
+      get: () => top.value !== null && (top.value.kind === 'goal') === isGoal,
+      set: (value: boolean) => {
+        if (!value) nav.back()
+      },
+    })
 
   /**
    * The dialog asked for by a card action. The dialogs stay mounted (they
@@ -71,7 +72,8 @@ export function useEntityHost() {
     top,
     card,
     current,
-    cardOpen,
+    goalCardOpen: sheetOpen(true),
+    cardOpen: sheetOpen(false),
     request,
     goalOpen: dialogOpen('goal'),
     budgetOpen: dialogOpen('budget'),

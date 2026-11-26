@@ -39,6 +39,33 @@ export const TOURS: Record<string, TourStep[]> = {
   ],
   // The settings window opens over any screen; a step of a tab that is not open is skipped.
   settings: [{ target: 'appearance-settings', key: 'settings.appearance', side: 'bottom' }],
+  // The Budget plan: limits, envelopes, the emergency fund and the carry-over switch.
+  'money-plan': [
+    { target: 'plan-limits', key: 'planningBudgets.content', side: 'top' },
+    { target: 'budget-spent', key: 'planningBudgets.spent', side: 'bottom' },
+    { target: 'plan-goals', key: 'planningGoals.content', side: 'top' },
+    { target: 'plan-fund', key: 'health.fund', side: 'top' },
+    { target: 'carry-over', key: 'money.carryOver', side: 'left' },
+    { target: 'plan-envelopes', key: 'money.planEnvelopes', side: 'top' },
+  ],
+  // The calculator: saved calculations, what to find, stages, data prefill, the result, comparison and the year table.
+  'money-calculator': [
+    { target: 'calc-scenarios', key: 'planningCalculator.scenarios', side: 'bottom' },
+    { target: 'calc-mode', key: 'planningCalculator.mode', side: 'bottom' },
+    { target: 'calc-stages', key: 'planningCalculator.stages', side: 'top' },
+    { target: 'calc-prefill', key: 'planningCalculator.prefill', side: 'top' },
+    { target: 'calc-result', key: 'planningCalculator.result', side: 'left' },
+    { target: 'calc-compare', key: 'planningCalculator.compare', side: 'top' },
+    { target: 'calc-overlay', key: 'planningCalculator.overlay', side: 'top' },
+    { target: 'calc-table', key: 'planningCalculator.table', side: 'top' },
+  ],
+  // The Budget month: left to spend and the pace, then how the month went and the carry-over switch.
+  'money-month': [
+    { target: 'month-left', key: 'money.monthLeft', side: 'right' },
+    { target: 'balance-months', key: 'money.monthBalance', side: 'left' },
+    { target: 'carry-over', key: 'money.carryOver', side: 'left' },
+    { target: 'budget-spent', key: 'planningBudgets.spent', side: 'bottom' },
+  ],
   // Before a vault is open: the sandbox.
   unlock: [{ target: 'unlock-sandbox', key: 'unlock.sandbox', side: 'top' }],
 }
@@ -47,10 +74,7 @@ export const TOURS: Record<string, TourStep[]> = {
 const PLACEHOLDER_ROUTES = [
   'money',
   'money-where',
-  'money-plan',
-  'money-month',
   'money-health',
-  'money-calculator',
   'money-together',
   'money-together-event',
   'wallet',

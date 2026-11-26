@@ -1,2 +1,6 @@
 export { default as MoneyWealth } from './ui/MoneyWealth.vue'
 export { default as MoneyInvestments } from './ui/MoneyInvestments.vue'
+export { default as MoneySection } from './MoneySection.vue'
+export { default as MoneyPlan } from './MoneyPlan.vue'
+export { default as MoneyMonth } from './MoneyMonth.vue'
+export { default as MoneyCalculator } from './MoneyCalculator.vue'

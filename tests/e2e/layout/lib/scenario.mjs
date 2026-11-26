@@ -21,7 +21,7 @@ export const PHONE = [
  * The views: the home page and the shared route placeholder (every other route renders it, spec D14).
  * A screen's own routes come back with its W4 task.
  */
-const ROUTES = ['/', '/transactions']
+const ROUTES = ['/', '/transactions', '/money/month', '/money/plan', '/money/calculator']
 
 const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`
 
