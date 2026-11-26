@@ -1,13 +1,12 @@
 /** Commands: what a period or a spread would do (spec op-period I5-I7); nothing is written. */
 
-import { isFiatCode } from '@/shared/lib/format'
 import { txId, txMeta } from '@/shared/lib/transactions'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockTransactions, priceOf } from './demo'
 import { checkPeriodMeta, monthShares, periodOfRule, settleSpread } from './period'
+import { placesOf } from './planning/distribution-rule'
 
-const placesOf = (symbol: string) => (isFiatCode(symbol) ? 2 : 8)
 const text = (value: number) => String(Number(value.toFixed(2)))
 
 /** The months of the stored operation `id` as an edit to `period` / `spread` would leave them. */

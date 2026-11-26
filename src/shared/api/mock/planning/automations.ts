@@ -6,7 +6,8 @@ import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTota
 import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
 import { deleteGoal, restoreGoal } from './goal-delete'
 import { forMonthKey } from './salary-seed'
-import { bookRun, findTemplate } from './templates'
+import { bookRun } from './automation-run'
+import { findTemplate } from './template-store'
 import {
   automations,
   budgets,
