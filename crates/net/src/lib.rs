@@ -13,6 +13,7 @@ mod market;
 mod pricing;
 #[cfg(test)]
 mod props;
+mod theme_fetch;
 mod txinfo;
 mod updates;
 
@@ -33,6 +34,7 @@ pub use pricing::history::{
 };
 pub use pricing::llama::llama_coin;
 pub use pricing::{AssetSearchHit, PricingService, Quote};
+pub use theme_fetch::{ThemeCssFetch, fetch_theme_css};
 pub use txinfo::{
     BtcPrevout, BtcStatus, BtcTx, BtcVin, BtcVout, SolMeta, SolTokenAmount, SolTokenBalance, SolTx,
     TxInfoClient,
