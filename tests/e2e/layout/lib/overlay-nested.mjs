@@ -6,7 +6,7 @@ import { FIND, LAYER, closeLayer, openLayer, pointOf, press, step } from './over
 
 const overlay = (id) => `[data-overlay="${id}"]`
 
-// The pairs of the other screens come back with their W4 tasks.
+// The pairs of the screens that are rebuilt; the rest come back with their W4 tasks (T72).
 export const NESTED = [
   {
     id: 'confirm-in-goal-sheet',
@@ -15,6 +15,24 @@ export const NESTED = [
     parent: '[data-goal-card]',
     child: overlay('goal-delete'),
     openChild: [{ click: '[data-goal-delete]' }],
+  },
+  {
+    id: 'select-in-dialog',
+    route: '/automations/alerts',
+    open: [{ query: { new: 'alert' } }],
+    parent: overlay('price-alert'),
+    child: '[role="listbox"]',
+    openChild: [{ click: `${overlay('price-alert')} [data-slot="select-trigger"]` }],
+    inside: '[role="option"]',
+    insideCloses: true,
+  },
+  {
+    id: 'confirm-in-sheet',
+    route: '/automations',
+    open: [{ query: { card: '{automation}' } }],
+    parent: '[data-automation-card]',
+    child: overlay('confirm'),
+    openChild: [{ click: '[data-automation-card] [data-slot="confirm-button"]' }],
   },
 ]
 

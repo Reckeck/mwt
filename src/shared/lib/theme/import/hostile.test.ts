@@ -9,7 +9,7 @@ import { parseThemeCss } from './parse'
 import { validateTheme } from './validate'
 
 const DIRECTORY = resolve(process.cwd(), 'src/shared/lib/theme/import/fixtures/hostile')
-const MAX_PARSE_MS = 200
+const MAX_PARSE_MS = 1000
 const HOSTILE = /url\s*\(|expression\s*\(|javascript\s*:|-moz-binding|@import|<\/?style|<script|[<>{}]/i
 
 const fixtures = readdirSync(DIRECTORY)

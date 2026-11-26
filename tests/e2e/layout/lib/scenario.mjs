@@ -1,5 +1,5 @@
 // What check-layout visits and what it measures on each view.
-import { press } from './overlay-steps.mjs'
+import { pointOf, press } from './overlay-steps.mjs'
 import { DAY_BAND_GAP, DUPLICATE_SECTIONS, DIALOG_RECT, INSTALL_OBSERVERS, NARROW_FIELDS, OVERFLOW, READ_OBSERVERS, RESET_OBSERVERS, ROW_RECTS, SIBLING_OVERLAP, TOUCH } from './probes.mjs'
 
 export const DESKTOP = [
@@ -18,10 +18,25 @@ export const PHONE = [
 ]
 
 /**
- * The views: the home page and the shared route placeholder (every other route renders it, spec D14).
- * A screen's own routes come back with its W4 task.
+ * The views: the home page, the rebuilt operations and automations screens, and the shared route placeholder
+ * (every other route renders it, spec D14). A screen's own routes come back with its W4 task.
  */
-const ROUTES = ['/', '/transactions', '/money/month', '/money/plan', '/money/calculator']
+const ROUTES = [
+  '/',
+  '/transactions',
+  '/transactions/calendar',
+  '/transactions/bonuses',
+  '/transactions/crypto',
+  '/money/month',
+  '/money/plan',
+  '/money/calculator',
+  '/automations',
+  '/automations/reminders',
+  '/automations/alerts',
+  '/automations/workflows',
+  '/automations/journal',
+  '/automations/sources',
+]
 
 const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`
 
@@ -226,6 +241,38 @@ export async function backCloses(page) {
   await page.eval(back)
   await page.sleep(400)
   if (await page.eval(open)) problems.push('Back does not close the command palette')
+  return problems
+}
+
+/** A confirm button opens its question beside itself: the button keeps its box and its place, the layer does not cover it, Esc closes it. */
+export async function confirmStable(page) {
+  await page.eval(`${APP} await gp.$router.push('/automations/reminders'); return true`)
+  await page.sleep(700)
+  const at = await pointOf(page, '[data-slot="confirm-button"]')
+  if (!at) return ['no [data-slot="confirm-button"] on /automations/reminders']
+  const box = `const b = document.querySelector('[data-slot="confirm-button"][data-armed]') ?? [...document.querySelectorAll('[data-slot="confirm-button"]')].find((el) => el.getBoundingClientRect().width); const r = b.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]`
+  const before = await page.eval(box)
+  await page.mouse(at[0], at[1])
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at[0], y: at[1], button: 'left', clickCount: 1 })
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at[0], y: at[1], button: 'left', clickCount: 1 })
+  await page.sleep(500)
+  const layer = await page.eval(`
+    const el = document.querySelector('[data-overlay="confirm"]')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { box: [r.left, r.top, r.right, r.bottom], armed: Boolean(document.querySelector('[data-slot="confirm-button"][data-armed]')) }`)
+  if (!layer) return ['the confirm button did not open its question']
+  const problems = []
+  const after = await page.eval(box)
+  if (before.some((v, i) => Math.abs(v - after[i]) > 0.5)) problems.push(`confirm button moves or resizes when armed: ${before} → ${after}`)
+  if (!layer.armed) problems.push('confirm button has no data-armed while its question is open')
+  const [bl, bt, bw, bh] = after
+  const [l, t, r, b] = layer.box
+  const phone = r - l > 600 || l <= 0
+  if (!phone && l < bl + bw && r > bl && t < bt + bh && b > bt) problems.push('the question covers the button it belongs to')
+  await press(page, 'Escape')
+  await page.sleep(500)
+  if (await page.eval(`return Boolean(document.querySelector('[data-overlay="confirm"]'))`)) problems.push('Esc does not close the confirm question')
   return problems
 }
 

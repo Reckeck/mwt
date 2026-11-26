@@ -13,6 +13,18 @@ const REBUILT = new Set([
   'money-plan',
   'money-month',
   'money-calculator',
+  'transactions',
+  'transactions-calendar',
+  'transactions-bonuses',
+  'crypto-operations',
+  'automations',
+  'automations-journal',
+  'automations-workflows',
+  'automations-reminders',
+  'automations-alerts',
+  'automations-sources',
+  'workflow-new',
+  'workflow-edit',
 ])
 
 describe('route placeholder', () => {

@@ -169,6 +169,7 @@ export async function visitPage(page, at, errors, warnings, reopen) {
     seen.add(link.href)
     checked++
     if (link.broken) errors.push(`${from}: link ${link.href} does not resolve in the router`)
+    if (/^\/automations\/workflows\//.test(link.href) && !link.tagged) warnings.push(`${from}: ${link.href}`)
   }
   for (const entity of sample(found.entities)) {
     checked++

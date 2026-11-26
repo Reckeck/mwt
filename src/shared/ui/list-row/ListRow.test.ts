@@ -13,6 +13,11 @@ describe('ListRow', () => {
     expect(wrapper.find('[data-list-row-value]').text()).toBe('1 000 $')
   })
 
+  it('is taller with a control beside it', () => {
+    expect(mount(ListRow, { props: { title: 'A', size: 'withControl' } }).classes()).toContain('min-h-16')
+    expect(mount(ListRow, { props: { title: 'A' } }).classes()).toContain('min-h-14')
+  })
+
   it('colours the value by tone and defaults to ink', () => {
     const base = { title: 'A', value: '1' }
     expect(mount(ListRow, { props: base }).find('[data-list-row-value]').classes()).toContain('text-foreground')

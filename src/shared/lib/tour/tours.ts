@@ -1,13 +1,15 @@
+import { OPERATIONS_TOURS } from './tours.operations.ts'
 import type { TourStep } from './tours.types.ts'
 
 export type { TourStep } from './tours.types.ts'
 
 /**
- * Tours by route name. Steps whose element is not on the screen are skipped. Only the screens that
- * survived the T72 deletion keep a tour; the rest are in `PLACEHOLDER_ROUTES` until their W4 task
- * brings the screen and its tour back (the `check-onboarding` gate reads both, see the `onboarding` skill).
+ * Tours by route name. Steps whose element is not on the screen are skipped. A screen rebuilt in W4 has its
+ * tour back; the rest are in `PLACEHOLDER_ROUTES` until their W4 task brings the screen and its tour back
+ * (the `check-onboarding` gate reads both, see the `onboarding` skill).
  */
 export const TOURS: Record<string, TourStep[]> = {
+  ...OPERATIONS_TOURS,
   // The shell around the placeholder body: the bottom bar, the quick add, the sidebar, the palette, the profile menu.
   dashboard: [
     // Only on a phone.
@@ -79,30 +81,26 @@ const PLACEHOLDER_ROUTES = [
   'money-together-event',
   'wallet',
   'wallet-settings',
-  'transactions',
-  'transactions-calendar',
-  'transactions-bonuses',
   'contacts',
-  'crypto-operations',
-  'automations',
-  'automations-journal',
-  'automations-workflows',
-  'automations-reminders',
-  'automations-alerts',
-  'automations-sources',
-  'workflow-new',
-  'workflow-edit',
 ]
 
+/** Routes that show another route's tour: a saved workflow opens the same editor as a new one. */
+export const TOUR_ALIASES: Record<string, string> = {
+  'workflow-edit': 'workflow-new',
+}
+
 /** Routes with no tour, and why (the `check-onboarding` gate reads this). */
-export const TOURLESS_ROUTES: Record<string, string> = Object.fromEntries(
-  PLACEHOLDER_ROUTES.map((route) => [
-    route,
-    'The shared route placeholder: the W4 task that rebuilds the screen brings its tour back.',
-  ]),
-)
+export const TOURLESS_ROUTES: Record<string, string> = {
+  ...Object.fromEntries(
+    PLACEHOLDER_ROUTES.map((route) => [
+      route,
+      'The shared route placeholder: the W4 task that rebuilds the screen brings its tour back.',
+    ]),
+  ),
+  'workflow-edit': 'The same editor as workflow-new; it shows that tour (TOUR_ALIASES).',
+}
 
 /** The tour a route shows. */
 export function tourIdOf(routeName: string): string {
-  return routeName
+  return TOUR_ALIASES[routeName] ?? routeName
 }

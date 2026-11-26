@@ -29,6 +29,7 @@ import { flushTimings, shardOwner, timed } from '../harness/shard'
 import { overlayIds, overlays } from './lib/overlays.mjs'
 import {
   backCloses,
+  confirmStable,
   DESKTOP,
   dialogJump,
   listenerLeak,
@@ -52,9 +53,9 @@ const onlyOverlays = process.env.E2E_OVERLAYS !== undefined
 // Unit sizes. A sweep unit is a theme x width cut into chunks of about VIEWS_PER_CHUNK views; the number of
 // chunks is fixed here (the unit names are the keys of weights.json) and the views are divided evenly between
 // them when the unit runs, so a new view makes a chunk bigger, never lost. Counts come from scenario.mjs
-// (`views()`): the home page and the route placeholder at every size and theme, until the screens come back (W4).
+// (`views()`): the home page, the rebuilt screens and the route placeholder at every size and theme.
 const VIEWS_PER_CHUNK = 5
-const VIEWS = 2
+const VIEWS = views().length
 const OVERLAYS_PER_CHUNK = 10
 const viewChunks = () => Math.ceil(VIEWS / VIEWS_PER_CHUNK)
 
@@ -223,6 +224,10 @@ describe('check-layout', () => {
     runOnce('no listener leaks', async () => {
       await sized(1280, 720, false)
       if (!onlyOverlays) settle('listeners', await listenerLeak(page))
+    })
+    runOnce('confirm button is stable', async () => {
+      await sized(1280, 720, false)
+      if (!onlyOverlays) settle('confirm', await confirmStable(page))
     })
     runOnce('toast over a dialog can be clicked', async () => {
       await sized(1280, 720, false)
