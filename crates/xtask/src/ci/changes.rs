@@ -25,6 +25,12 @@ const SKIPPABLE_FILES: &[&str] = &[
     "steiger.config.ts",
 ];
 
+/// Frontend check baselines (`scripts/check-*.baseline.json`) feed only the frontend checks.
+fn is_check_baseline(path: &str) -> bool {
+    path.strip_prefix("scripts/check-")
+        .is_some_and(|name| name.ends_with(".baseline.json") && !name.contains('/'))
+}
+
 fn is_skippable(path: &str) -> bool {
     if ALWAYS_RUN_PREFIXES
         .iter()
@@ -37,6 +43,7 @@ fn is_skippable(path: &str) -> bool {
         .any(|prefix| path.starts_with(prefix))
         || SKIPPABLE_FILES.contains(&path)
         || path.ends_with(".md")
+        || is_check_baseline(path)
         || (path.starts_with("tsconfig") && path.ends_with(".json"))
 }
 
@@ -91,6 +98,21 @@ mod tests {
             "tsconfig.app.json",
         ];
         assert!(!platforms_needed("pull_request", &files));
+    }
+
+    #[test]
+    fn frontend_check_baselines_skip() {
+        assert!(!platforms_needed(
+            "pull_request",
+            &["src/a.ts", "scripts/check-ui.baseline.json"]
+        ));
+    }
+
+    #[test]
+    fn other_scripts_run() {
+        for path in ["scripts/ci/x.sh", "scripts/build.sh", "scripts/check-ui.sh"] {
+            assert!(platforms_needed("pull_request", &["src/a.ts", path]));
+        }
     }
 
     #[test]
