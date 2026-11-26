@@ -77,7 +77,7 @@ const runButton = computed(() => phone.value && 'order-first h-11 min-w-0 basis-
           </div>
           <AutomationFacts :card="card" :names="details.names" />
           <Separator />
-          <AutomationRuns :runs="card.runs" :names="details.names" />
+          <AutomationRuns :runs="card.runs" :names="details.names" :automation-id="card.kind === 'repeat' ? card.id : null" :name="card.name" />
         </div>
       </SectionState>
 

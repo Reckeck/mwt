@@ -23,6 +23,8 @@ const categories = useCategories()
 const tree = useStoreTree()
 
 const nodes = computed(() => withoutLoyalty(tree.data.value ?? []))
+/** Every live wallet, sub-accounts too. */
+const pickable = computed(() => flattenStoreTree(nodes.value).filter((node) => !node.store.archived))
 const storeName = computed(() => {
   const id = pay.value?.store_id
   return id ? flattenStoreTree(nodes.value).find((node) => node.store.id === id)?.store.name : undefined
@@ -64,6 +66,6 @@ const storeId = computed({
     <Combobox id="reminder-pay" v-model="category" :options="options" :placeholder="t('reminder.payNone')" />
   </FormField>
   <FormField v-if="pay" for="reminder-pay-store" :label="t('reminder.payStore')">
-    <StoreNodeSelect id="reminder-pay-store" v-model="storeId" :nodes="nodes" :placeholder="t('reminder.payStoreAny')" />
+    <StoreNodeSelect id="reminder-pay-store" v-model="storeId" :nodes="pickable" :empty-label="t('reminder.payStoreAny')" />
   </FormField>
 </template>

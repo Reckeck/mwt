@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { templateDraftOf, templateErrors, templateKindOf, templateToInput } from './template-input'
+import {
+  templateAssetOf,
+  templateDraftOf,
+  templateErrors,
+  templateKindOf,
+  templateRetyped,
+  templateToInput,
+} from './template-input'
 
 const draft = { kind: 'payment' as const, amount: '12,5', category: 'food', comment: ' lunch ', to: '' }
 
@@ -48,5 +55,69 @@ describe('template start', () => {
     })
     expect(templateStartOf({ kind: 'convert' })?.kind).toBe('payment')
     expect(templateStartOf(null)).toBeNull()
+  })
+
+  it('rejects a transfer to its own wallet', () => {
+    const transfer = { ...draft, kind: 'transfer' as const, category: '', to: 'wallet' }
+    expect(Object.keys(templateErrors(transfer, 'wallet'))).toEqual(['to'])
+    expect(templateErrors({ ...transfer, to: 'other' }, 'wallet')).toEqual({})
+  })
+
+  describe('a stored template', () => {
+    const asset = { symbol: 'THB', name: 'Baht', coingecko_id: null, chain: null, contract: null, quote: 'fiat' }
+    const ident = { symbol: 'THB', name: 'Baht', coingecko_id: null, chain: null, contract: null }
+    const price = { price_usd: '0.03', price_base: '2.7', price_base_currency: 'rub', fx_override: '90' }
+    const stored = {
+      payment: {
+        meta: {
+          id: 'x',
+          timestamp: 't',
+          comment: 'rent',
+          categories: ['fixed', 'home'],
+          flow_id: 'flow',
+          contact_id: 'landlord',
+        },
+        store_id: 'wallet',
+        asset,
+        amount: '100',
+        fee: { asset, amount: '1', price },
+        to: { raw: 'Landlord' },
+        details: { cash_breakdown: null, unit_price: '5', network: null, tx_hash: null },
+        price,
+      },
+    } as unknown as Transaction
+
+    it('is written back unchanged, in its own asset', () => {
+      const input = templateToInput(templateDraftOf(stored), 'wallet', null, 'rub')
+      expect(templateAssetOf(stored)).toEqual(asset)
+      expect(input).toEqual({
+        type: 'payment',
+        common: {
+          timestamp: null,
+          comment: 'rent',
+          categories: ['fixed', 'home'],
+          flow_id: 'flow',
+          contact_id: 'landlord',
+          price_usd: '0.03',
+          fx_override: '90',
+          price: '2.7',
+          price_currency: 'rub',
+        },
+        store_id: 'wallet',
+        asset: ident,
+        amount: '100',
+        fee: { asset: ident, amount: '1' },
+        to: { raw: 'Landlord' },
+        details: { cash_breakdown: null, unit_price: '5', network: null, tx_hash: null },
+      })
+    })
+
+    it('keeps the list of categories until another one is picked, and drops the other side with the kind', () => {
+      const edited = templateDraftOf(stored)
+      edited.category = 'daily'
+      expect(templateToInput(edited, 'wallet', null, 'rub').common.categories).toEqual(['daily'])
+      templateRetyped(edited, 'topup')
+      expect(templateToInput(edited, 'wallet', null, 'rub')).toMatchObject({ type: 'topup', from: null, asset: ident })
+    })
   })
 })

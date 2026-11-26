@@ -46,6 +46,8 @@ const payouts = ref<SalaryPayout[]>([])
 
 const nodes = computed(() => withoutLoyalty(tree.data.value ?? []))
 const flat = computed(() => flattenStoreTree(nodes.value))
+/** Every live wallet, sub-accounts too. */
+const pickable = computed(() => flat.value.filter((node) => !node.store.archived))
 /** Where «10 %» goes: the first cash wallet; without one there is no switch. */
 const cash = computed(() => flat.value.find((node) => node.store.kind === 'cash' && !node.store.archived)?.store ?? null)
 const incomes = computed(() => (categories.data.value ?? []).filter((entry) => entry.group === 'income' && !entry.archived))
@@ -163,7 +165,7 @@ const save = useMutation({
           <Combobox id="salary-source" v-model="category" :options="options" />
         </FormField>
         <FormField for="salary-store" :label="t('salary.store')" required :error="form.error('store')">
-          <StoreNodeSelect id="salary-store" v-model="storeId" :nodes="nodes" class="w-full" />
+          <StoreNodeSelect id="salary-store" v-model="storeId" :nodes="pickable" class="w-full" />
         </FormField>
       </div>
       <SwitchRow

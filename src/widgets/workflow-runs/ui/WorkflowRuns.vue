@@ -13,11 +13,13 @@ import { WORKFLOW_KEYS } from '@/shared/lib/workflow'
 import { Button } from '@/shared/ui/button'
 import { EntityLink } from '@/shared/ui/entity-link'
 
-/** The journal: every run, newest first, with its steps in words. */
+/** The journal: every run (or those of `workflowId`), newest first, with its steps in words. */
+const props = defineProps<{ workflowId?: string | null }>()
 const { t } = useI18n()
 const runs = useQuery({
-  queryKey: WORKFLOW_KEYS.runs,
-  queryFn: () => call<WorkflowRun[]>('list_workflow_runs', { input: { workflow_id: null, limit: 200 } }),
+  // no placeholder: another workflow's runs
+  queryKey: computed(() => [...WORKFLOW_KEYS.runs, props.workflowId ?? null]),
+  queryFn: () => call<WorkflowRun[]>('list_workflow_runs', { input: { workflow_id: props.workflowId ?? null, limit: 200 } }),
 })
 const workflows = useQuery({ queryKey: WORKFLOW_KEYS.list, queryFn: () => call<Workflow[]>('list_workflows') })
 const nameOf = (id: string) => (workflows.data.value ?? []).find((entry) => entry.id === id)?.name ?? id

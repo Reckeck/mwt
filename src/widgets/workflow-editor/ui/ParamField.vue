@@ -20,6 +20,7 @@ import { DateTimePicker } from '@/shared/ui/date-time-picker'
 
 import TargetsField from './TargetsField.vue'
 import { useCategories, useStoreTree } from '@/shared/api/queries'
+import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { CATEGORY_GROUPS, categoryOptions } from '@/shared/lib/categories'
 
 /** One field of a node, edited by the control its kind asks for. */
@@ -33,7 +34,9 @@ const kind = computed(() => props.param.kind.kind)
 const current = computed(() => props.value ?? props.param.default)
 const text = computed(() => (current.value === null || current.value === undefined ? '' : String(current.value)))
 
-const tree = useStoreTree(computed(() => kind.value === 'store'))
+const tree = useStoreTree(computed(() => kind.value === 'store' || kind.value === 'account'))
+/** Every live wallet, sub-accounts too. */
+const stores = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
 const budgets = useQuery({
   queryKey: ['budgets'],
   queryFn: () => call<Budget[]>('list_budgets'),
@@ -95,8 +98,9 @@ const categoryChoices = computed(() => categoryOptions(categories.data.value, t,
         v-else-if="kind === 'store' || kind === 'account'"
         :id="id"
         :model-value="storeId"
-        :nodes="tree.data.value ?? []"
-        :placeholder="t(props.param.required ? 'workflow.field.pickStore' : 'workflow.field.anyStore')"
+        :nodes="stores"
+        :placeholder="t('workflow.field.pickStore')"
+        :empty-label="props.param.required ? undefined : t('workflow.field.anyStore')"
         @update:model-value="(next) => emit('update', next ? { store: next } : null)"
       />
       <AssetInput

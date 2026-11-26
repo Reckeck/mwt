@@ -44,7 +44,6 @@ const uses = computed(() => props.state.uses.value)
         id="source-deposit"
         v-model="uses.depositStoreId"
         :nodes="deposits"
-        flat
         :empty-label="t('sources.uses.none')"
       />
     </FormField>

@@ -4,9 +4,11 @@ import { type RouteLocationRaw, onBeforeRouteLeave, useRoute, useRouter } from '
 import { useI18n } from 'vue-i18n'
 
 import { WorkflowEditor } from '@/widgets/workflow-editor'
+import { WorkflowRuns } from '@/widgets/workflow-runs'
 import { AutomationWorkflowBanner, useAutomationWorkflow } from '@/features/automation-edit'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/shared/ui/sheet'
 
 // `Automations ›` and the name live in the editor's own toolbar (Auto-2 · 13).
 const { t } = useI18n()
@@ -39,6 +41,8 @@ const leaveOpen = computed({
   },
 })
 const keeping = ref(false)
+/** The runs of this scheme, as the journal draws them. */
+const runsOpen = ref(false)
 
 // A navigation that did not come through the guard (replace, redirect) settles the question.
 watch(() => route.fullPath, () => {
@@ -86,6 +90,9 @@ function throwAway() {
       :workflow-id="workflowId"
       :name="automation.workflow.data.value?.name ?? ''"
     />
+    <div v-if="workflowId" class="flex justify-end">
+      <Button variant="ghost" size="sm" class="touch-hit" data-workflow-runs-open @click="runsOpen = true">{{ t('workflow.runs.open') }}</Button>
+    </div>
     <WorkflowEditor
       class="min-h-0 flex-1"
       :key="workflowId ?? `new-${template ?? ''}-${lesson ?? ''}`"
@@ -97,6 +104,13 @@ function throwAway() {
       @saved="onSaved"
       @lesson="(id) => router.push({ name: 'workflow-new', query: { lesson: id } })"
     />
+    <Sheet v-model:open="runsOpen">
+      <SheetContent overlay="workflow-runs" side="right" class="flex w-full flex-col gap-3 overflow-y-auto p-4 sm:max-w-[560px]">
+        <SheetTitle>{{ t('workflow.runs.title') }}</SheetTitle>
+        <SheetDescription class="sr-only">{{ t('workflow.runs.intro') }}</SheetDescription>
+        <WorkflowRuns v-if="runsOpen" :workflow-id="workflowId" />
+      </SheetContent>
+    </Sheet>
     <!-- A new workflow has nothing saved to keep running: its own title and text. -->
     <Dialog overlay="workflow-leave"
       v-model:open="leaveOpen"

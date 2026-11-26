@@ -13,7 +13,7 @@ import { FormField } from '@/shared/ui/form-field'
 import { openSystemPicker } from '@/shared/api'
 import { useStoreTree } from '@/shared/api/queries'
 import { pluralForm } from '@/shared/lib/format'
-import { withoutLoyalty } from '@/shared/lib/store-tree'
+import { flattenStoreTree, withoutLoyalty } from '@/shared/lib/store-tree'
 
 import { useWorkflowImport } from '../../model/use-workflow-import'
 
@@ -23,7 +23,7 @@ const emit = defineEmits<{ imported: [workflow: Workflow] }>()
 
 const { t, locale } = useI18n()
 const tree = useStoreTree()
-const nodes = computed(() => withoutLoyalty(tree.data.value ?? []))
+const nodes = computed(() => flattenStoreTree(withoutLoyalty(tree.data.value ?? [])).filter((node) => !node.store.archived))
 const zone = ref<HTMLElement | null>(null)
 const input = ref<HTMLInputElement | null>(null)
 const { dragging, stores, found, missing, form, pick, submit, pending } = useWorkflowImport(open, (workflow) =>

@@ -95,7 +95,7 @@ function uses(view: DataSourceView): string {
             </p>
             <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span class="min-w-0 truncate">{{ t('sources.usedBy') }} {{ uses(view) }}</span>
-              <div class="flex items-center gap-1">
+              <div class="flex items-center gap-2">
                 <Button size="sm" variant="outline" :disabled="busy" @click="refresh.mutate(view.source.id)">
                   <RefreshCw class="size-4" />{{ t('sources.refresh') }}
                 </Button>

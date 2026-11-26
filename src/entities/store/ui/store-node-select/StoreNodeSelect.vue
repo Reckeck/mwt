@@ -23,11 +23,13 @@ type StoreCaption = string | ((balance: string) => string)
  * wallet plate of the quick form (`plate`, board 533927), or the bare wallet line inside an exchange
  * box with a caption under the name (`inline`, board 534325). `id`,
  * `aria-*` and `class` go to the trigger.
+ * `nodes` is a flat list: a sub-account is listed only when the caller passes it.
+ * `emptyLabel` makes the pick optional: a first row with that label clears it.
  */
 defineOptions({ inheritAttrs: false })
 const props = withDefaults(
-  defineProps<{ nodes: StoreTreeNode[]; invalid?: boolean; placeholder?: string; variant?: 'field' | 'plate' | 'inline'; caption?: StoreCaption }>(),
-  { variant: 'field', placeholder: undefined, caption: undefined },
+  defineProps<{ nodes: StoreTreeNode[]; invalid?: boolean; placeholder?: string; variant?: 'field' | 'plate' | 'inline'; caption?: StoreCaption; emptyLabel?: string }>(),
+  { variant: 'field', placeholder: undefined, caption: undefined, emptyLabel: undefined },
 )
 const model = defineModel<string>({ default: '' })
 const attrs = useAttrs()
@@ -67,7 +69,7 @@ const captionText = computed(() =>
 )
 const label = computed(() => {
   const name = props.variant === 'field' ? current.value?.title : current.value?.fullName
-  return name ?? props.placeholder ?? t('quickAdd.pickStore')
+  return name ?? props.emptyLabel ?? props.placeholder ?? t('quickAdd.pickStore')
 })
 /** One trigger for every look, so the field is never swapped for another control (rule 17). */
 const TRIGGER_CLASS: Record<'field' | 'plate' | 'inline', string> = {
@@ -124,6 +126,17 @@ function pick(id: string) {
         <ChevronDown v-if="props.variant !== 'inline'" class="size-4 shrink-0 text-muted-foreground" />
       </Button>
     </template>
+    <Button
+      v-if="props.emptyLabel"
+      type="button"
+      variant="ghost"
+      class="h-auto w-full justify-start px-1 py-2 text-left text-base"
+      :aria-pressed="model === ''"
+      :class="model === '' && 'bg-accent'"
+      @click="pick('')"
+    >
+      {{ props.emptyLabel }}
+    </Button>
     <p v-if="groups.length === 0" class="py-6 text-center text-sm text-muted-foreground">{{ t('quickAdd.noStore') }}</p>
     <!-- money: plain — each group's total in its heading is preformatted in `groups` -->
     <section v-for="group in groups" :key="group.purpose" class="grid gap-1 pb-2">

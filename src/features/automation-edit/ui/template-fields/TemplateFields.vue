@@ -23,6 +23,7 @@ import {
   templateDraftOf,
   templateErrors,
   templateKindOf,
+  templateRetyped,
   templateStartOf,
   templateToInput,
 } from '../../lib/template-input'
@@ -83,8 +84,7 @@ const wizardDraft = computed<WizardDraft>(() => ({
 
 const pickKind = (kind: unknown) => {
   if (typeof kind === 'string' && kind !== draft.kind) {
-    draft.kind = kind as TemplateKind
-    draft.category = ''
+    templateRetyped(draft, kind as TemplateKind)
   }
 }
 defineExpose({ valid, input, draft: wizardDraft, showErrors: () => (shown.value = true) })
