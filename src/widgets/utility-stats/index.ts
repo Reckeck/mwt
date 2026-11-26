@@ -1,2 +1,2 @@
-export { default as UtilityStats } from './UtilityStats.vue'
+export { default as UtilityStats } from './ui/UtilityStats.vue'
 export * from './utility-stats.types'

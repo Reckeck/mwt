@@ -4,12 +4,12 @@ import { useI18n } from 'vue-i18n'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { AlertTriangle, Minus, Plus, Trash2 } from 'lucide-vue-next'
 
+import { AssetSelect } from '@/entities/asset'
 import { FormField } from '@/shared/ui/form-field'
 import { Button } from '@/shared/ui/button'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Input } from '@/shared/ui/input'
-import { Select, SelectItem } from '@/shared/ui/select'
 import { assetKey } from '@/shared/lib/asset-ref'
 import { nonNegativeAmount, required, useFormValidation } from '@/shared/lib/form'
 import { call } from '@/shared/api/ipc'
@@ -37,13 +37,6 @@ const refresh = () => {
 const name = ref('')
 const pickedAsset = ref<AssetRef | null>(null)
 const target = ref('')
-/** The select speaks keys; the form keeps the asset itself. */
-const pickedKey = computed({
-  get: () => (pickedAsset.value ? assetKey(pickedAsset.value) : ''),
-  set: (key: string) => {
-    pickedAsset.value = props.assets.find((asset) => assetKey(asset) === key) ?? null
-  },
-})
 
 const form = useFormValidation(() => ({
   name: required(name.value),
@@ -171,9 +164,7 @@ const qty = (value: string, symbol: string) => `${formatQuantity(value)} ${symbo
           <Input id="envelope-name" v-model="name" :placeholder="t('envelope.namePlaceholder')" />
         </FormField>
         <FormField for="envelope-asset" :label="t('form.asset')" required :error="form.error('asset')">
-          <Select id="envelope-asset" v-model="pickedKey" :invalid="Boolean(form.error('asset'))">
-            <SelectItem v-for="option in props.assets" :key="assetKey(option)" :value="assetKey(option)">{{ option.symbol }}</SelectItem>
-          </Select>
+          <AssetSelect id="envelope-asset" v-model="pickedAsset" :assets="props.assets" />
         </FormField>
         <FormField for="envelope-target" :label="t('envelope.target')" :error="form.error('target')">
           <AmountInput id="envelope-target" v-model="target" />

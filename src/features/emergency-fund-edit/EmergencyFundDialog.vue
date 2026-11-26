@@ -4,11 +4,11 @@ import { useI18n } from 'vue-i18n'
 
 import { useStoreTree } from '@/shared/api/queries'
 import { Money } from '@/entities/currency'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { formatMoney, formatQuantity } from '@/shared/lib/format'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { AmountInput } from '@/shared/ui/amount-input'
-import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
 import { FormDialog } from '@/shared/ui/form-dialog'
 import { FormField } from '@/shared/ui/form-field'
 import { SwitchRow } from '@/shared/ui/switch-row'
@@ -31,10 +31,10 @@ const { storeIds, targetMonths, avgMonths, makeGoal, goal, form, set, save } = u
 )
 
 /** The fund takes savings accounts only, each by its full path. */
-const accounts = computed<ComboboxOption[]>(() =>
-  flattenStoreTree(tree.data.value ?? [])
-    .filter((node) => node.store.purpose === 'savings' || storeIds.value.includes(node.store.id))
-    .map((node) => ({ value: node.store.id, label: node.path.join(' › ') })),
+const accounts = computed(() =>
+  flattenStoreTree(tree.data.value ?? []).filter(
+    (node) => node.store.purpose === 'savings' || storeIds.value.includes(node.store.id),
+  ),
 )
 
 // money: plain — the hint under the field is a string prop of FormField
@@ -72,7 +72,14 @@ const monthsHint = computed(() => {
       :error="form.error('accounts')"
       required
     >
-      <Combobox id="emergency-accounts" v-model="storeIds" :options="accounts" multiple :placeholder="t('emergency.dialog.none')" :empty-label="t('emergency.dialog.none')" />
+      <ComboStoreNodeSelect
+        id="emergency-accounts"
+        v-model="storeIds"
+        :nodes="accounts"
+        multiple
+        :placeholder="t('emergency.dialog.none')"
+        :empty-label="t('emergency.dialog.none')"
+      />
     </FormField>
     <template v-if="goal">
       <div class="flex flex-wrap items-baseline justify-between gap-x-3 rounded-lg bg-muted/60 px-3 py-2.5 text-sm" data-fund-goal>

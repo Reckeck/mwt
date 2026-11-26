@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuery } from '@tanstack/vue-query'
 
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { EnvelopeManager } from '@/features/envelope-manage'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
@@ -10,7 +11,6 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 import { EmptyState } from '@/shared/ui/empty-state'
 import { FormField } from '@/shared/ui/form-field'
-import { Select, SelectItem } from '@/shared/ui/select'
 import { SectionState } from '@/shared/ui/section-state'
 
 import { envelopeAssets, hasEnvelopes } from '../../lib/envelope-assets'
@@ -50,9 +50,7 @@ const assets = computed(() =>
       <EmptyState v-if="!wallets.length" compact :title="t('money.plan.envelopesNoWallets')" />
       <div v-else class="grid gap-3">
         <FormField for="envelope-wallet" :label="t('money.plan.envelopesWallet')">
-          <Select id="envelope-wallet" v-model="storeId">
-            <SelectItem v-for="node in wallets" :key="node.store.id" :value="node.store.id">{{ node.path.join(' › ') }}</SelectItem>
-          </Select>
+          <ComboStoreNodeSelect id="envelope-wallet" v-model="storeId" :nodes="wallets" />
         </FormField>
         <EnvelopeManager v-if="overview.data.value" :key="storeId" :store-id="storeId" :assets="assets" />
       </div>

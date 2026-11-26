@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { Money } from '@/entities/currency'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import type { FormValidation } from '@/shared/lib/form'
-import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { AdvancedFields } from '@/shared/ui/advanced-fields'
 import { FormField } from '@/shared/ui/form-field'
 import { Label } from '@/shared/ui/label'
@@ -23,8 +22,6 @@ const storeId = defineModel<string>('storeId', { required: true })
 const period = defineModel<BudgetPeriod>('period', { required: true })
 
 const { t } = useI18n()
-/** Every wallet and sub-account by its full path, so two «Spot» accounts stay apart. */
-const storeOptions = computed(() => flattenStoreTree(props.nodes).map((node) => ({ id: node.store.id, label: node.path.join(' › ') })))
 </script>
 
 <template>
@@ -39,9 +36,7 @@ const storeOptions = computed(() => flattenStoreTree(props.nodes).map((node) => 
       </p>
     </FormField>
     <FormField v-else-if="kind === 'store'" for="budget-store" :label="t('budget.on')" required :error="props.form.error('store')">
-      <Select id="budget-store" v-model="storeId" :invalid="Boolean(props.form.error('store'))" :placeholder="t('budget.pickStore')">
-        <SelectItem v-for="option in storeOptions" :key="option.id" :value="option.id">{{ option.label }}</SelectItem>
-      </Select>
+      <ComboStoreNodeSelect id="budget-store" v-model="storeId" :nodes="props.nodes" :placeholder="t('budget.pickStore')" />
     </FormField>
 
     <div class="grid gap-1.5">

@@ -1,3 +1,3 @@
-export { default as UtilityList } from './UtilityList.vue'
-export { default as PropertySummaryCard } from './PropertySummaryCard.vue'
+export { default as UtilityList } from './ui/UtilityList.vue'
+export { default as PropertySummaryCard } from './ui/PropertySummaryCard.vue'
 export * from './utility-list.types'

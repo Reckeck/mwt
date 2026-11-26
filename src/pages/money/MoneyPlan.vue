@@ -5,6 +5,7 @@ import { ChevronDown } from 'lucide-vue-next'
 
 import { BudgetList } from '@/widgets/budget-list'
 import { BudgetSettings } from '@/widgets/budget-settings'
+import { FixedCosts } from '@/widgets/fixed-costs'
 import { GoalDetailsSheet } from '@/widgets/goal-details'
 import { GoalList } from '@/widgets/goal-list'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
@@ -18,6 +19,7 @@ import PlanGoals from './ui/plan/PlanGoals.vue'
 /**
  * The plan (Budget): limits as Budget rows, goals, envelopes, the carry-over prompt and the emergency fund.
  * The full goal list with its calendar waits folded below.
+ * The regular payments sit under the envelopes.
  * The plan's own settings (savings rate, a usual month, the daily budget) wait folded below.
  */
 const { t } = useI18n()
@@ -47,6 +49,7 @@ const goalCardOpen = computed({
       </div>
     </div>
     <PlanEnvelopes />
+    <FixedCosts />
     <Collapsible v-model:open="goalsOpen" class="grid gap-3">
       <CollapsibleTrigger as-child>
         <Button variant="ghost" size="sm" class="w-fit text-muted-foreground" data-plan-details>

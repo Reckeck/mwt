@@ -10,7 +10,7 @@ import { EmptyState } from '@/shared/ui/empty-state'
 import { call } from '@/shared/api/ipc'
 
 import UtilityCard from './UtilityCard.vue'
-import type { UtilityListProps } from './utility-list.types'
+import type { UtilityListProps } from '../utility-list.types'
 
 const props = defineProps<UtilityListProps>()
 const { t } = useI18n()

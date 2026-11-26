@@ -14,7 +14,7 @@ import { formatMonthKey, formatPct } from '@/shared/lib/format'
 import { localDate } from '@/shared/lib/planning'
 import { useTheme } from '@/shared/lib/theme'
 
-import type { UtilityStatsProps } from './utility-stats.types'
+import type { UtilityStatsProps } from '../utility-stats.types'
 import { SectionState } from '@/shared/ui/section-state'
 
 /**

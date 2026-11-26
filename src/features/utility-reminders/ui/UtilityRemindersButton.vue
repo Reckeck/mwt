@@ -10,8 +10,8 @@ import { FormField } from '@/shared/ui/form-field'
 import { Input } from '@/shared/ui/input'
 import { firstError, integerInRange, required, useFormValidation } from '@/shared/lib/form'
 
-import { PAY_DAY_MAX } from './utility-reminders.constants'
-import { useUtilityReminders } from './use-utility-reminders'
+import { PAY_DAY_MAX } from '../model/utility-reminders.constants'
+import { useUtilityReminders } from '../model/use-utility-reminders'
 
 /**
  * «Remind» on the utilities tab: sets the day the property's utilities are

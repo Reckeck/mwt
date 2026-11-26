@@ -7,7 +7,7 @@ import { Card } from '@/shared/ui/card'
 import { call } from '@/shared/api/ipc'
 import { composeSums } from '@/shared/lib/money-parts'
 
-import type { UtilityListProps } from './utility-list.types'
+import type { UtilityListProps } from '../utility-list.types'
 import { Money, MoneyPhrase } from '@/entities/currency'
 
 const props = defineProps<UtilityListProps>()

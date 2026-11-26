@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/vue-query'
 import { ChevronDown, RefreshCw } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { call } from '@/shared/api/ipc'
 import { useStoreTree } from '@/shared/api/queries'
 import { formatDate } from '@/shared/lib/format'
@@ -12,7 +13,6 @@ import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { useSettingsStore } from '@/shared/store/settings'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Button } from '@/shared/ui/button'
-import { Combobox, type ComboboxOption } from '@/shared/ui/combobox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { FormField } from '@/shared/ui/form-field'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
@@ -30,10 +30,6 @@ const { t } = useI18n()
 const settings = useSettingsStore()
 const tree = useStoreTree()
 const liveNodes = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => !node.store.archived))
-
-const storeOptions = computed<ComboboxOption[]>(() =>
-  liveNodes.value.map((node) => ({ value: node.store.id, label: node.path.join(' › ') })),
-)
 
 const INCOME_MONTHS = [3, 6, 12] as const
 const defaultPct = () => String(Math.round(Number(settings.vault?.savings_rate ?? '0.1') * 100))
@@ -103,11 +99,11 @@ function pickMonths(value: unknown) {
           {{ t('invest.prefilledAt', { date: formatDate(props.calc.prefilledAt.value) }) }}
         </p>
         <FormField for="calc-prefill-stores" :label="t('invest.prefillStores')" :hint="t('invest.prefillStoresHint')">
-          <Combobox
+          <ComboStoreNodeSelect
             id="calc-prefill-stores"
             v-model="storeIds"
             multiple
-            :options="storeOptions"
+            :nodes="liveNodes"
             :placeholder="t('invest.prefillNoStores')"
             :empty-label="t('invest.prefillNoStores')"
           />

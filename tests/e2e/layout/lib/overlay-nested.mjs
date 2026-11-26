@@ -6,8 +6,17 @@ import { FIND, LAYER, closeLayer, openLayer, pointOf, press, step } from './over
 
 const overlay = (id) => `[data-overlay="${id}"]`
 
-// Every pair lived on a screen that is being rebuilt (T72); each comes back with its W4 task.
-export const NESTED = []
+// The pairs of the other screens come back with their W4 tasks.
+export const NESTED = [
+  {
+    id: 'confirm-in-goal-sheet',
+    route: '/money/plan',
+    open: [{ query: { open: 'goal:{goal}' } }],
+    parent: '[data-goal-card]',
+    child: overlay('goal-delete'),
+    openChild: [{ click: '[data-goal-delete]' }],
+  },
+]
 
 export const NESTED_IDS = NESTED.map((entry) => entry.id)
 

@@ -88,23 +88,23 @@ const pause = useGoalPause()
           </div>
         </div>
 
-        <footer class="flex items-center gap-2 border-t px-4 pt-3 pb-[max(0.75rem,var(--safe-bottom,0px))]" data-goal-card-actions>
+        <footer class="flex flex-wrap items-center gap-2 border-t px-4 pt-3 pb-[max(0.75rem,var(--safe-bottom,0px))]" data-goal-card-actions>
           <GoalDelete
             :progress="entry"
             :wallet="details.storeName.value"
             :filler="details.filler.value?.label ?? null"
-            class="max-sm:min-w-0 max-sm:flex-1"
+            class="max-sm:flex-1"
             @deleted="open = false"
           />
-          <Button variant="ghost" class="max-sm:min-w-0 max-sm:flex-1 sm:ms-auto" :disabled="pause.isPending.value" data-goal-pause @click="pause.mutate(entry.goal)">
+          <Button variant="ghost" class="max-sm:flex-1 sm:ms-auto" :disabled="pause.isPending.value" data-goal-pause @click="pause.mutate(entry.goal)">
             <component :is="entry.goal.active ? Pause : Play" class="size-4 shrink-0" />
             {{ entry.goal.active ? t('goalCard.pause') : t('goalCard.resume') }}
           </Button>
-          <Button variant="outline" class="max-sm:min-w-0 max-sm:flex-1" :disabled="!details.store.value || !entry.goal.active" data-goal-top-up @click="topUpOpen = true">
+          <Button variant="outline" class="max-sm:flex-1" :disabled="!details.store.value || !entry.goal.active" data-goal-top-up @click="topUpOpen = true">
             <Plus class="size-4 shrink-0" />
             {{ t('goalCard.topUp') }}
           </Button>
-          <Button class="max-sm:min-w-0 max-sm:flex-1" data-goal-edit @click="editOpen = true">
+          <Button class="max-sm:flex-1" data-goal-edit @click="editOpen = true">
             <Pencil class="size-4 shrink-0" />
             {{ t('actions.edit') }}
           </Button>

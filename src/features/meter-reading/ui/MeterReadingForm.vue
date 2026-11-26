@@ -11,7 +11,7 @@ import { positiveAmount, useFormValidation } from '@/shared/lib/form'
 import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { Select, SelectItem } from '@/shared/ui/select'
 
-import type { MeterReadingFormProps } from './meter-reading.types'
+import type { MeterReadingFormProps } from '../meter-reading.types'
 
 const props = defineProps<MeterReadingFormProps>()
 

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { ComboStoreNodeSelect } from '@/entities/store'
 import { Button } from '@/shared/ui/button'
 import { Combobox } from '@/shared/ui/combobox'
 import { Dialog } from '@/shared/ui/dialog'
@@ -34,7 +35,6 @@ const { editing, step, name, kind, propertyName, storeId, category, nodes, form,
   state
 const save = useSaveUtility(props, state, () => (open.value = false))
 
-const storeOptions = computed(() => nodes.value.map((node) => ({ value: node.store.id, label: node.store.name })))
 const categories = useCategories()
 const categoryOptions = computed(() =>
   (categories.data.value ?? [])
@@ -73,7 +73,7 @@ function submit(event?: Event) {
         <div class="grid gap-3 @lg:grid-cols-2">
           <div class="grid content-start gap-1.5">
             <Label for="utility-store">{{ t('utilityEdit.store') }}</Label>
-            <Combobox id="utility-store" v-model="storeId" :options="storeOptions" :empty-label="t('utilities.anyStore')" :placeholder="t('utilities.anyStore')" />
+            <ComboStoreNodeSelect id="utility-store" v-model="storeId" :nodes="nodes" :empty-label="t('utilities.anyStore')" :placeholder="t('utilities.anyStore')" />
           </div>
           <div class="grid content-start gap-1.5">
             <Label for="utility-category">{{ t('utilities.category') }}</Label>
