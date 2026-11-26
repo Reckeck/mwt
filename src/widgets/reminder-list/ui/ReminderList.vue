@@ -15,7 +15,7 @@ import { Checkbox } from '@/shared/ui/checkbox'
 import { ConfirmButton } from '@/shared/ui/confirm-button'
 import { SectionState } from '@/shared/ui/section-state'
 
-import { dueOf, groupReminders } from '../lib/reminder'
+import { dueOf, groupReminders, repeatLabel } from '../lib/reminder'
 
 /** Reminders under their headings: overdue, today, later, done. «Done» is a checkbox; delete asks first. */
 const { t } = useI18n()
@@ -83,9 +83,13 @@ function openDialog(reminder: Reminder | null) {
                 <p class="truncate text-sm font-medium" :class="reminder.done && 'text-muted-foreground line-through'">
                   {{ reminder.text }}
                 </p>
-                <p class="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                <p
+                  class="flex items-center gap-1 truncate text-xs"
+                  :class="group.key === 'overdue' ? 'text-destructive' : 'text-muted-foreground'"
+                >
                   <Repeat v-if="reminder.repeat" class="size-3" />
                   {{ formatDateTime(dueOf(reminder)) }}
+                  <template v-if="reminder.repeat">· {{ repeatLabel(reminder.repeat) }}</template>
                 </p>
               </div>
               <Badge v-if="reminder.source" variant="secondary">{{ t('reminder.auto') }}</Badge>

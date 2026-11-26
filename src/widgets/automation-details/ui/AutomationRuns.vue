@@ -5,7 +5,7 @@ import { MoneyPhrase } from '@/entities/currency'
 import { formatDayMonthShort } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/utils'
 
-import { type RunTone, runMoney, statusTone } from '../lib/card-view'
+import { runMoney, runToneClass } from '../lib/card-view'
 
 /** `Last runs`: the day, what it did, how it ended (Auto-1 · 3). */
 defineProps<{
@@ -14,12 +14,6 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
-const TONE: Record<RunTone, string> = {
-  pos: 'text-success',
-  wrn: 'text-warning',
-  neg: 'text-destructive',
-  mut: 'text-muted-foreground',
-}
 </script>
 
 <template>
@@ -31,7 +25,7 @@ const TONE: Record<RunTone, string> = {
       <span class="min-w-0 flex-1 truncate tabular-nums">
         <MoneyPhrase :parts="runMoney(run, names)" />
       </span>
-      <span :class="cn('shrink-0', TONE[statusTone(run.status)])">{{ t(`automations.status.${run.status}`) }}</span>
+      <span :class="cn('shrink-0', runToneClass(run.status))">{{ t(`automations.status.${run.status}`) }}</span>
     </div>
   </section>
 </template>

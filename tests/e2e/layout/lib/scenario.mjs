@@ -26,6 +26,7 @@ const ROUTES = [
   '/transactions',
   '/transactions/calendar',
   '/transactions/bonuses',
+  '/transactions/crypto',
   '/money/month',
   '/money/plan',
   '/money/calculator',
@@ -34,6 +35,7 @@ const ROUTES = [
   '/automations/alerts',
   '/automations/workflows',
   '/automations/journal',
+  '/automations/sources',
 ]
 
 const APP = `const app = document.querySelector('#app').__vue_app__; const gp = app.config.globalProperties;`

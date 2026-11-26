@@ -32,11 +32,13 @@ const PAGES = [
   '/transactions',
   '/transactions/calendar',
   '/transactions/bonuses',
+  '/transactions/crypto',
   '/automations',
   '/automations/reminders',
   '/automations/alerts',
   '/automations/workflows',
   '/automations/journal',
+  '/automations/sources',
 ]
 // Errors are keyed by page and message minus ids that change nothing; the baseline holds the known ones.
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g

@@ -1,3 +1,5 @@
+import { i18n } from '@/shared/config/i18n'
+
 export type ReminderGroup = 'overdue' | 'today' | 'later' | 'done'
 
 /** When it comes next: its date, or the end of its snooze. */
@@ -10,6 +12,17 @@ export function groupOf(reminder: Reminder, now = new Date()): ReminderGroup {
   const due = new Date(dueOf(reminder))
   if (due.getTime() < now.getTime()) return 'overdue'
   return due.toDateString() === now.toDateString() ? 'today' : 'later'
+}
+
+/**
+ * «каждый месяц», «каждые 2 месяца», «каждые 5 месяцев»: Russian needs the
+ * determiner to agree with the unit, so every unit carries the whole phrase
+ * instead of «каждые» glued to a bare noun.
+ */
+export function repeatLabel(repeat: ReminderRepeat): string {
+  const { t } = i18n.global
+  if (repeat.every <= 1) return t(`reminder.repeatEvery.${repeat.unit}`)
+  return t(`reminder.repeatEveryN.${repeat.unit}`, { count: repeat.every })
 }
 
 const GROUPS: ReminderGroup[] = ['overdue', 'today', 'later', 'done']

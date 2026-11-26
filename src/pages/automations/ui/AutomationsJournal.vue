@@ -5,6 +5,7 @@ import { Bell, CalendarClock, Repeat, Workflow } from 'lucide-vue-next'
 
 import { Money } from '@/entities/currency'
 import { AutomationConfirmDialog } from '@/features/workflow-manage'
+import { runToneClass } from '@/widgets/automation-details'
 import { WorkflowQueue } from '@/widgets/workflow-queue'
 import { Button } from '@/shared/ui/button'
 import { call } from '@/shared/api/ipc'
@@ -17,7 +18,6 @@ import { Card } from '@/shared/ui/card'
 import { ListRow } from '@/shared/ui/list-row'
 import { SectionState } from '@/shared/ui/section-state'
 
-import { journalTone } from '../lib/journal-view'
 import { useJournal } from '../model/use-journal'
 
 /** Everything that ran — schemes, repeats, reminders, alerts — in one list, the newest first. */
@@ -73,7 +73,7 @@ const KIND_ICON = { repeat: Repeat, scheme: Workflow, reminder: CalendarClock, a
           >
             {{ t('automations.journal.confirm') }}
           </Button>
-          <span v-else class="shrink-0 text-sm" :class="journalTone(entry.status)">{{ t(`automations.status.${entry.status}`) }}</span>
+          <span v-else class="shrink-0 text-sm" :class="runToneClass(entry.status)">{{ t(`automations.status.${entry.status}`) }}</span>
         </li>
       </ul>
     </Card>
