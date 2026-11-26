@@ -40,6 +40,9 @@
   --color-scrim: var(--scrim);
   --color-tertiary: var(--text-tertiary);
   --color-strong: var(--border-strong);
+  /* A list row under the pointer or keyboard focus, and the picked row (Picker, board 1097003). */
+  --color-hover: var(--background-hover);
+  --color-selected: var(--background-selected);
   --color-money-income: var(--money-income);
   --color-money-expense: var(--money-expense);
   --color-money-in-transit: var(--money-in-transit);
@@ -111,6 +114,8 @@
   --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
   /* Label 11/14: badges, calendar cells, axis-like captions. */
+  /* Elevation/Popover: a picker or menu floating over the page. */
+  --shadow-popover: 0 8px 24px rgb(27 30 28 / 0.16);
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 0.875rem;
   /* 13px: the canvas's `.sm` — subtitles under a sum, phone buttons. */
@@ -173,6 +178,9 @@
   --scrim: #1B1E1C73;
   --text-tertiary: #7A807B;
   --border-strong: #B9B2A1;
+  /* From --foreground, so every theme gets them: 8 % / 4 % light, 12 % / 8 % dark (board tokens). */
+  --background-hover: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --background-selected: color-mix(in srgb, var(--foreground) 4%, transparent);
   --chart-actual: #1B1E1C;
   --chart-reference: #B9B2A1;
   --chart-bank: #2E8B62;
@@ -279,6 +287,8 @@
   --scrim: #000000A6;
   --text-tertiary: #767D78;
   --border-strong: #4A504C;
+  --background-hover: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --background-selected: color-mix(in srgb, var(--foreground) 8%, transparent);
   --chart-actual: #ECE9E1;
   --chart-reference: #5A615C;
   --chart-bank: #5FC591;

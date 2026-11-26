@@ -6,7 +6,7 @@ import { ChevronDown } from 'lucide-vue-next'
 import { useContacts } from '@/shared/api/queries'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
-import { PickerSheet } from '@/shared/ui/picker-sheet'
+import { PickerRow, PickerSheet } from '@/shared/ui/picker-sheet'
 
 /**
  * The counterparty of an operation: the saved contacts (not archived) in a bottom sheet with a
@@ -47,20 +47,13 @@ function pick(id: string) {
         <ChevronDown class="size-4 shrink-0 text-muted-foreground" />
       </Button>
     </template>
-    <Button type="button" variant="ghost" class="h-auto w-full justify-start px-2 py-3 text-left font-normal" :class="!model && 'bg-accent'" @click="pick('')">
-      {{ t('quickAdd.noContact') }}
-    </Button>
-    <Button
+    <PickerRow :title="t('quickAdd.noContact')" :selected="!model" @click="pick('')" />
+    <PickerRow
       v-for="contact in found"
       :key="contact.id"
-      type="button"
-      variant="ghost"
-      class="h-auto w-full justify-start px-2 py-3 text-left font-normal"
-      :class="contact.id === model && 'bg-accent'"
-      :aria-pressed="contact.id === model"
+      :title="contact.name"
+      :selected="contact.id === model"
       @click="pick(contact.id)"
-    >
-      <span class="truncate">{{ contact.name }}</span>
-    </Button>
+    />
   </PickerSheet>
 </template>

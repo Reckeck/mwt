@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { categoryIcon } from '@/shared/lib/category-icons'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
-import { PickerSheet } from '@/shared/ui/picker-sheet'
+import { PickerRow, PickerSection, PickerSheet } from '@/shared/ui/picker-sheet'
 
 /** A category as the picker lists it. */
 export interface CategoryChoice {
@@ -16,8 +16,9 @@ export interface CategoryChoice {
 /**
  * The category of an operation (boards 533927, 533529): chips with the category's icon for the
  * first few (the frequent ones come first in `options`), the chosen one dark, and a dashed «Ещё»
- * that opens the sheet of board 532506 — search, «Частые» chips, then every category as a row with
- * its icon. The chosen category always shows as a chip, even when it is deeper in the list.
+ * that opens the sheet of board 532506 — search, the «Недавние» rows (the first few), then
+ * «Все категории», every one a `PickerRow` with its icon. The chosen category always shows as a
+ * chip, even when it is deeper in the list.
  * Choosing stays inside this component (rule 14).
  */
 const props = withDefaults(defineProps<{ options: CategoryChoice[]; invalid?: boolean; chips?: number }>(), {
@@ -82,40 +83,29 @@ function pick(value: string) {
           {{ t('quickAdd.moreChip') }}
         </Button>
       </template>
-      <template v-if="!search.trim() && frequent.length > 0">
-        <h3 class="px-1 pb-2 text-xs text-muted-foreground">{{ t('quickAdd.frequent') }}</h3>
-        <div class="flex flex-wrap gap-2 pb-4">
-          <Button
-            v-for="option in frequent"
-            :key="option.value"
-            type="button"
-            :class="chipClass"
-            :variant="option.value === model ? 'default' : 'outline'"
-            :aria-pressed="option.value === model"
-            @click="pick(option.value)"
-          >
-            <component :is="option.icon" aria-hidden="true" />
-            {{ option.label }}
-          </Button>
-        </div>
-      </template>
-      <h3 class="px-1 pb-1 text-xs text-muted-foreground">{{ t('quickAdd.allCategories') }}</h3>
-      <p v-if="found.length === 0" class="py-6 text-center text-sm text-muted-foreground">{{ t('quickAdd.noCategory') }}</p>
-      <Button
-        v-for="option in found"
-        :key="option.value"
-        type="button"
-        variant="ghost"
-        class="h-auto w-full justify-start gap-3 px-1 py-2 text-left text-base font-medium"
-        :class="option.value === model && 'bg-accent'"
-        :aria-pressed="option.value === model"
-        @click="pick(option.value)"
-      >
-        <span class="grid size-10 shrink-0 place-items-center rounded-full bg-muted [&_svg]:size-5">
-          <component :is="option.icon" aria-hidden="true" />
-        </span>
-        {{ option.label }}
-      </Button>
+      <PickerSection v-if="!search.trim() && frequent.length > 0" :label="t('quickAdd.recent')">
+        <PickerRow
+          v-for="option in frequent"
+          :key="option.value"
+          :title="option.label"
+          :selected="option.value === model"
+          @click="pick(option.value)"
+        >
+          <template #icon><component :is="option.icon" aria-hidden="true" /></template>
+        </PickerRow>
+      </PickerSection>
+      <PickerSection :label="t('quickAdd.allCategories')">
+        <p v-if="found.length === 0" class="py-6 text-center text-sm text-muted-foreground">{{ t('quickAdd.noCategory') }}</p>
+        <PickerRow
+          v-for="option in found"
+          :key="option.value"
+          :title="option.label"
+          :selected="option.value === model"
+          @click="pick(option.value)"
+        >
+          <template #icon><component :is="option.icon" aria-hidden="true" /></template>
+        </PickerRow>
+      </PickerSection>
     </PickerSheet>
   </div>
 </template>

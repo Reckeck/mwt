@@ -8,7 +8,7 @@ import { formatMoney } from '@/shared/lib/format'
 import { useSettingsStore } from '@/shared/store/settings'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
-import { PickerSheet } from '@/shared/ui/picker-sheet'
+import { PickerRow, PickerSection, PickerSheet } from '@/shared/ui/picker-sheet'
 
 import { walletRow, type WalletRow } from '../../lib/wallet-option'
 
@@ -17,12 +17,12 @@ type StoreCaption = string | ((balance: string) => string)
 
 /**
  * A wallet picked from a bottom sheet on a phone (board 532847), a popover under the trigger on a
- * desktop (`PickerSheet`): a search field, then the wallets grouped by
- * what the money is for, each group with its total, each row an icon circle, the name, the bound
- * asset under it and the balance on the right. The trigger is an outline field (`field`), the muted
- * wallet plate of the quick form (`plate`, board 533927), or the bare wallet line inside an exchange
- * box with a caption under the name (`inline`, board 534325). `id`,
- * `aria-*` and `class` go to the trigger.
+ * desktop (`PickerSheet`, board 984555): a search row, then the wallets grouped by what the money is
+ * for, each group with its total, each `PickerRow` an icon circle, the name, the bound asset under
+ * it and the balance on the right with its `≈ base` under a foreign currency.
+ * The trigger is an outline field (`field`), the muted wallet plate of the quick form (`plate`,
+ * board 533927), or the bare wallet line inside an exchange box with a caption under the name
+ * (`inline`, board 534325). `id`, `aria-*` and `class` go to the trigger.
  * `nodes` is a flat list: a sub-account is listed only when the caller passes it.
  * `emptyLabel` makes the pick optional: a first row with that label clears it.
  */
@@ -126,43 +126,22 @@ function pick(id: string) {
         <ChevronDown v-if="props.variant !== 'inline'" class="size-4 shrink-0 text-muted-foreground" />
       </Button>
     </template>
-    <Button
-      v-if="props.emptyLabel"
-      type="button"
-      variant="ghost"
-      class="h-auto w-full justify-start px-1 py-2 text-left text-base"
-      :aria-pressed="model === ''"
-      :class="model === '' && 'bg-accent'"
-      @click="pick('')"
-    >
-      {{ props.emptyLabel }}
-    </Button>
+    <PickerRow v-if="props.emptyLabel" :title="props.emptyLabel" :selected="model === ''" @click="pick('')" />
     <p v-if="groups.length === 0" class="py-6 text-center text-sm text-muted-foreground">{{ t('quickAdd.noStore') }}</p>
-    <!-- money: plain — each group's total in its heading is preformatted in `groups` -->
-    <section v-for="group in groups" :key="group.purpose" class="grid gap-1 pb-2">
-      <h3 class="flex justify-between gap-2 px-1 pt-2 text-xs font-medium text-muted-foreground">
-        <span>{{ t(`purpose.${group.purpose}`) }}</span>
-        <span class="tabular-nums">{{ group.total }}</span>
-      </h3>
-      <Button
+    <!-- money: plain — each group total and row balance is preformatted in `groups` / `walletRow` -->
+    <PickerSection v-for="group in groups" :key="group.purpose" :label="t(`purpose.${group.purpose}`)" :total="group.total">
+      <PickerRow
         v-for="row in group.rows"
         :key="row.id"
-        type="button"
-        variant="ghost"
-        class="h-auto justify-start gap-3 px-1 py-2 text-left"
-        :aria-pressed="row.id === model"
-        :class="row.id === model && 'bg-accent'"
+        :title="row.fullName"
+        :subtitle="row.subtitle"
+        :amount="row.balance"
+        :amount-hint="row.baseHint"
+        :selected="row.id === model"
         @click="pick(row.id)"
       >
-        <span class="grid size-10 shrink-0 place-items-center rounded-full bg-muted [&_svg]:size-5">
-          <component :is="row.icon" :style="row.color ? { color: row.color } : undefined" />
-        </span>
-        <span class="grid min-w-0 flex-1">
-          <span class="truncate text-base font-medium">{{ row.fullName }}</span>
-          <span v-if="row.subtitle" class="truncate text-xs font-normal text-muted-foreground">{{ row.subtitle }}</span>
-        </span>
-        <span class="shrink-0 text-sm font-semibold tabular-nums">{{ row.balance }}</span>
-      </Button>
-    </section>
+        <template #icon><component :is="row.icon" :style="row.color ? { color: row.color } : undefined" /></template>
+      </PickerRow>
+    </PickerSection>
   </PickerSheet>
 </template>
