@@ -24,11 +24,15 @@ describe('startForm', () => {
 
   it('drops a wallet that is gone and a kind the form does not have', () => {
     rememberStore('gone')
-    expect(startForm({ kind: 'convert', amount: '100' }, ['a'], NOW)).toMatchObject({
+    expect(startForm({ kind: 'trade_spot', amount: '100' }, ['a'], NOW)).toMatchObject({
       storeId: 'a',
       kind: 'payment',
       amount: '100',
     })
+  })
+
+  it('opens on an exchange when asked', () => {
+    expect(startForm({ kind: 'convert', amount: '100' }, ['a'], NOW)).toMatchObject({ kind: 'convert', amount: '100' })
   })
 
   it('takes the kind, category and destination of a request', () => {

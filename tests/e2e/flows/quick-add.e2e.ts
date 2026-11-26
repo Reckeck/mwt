@@ -15,14 +15,14 @@ async function openQuickAdd(app: App) {
   )
 }
 
+/** The category is a row of chips; the first one is the most used. */
 async function pickFirstCategory(app: App) {
-  // Reka opens a select on pointerdown, not on click.
-  await app.page.eval(
-    `document.querySelector('#quick-category').dispatchEvent(new PointerEvent('pointerdown', { button: 0, ctrlKey: false, bubbles: true, pointerType: 'mouse' })); return true`,
+  await app.waitFor(
+    `return document.querySelector('${DIALOG} #quick-category')?.parentElement?.querySelector('button[aria-pressed]') !== null`,
+    'a category chip',
   )
-  await app.waitFor(`return document.querySelector('[role="option"]') !== null`, 'the category list')
   await app.page.eval(
-    `const option = document.querySelector('[role="option"]'); option.dispatchEvent(new PointerEvent('pointerup', { button: 0, bubbles: true, pointerType: 'mouse' })); option.click(); return true`,
+    `const chip = document.querySelector('${DIALOG} #quick-category').parentElement.querySelector('button[aria-pressed]'); chip.click(); return true`,
   )
 }
 
@@ -77,6 +77,29 @@ test('desktop: kind switch shows the destination of a transfer instead of a cate
   expect(await app.exists('#quick-category')).toBe(false)
   await app.click('[data-kind="topup"]')
   await app.waitFor(`return document.querySelector('#quick-category') !== null`, 'the category of an income')
+})
+
+test('desktop: the exchange shows the received amount and the rate; More holds the rare fields', async ({ app }) => {
+  await app.unlock()
+  await app.at('/')
+  await openQuickAdd(app)
+  await app.click('[data-kind="convert"]')
+  await app.waitFor(`return document.querySelector('#quick-to-store') !== null`, 'the destination wallet')
+  expect(await app.exists('#quick-got')).toBe(true)
+  expect(await app.exists('#quick-category')).toBe(false)
+
+  // An empty exchange says what is missing, above the button too.
+  await app.click('[data-quick-add-submit]')
+  await app.waitFor(
+    `return document.querySelector('${DIALOG} [data-quick-missing]') !== null`,
+    'the missing-fields summary',
+  )
+
+  // «More» opens a sheet with the rare fields of an exchange: a fee, no payee.
+  await app.click('[data-quick-more]')
+  await app.waitFor(`return document.querySelector('#quick-fee') !== null`, 'the fee field')
+  expect(await app.exists('#quick-payee')).toBe(false)
+  expect(await app.exists('#quick-network')).toBe(false)
 })
 
 test('desktop: Ctrl Enter saves and keeps the form for the next one', async ({ app }) => {

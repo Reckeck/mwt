@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import { CategorySelect } from '@/features/category-select'
 import { ContactPicker } from '@/features/contact-select'
+import { ExchangeFields } from '@/features/currency-convert'
 import { useCategories } from '@/shared/api/queries'
 import { categoryOptions } from '@/shared/lib/categories'
 import type { FieldError } from '@/shared/lib/form'
@@ -11,7 +12,8 @@ import { DateTimePicker } from '@/shared/ui/date-time-picker'
 import { FormField } from '@/shared/ui/form-field'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
-import { QUICK_KINDS, type QuickField, type QuickFormState, type QuickKind } from '../../lib/quick-form'
+import { QUICK_KINDS, isTwoWalletKind, type QuickField, type QuickFormState, type QuickKind } from '../../lib/quick-form'
+import { useQuickAsset } from '../../model/use-quick-asset'
 import { AccountRefPicker } from '../account-ref-picker'
 import { QuickAmount } from '../quick-amount'
 import { QuickNote } from '../quick-note'
@@ -27,9 +29,13 @@ const { t } = useI18n()
 
 const categories = useCategories()
 const GROUPS = { payment: ['daily', 'fixed', 'savings'], topup: ['income', 'savings'] } as const
-const options = computed(() =>
-  form.value.kind === 'transfer' ? [] : categoryOptions(categories.data.value, t, GROUPS[form.value.kind]),
-)
+const options = computed(() => {
+  const kind = form.value.kind
+  return kind === 'payment' || kind === 'topup' ? categoryOptions(categories.data.value, t, GROUPS[kind]) : []
+})
+const exchange = computed(() => form.value.kind === 'convert')
+const gaveAsset = useQuickAsset(() => form.value.storeId)
+const gotAsset = useQuickAsset(() => form.value.toStoreId)
 // A category of the other kind does not carry over.
 watch(options, (list) => {
   if (form.value.category && !list.some((option) => option.value === form.value.category)) form.value.category = ''
@@ -53,14 +59,23 @@ function pickKind(value: unknown) {
       <QuickAmount id="quick-amount" v-model="form.amount" :invalid="Boolean(props.errors.amount)" :aria-label="t('form.sum')" />
     </FormField>
 
-    <FormField for="quick-store" :label="form.kind === 'transfer' ? t('tx.quick.fromWallet') : t('quickAdd.store')" required :error="props.errors.storeId ?? undefined">
+    <FormField for="quick-store" :label="isTwoWalletKind(form.kind) ? t('tx.quick.fromWallet') : t('quickAdd.store')" required :error="props.errors.storeId ?? undefined">
       <AccountRefPicker id="quick-store" v-model="form.storeId" :invalid="Boolean(props.errors.storeId)" />
     </FormField>
 
-    <FormField v-if="form.kind === 'transfer'" for="quick-to-store" :label="t('tx.quick.toWallet')" required :error="props.errors.toStoreId ?? undefined">
+    <FormField v-if="isTwoWalletKind(form.kind)" for="quick-to-store" :label="t('tx.quick.toWallet')" required :error="props.errors.toStoreId ?? undefined">
       <AccountRefPicker id="quick-to-store" v-model="form.toStoreId" :invalid="Boolean(props.errors.toStoreId)" />
     </FormField>
-    <FormField v-else for="quick-category" :label="t('quickAdd.category')" required :error="props.errors.category ?? undefined">
+    <ExchangeFields
+      v-if="exchange"
+      v-model="form.toAmount"
+      :gave="form.amount"
+      :from="gaveAsset?.symbol.toLowerCase() ?? ''"
+      :to="form.toStoreId ? (gotAsset?.symbol.toLowerCase() ?? '') : ''"
+      :error="props.errors.toAmount ?? undefined"
+      :invalid="Boolean(props.errors.toAmount)"
+    />
+    <FormField v-else-if="!isTwoWalletKind(form.kind)" for="quick-category" :label="t('quickAdd.category')" required :error="props.errors.category ?? undefined">
       <CategorySelect v-model="form.category" :options="options" :invalid="Boolean(props.errors.category)" />
     </FormField>
 
@@ -68,7 +83,7 @@ function pickKind(value: unknown) {
       <DateTimePicker id="quick-date" chip v-model="form.timestamp" mode="datetime" required :invalid="Boolean(props.errors.timestamp)" />
     </FormField>
 
-    <FormField v-if="form.kind !== 'transfer'" for="quick-contact" :label="t('quickAdd.contact')">
+    <FormField v-if="!isTwoWalletKind(form.kind)" for="quick-contact" :label="t('quickAdd.contact')">
       <ContactPicker id="quick-contact" v-model="form.contactId" />
     </FormField>
 

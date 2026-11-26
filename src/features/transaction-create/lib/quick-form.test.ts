@@ -21,6 +21,15 @@ describe('quickErrors', () => {
     expect(quickErrors({ ...form, toStoreId: 'b' }).toStoreId).toBeNull()
   })
 
+  it('wants a destination wallet and a received amount for an exchange', () => {
+    const form = { ...emptyQuickForm('convert', 'a'), amount: '100' }
+    const errors = quickErrors(form)
+    expect(errors.category).toBeNull()
+    expect(errors.toStoreId).toBeTruthy()
+    expect(errors.toAmount).toBeTruthy()
+    expect(Object.values(quickErrors({ ...form, toStoreId: 'b', toAmount: '92' })).some(Boolean)).toBe(false)
+  })
+
   it('refuses a zero amount and a date out of range', () => {
     const form = { ...emptyQuickForm('payment', 'a'), category: 'food', amount: '0', timestamp: '1800-01-01T10:00' }
     expect(quickErrors(form).amount).toBeTruthy()
@@ -65,5 +74,16 @@ describe('quickFormToInput counterparty and note', () => {
 
   it('sends no contact when none is picked', () => {
     expect(quickFormToInput({ ...emptyQuickForm('payment', 'a'), amount: '5' }, rub).common.contact_id).toBeNull()
+  })
+})
+
+describe('quickFormToInput for an exchange', () => {
+  it("gives from the first wallet and gets in the second wallet's asset", () => {
+    const usd: AssetRef = { ...rub, symbol: 'USD', name: 'USD', quote: 'USD' }
+    const form = { ...emptyQuickForm('convert', 'a'), toStoreId: 'b', amount: '100', toAmount: '92' }
+    const input = quickFormToInput(form, rub, usd)
+    if (input.type !== 'convert') throw new Error('not an exchange')
+    expect(input.from).toMatchObject({ account: { store: 'a' }, amount: '100', asset: { symbol: 'RUB' } })
+    expect(input.to).toMatchObject({ account: { store: 'b' }, amount: '92', asset: { symbol: 'USD' } })
   })
 })

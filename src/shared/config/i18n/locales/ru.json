@@ -6774,5 +6774,12 @@
   "profile.switchHint": "закрыть и выбрать другое на экране входа",
   "profile.forget": "Забыть хранилище",
   "profile.forgetHint": "убрать из истории, файл останется",
-  "profile.automationsHint": "повторы, схемы, оповещения"
+  "profile.automationsHint": "повторы, схемы, оповещения",
+  "quickAdd.kind.convert": "Обмен",
+  "quickAdd.got": "Получено",
+  "quickAdd.noProperty": "Без объекта",
+  "quickAdd.noNetwork": "Без сети",
+  "quickAdd.overrunTitle": "Выше лимита категории",
+  "quickAdd.overrunBy": "Эта трата выходит за лимит периода на",
+  "quickAdd.missingTitle": "Чтобы сохранить, заполните"
 }

@@ -6774,5 +6774,12 @@
   "profile.switchHint": "lock and pick another on the unlock screen",
   "profile.forget": "Forget vault",
   "profile.forgetHint": "remove from history, the file stays",
-  "profile.automationsHint": "repeats, schemes, alerts"
+  "profile.automationsHint": "repeats, schemes, alerts",
+  "quickAdd.kind.convert": "Exchange",
+  "quickAdd.got": "Received",
+  "quickAdd.noProperty": "No property",
+  "quickAdd.noNetwork": "No network",
+  "quickAdd.overrunTitle": "Over the category limit",
+  "quickAdd.overrunBy": "This expense goes over the month limit by",
+  "quickAdd.missingTitle": "Fill in to save"
 }
