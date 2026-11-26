@@ -63,19 +63,19 @@ export const router = createRouter({
               // What the crypto module read from its sources; the filter is in the query (spec E10).
               path: 'crypto',
               name: 'crypto-operations',
-              component: routePlaceholder,
+              component: () => import('@/pages/crypto-operations').then((page) => page.CryptoOperations),
               meta: { i18n: 'cryptoTrack.operations.title' },
             },
             {
               path: 'calendar',
               name: 'transactions-calendar',
-              component: routePlaceholder,
+              component: () => import('@/pages/transactions').then((page) => page.TransactionsCalendar),
               meta: { i18n: 'nav.transactions' },
             },
             {
               path: 'bonuses',
               name: 'transactions-bonuses',
-              component: routePlaceholder,
+              component: () => import('@/pages/transactions').then((page) => page.TransactionsBonuses),
               meta: { i18n: 'nav.transactions' },
             },
           ],
