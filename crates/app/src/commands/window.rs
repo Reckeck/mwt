@@ -3,7 +3,9 @@
 //! this side only checks the value and paints it, so it keeps no colour table.
 
 use crate::ipc::commands::ipc_commands;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
+#[cfg(desktop)]
+use tauri::Manager;
 
 /// `#rrggbb` as three bytes; anything else is refused.
 fn parse_rgb(rgb: &str) -> Result<(u8, u8, u8), String> {
