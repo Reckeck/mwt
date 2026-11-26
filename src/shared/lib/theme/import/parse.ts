@@ -28,6 +28,13 @@ export function formatParseError(error: ParseError): string {
   return `${error.line}:${error.col} ${error.message}`
 }
 
+const ECHO_LIMIT = 40
+
+/** Bounds raw input quoted in an error message: at most 40 characters plus an ellipsis. */
+function echo(text: string): string {
+  return text.length > ECHO_LIMIT ? `${text.slice(0, ECHO_LIMIT)}…` : text
+}
+
 const FORBIDDEN_VALUE = /(?:url|image-set|src|expression)\s*\(|javascript\s*:|behavior|-moz-binding/
 const WHITESPACE = /\s/
 const HEX = /[0-9a-fA-F]/
@@ -162,7 +169,7 @@ class Parser {
         return
       }
       if (selector !== ':root') {
-        this.fail(start, `selector '${selector}' is not allowed, only :root`)
+        this.fail(start, `selector '${echo(selector)}' is not allowed`)
         return
       }
       rules += 1
@@ -204,16 +211,16 @@ class Parser {
     if (raw.trim() === '') return
     const colon = this.scanTo(start, ':', end)
     if (colon === -1 || colon >= end) {
-      this.fail(start, `malformed declaration '${raw.trim()}': expected ':'`)
+      this.fail(start, `declaration '${echo(raw.trim())}': expected ':'`)
       return
     }
     const name = decodeCssEscapes(this.text.slice(start, colon)).trim()
     if (!name.startsWith('--')) {
-      this.fail(start, `property '${name}' is not a custom property`)
+      this.fail(start, `'${echo(name)}' is not a custom property`)
       return
     }
     if (!/^--[\w-]+$/.test(name)) {
-      this.fail(start, `invalid custom property name '${name}'`)
+      this.fail(start, `invalid custom property name '${echo(name)}'`)
       return
     }
     let valueStart = colon + 1
@@ -221,7 +228,7 @@ class Parser {
     const value = this.text.slice(valueStart, end).trim()
     const problem = valueProblem(value)
     if (problem) {
-      this.fail(valueStart, `${problem} in ${name}`)
+      this.fail(valueStart, `${problem} in ${echo(name)}`)
       return
     }
     this.declarations.push({ name, value, ...this.locate(start) })

@@ -38,9 +38,7 @@ describe('validateTheme', () => {
   })
 
   it('rejects font-family as a non-custom property', () => {
-    expect(messages(':root {\n  font-family: serif;\n}')).toEqual([
-      "2:3 property 'font-family' is not a custom property",
-    ])
+    expect(messages(':root {\n  font-family: serif;\n}')).toEqual(["2:3 'font-family' is not a custom property"])
   })
 
   it('falls back to the base theme of the declared mode with one warning', () => {

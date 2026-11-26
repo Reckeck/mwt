@@ -22,7 +22,7 @@ describe('parseThemeCss', () => {
   })
 
   it('rejects another selector', () => {
-    expect(errorsOf('\n.dark { --a: red; }')).toEqual(["2:1 selector '.dark' is not allowed, only :root"])
+    expect(errorsOf('\n.dark { --a: red; }')).toEqual(["2:1 selector '.dark' is not allowed"])
   })
 
   it('rejects a second rule', () => {
@@ -64,17 +64,15 @@ describe('parseThemeCss', () => {
     expect(errorsOf(':root {\n  --a: red;\n  .x { --b: red; }\n}')).toEqual([
       '3:6 malformed block: nested block is not allowed',
     ])
-    expect(errorsOf(':root {\n  --a red;\n}')).toEqual(["2:3 malformed declaration '--a red': expected ':'"])
+    expect(errorsOf(':root {\n  --a red;\n}')).toEqual(["2:3 declaration '--a red': expected ':'"])
     expect(errorsOf('--a: red;')).toEqual(["1:1 malformed block: expected '{'"])
     expect(errorsOf(':root {\n  --a: (red;\n}')).toEqual(['2:8 unbalanced parentheses in --a'])
     expect(errorsOf('/* open\n:root { --a: red; }')).toEqual(['1:1 unterminated comment'])
   })
 
   it('rejects a non-custom-property declaration', () => {
-    expect(errorsOf(':root {\n  --a: red;\n  color: red;\n}')).toEqual([
-      "3:3 property 'color' is not a custom property",
-    ])
-    expect(errorsOf(':root {\n  font-family: x;\n}')).toEqual(["2:3 property 'font-family' is not a custom property"])
+    expect(errorsOf(':root {\n  --a: red;\n  color: red;\n}')).toEqual(["3:3 'color' is not a custom property"])
+    expect(errorsOf(':root {\n  font-family: x;\n}')).toEqual(["2:3 'font-family' is not a custom property"])
   })
 
   it('rejects hostile characters in values', () => {
@@ -103,5 +101,15 @@ describe('parseThemeCss', () => {
     expect(performance.now() - started).toBeLessThan(2000)
     expect(result.declarations).toEqual([])
     expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  it.each([
+    ['selector', `${'.a'.repeat(10240)} { --a: red; }`],
+    ['colon-less declaration', `:root {\n  ${'x'.repeat(20480)};\n}`],
+    ['property name', `:root {\n  ${'y'.repeat(20480)}: red;\n}`],
+  ])('bounds the echo of a 20 KiB %s and names line:col', (_label, source) => {
+    const [message] = errorsOf(source)
+    expect(message.length).toBeLessThanOrEqual(80)
+    expect(message).toMatch(/^\d+:\d+ /)
   })
 })

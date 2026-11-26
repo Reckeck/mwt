@@ -68,4 +68,15 @@ describe('hostile corpus', () => {
     expect(root.getAttribute('style')).not.toContain('evil')
     expect(root.style.getPropertyValue('--background')).toBe('#123456')
   })
+
+  it.each(['constructor', '__proto__', 'toString', 'hasOwnProperty'])(
+    'a prototype key %s as a colour is a per-line error, never a throw',
+    (word) => {
+      const text = readFileSync(resolve(DIRECTORY, `proto-${word}.css`), 'utf8')
+      const result = validateTheme(text)
+      expect(result.theme).toBeUndefined()
+      expect(result.errors.length).toBeGreaterThan(0)
+      expect(result.errors[0]).toMatchObject({ line: 2, col: expect.any(Number) })
+    },
+  )
 })

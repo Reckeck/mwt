@@ -158,7 +158,8 @@ function parseColor(color: string): Rgba {
   const hex = HEX_PATTERN.exec(text)
   if (hex) return parseHex(hex[1])
   if (text.toLowerCase() === 'transparent') return { red: 0, green: 0, blue: 0, alpha: 0 }
-  const named = NAMED_COLORS[text.toLowerCase()]
+  const key = text.toLowerCase()
+  const named = Object.hasOwn(NAMED_COLORS, key) ? NAMED_COLORS[key] : undefined
   if (named) return parseHex(named.slice(1))
   const fn = FUNCTION_PATTERN.exec(text)
   if (fn) return parseFunction(color, fn[1], fn[2])
