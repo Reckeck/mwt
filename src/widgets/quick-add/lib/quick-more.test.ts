@@ -5,16 +5,18 @@ import { emptyQuickForm, quickFormToInput } from '@/features/transaction-create'
 import { applyMore, emptyQuickMore, filledMoreCount, moreError, moreFieldsOf } from './quick-more'
 
 const rub: AssetRef = { symbol: 'RUB', name: 'RUB', coingecko_id: null, chain: 'fiat', contract: null, quote: 'RUB' }
-const base = (kind: 'payment' | 'transfer' | 'convert') =>
-  quickFormToInput(
-    { ...emptyQuickForm(kind, 'a'), toStoreId: 'b', amount: '10', toAmount: '9', category: 'food' },
-    rub,
-    rub,
-  )
+const formOf = (kind: 'payment' | 'transfer' | 'convert') => ({
+  ...emptyQuickForm(kind, 'a'),
+  toStoreId: 'b',
+  amount: '10',
+  toAmount: '9',
+  category: 'food',
+})
+const base = (kind: 'payment' | 'transfer' | 'convert') => quickFormToInput(formOf(kind), rub, rub)
 
 describe('applyMore', () => {
   it('changes nothing when nothing is filled', () => {
-    expect(applyMore(base('payment'), emptyQuickMore(), rub, 'payment')).toMatchObject({ fee: null, to: null })
+    expect(applyMore(base('payment'), emptyQuickMore(), rub, formOf('payment'))).toMatchObject({ fee: null, to: null })
   })
 
   it('puts the fee, the payee, the property and the hash on an expense', () => {
@@ -26,7 +28,7 @@ describe('applyMore', () => {
       network: 'ethereum',
       txHash: ' 0xabc ',
     }
-    const input = applyMore(base('payment'), more, rub, 'payment')
+    const input = applyMore(base('payment'), more, rub, formOf('payment'))
     if (input.type !== 'payment') throw new Error('kind')
     expect(input.fee).toMatchObject({ amount: '1.5', asset: { symbol: 'RUB' } })
     expect(input.to).toEqual({ raw: 'Cafe' })
@@ -37,26 +39,26 @@ describe('applyMore', () => {
   it('marks a transfer to a contact as a loan and leaves the payee out', () => {
     const more = { ...emptyQuickMore(), asDebt: true, payee: 'ignored' }
     const form = { ...emptyQuickForm('transfer', 'a'), amount: '10', toContactId: 'c1' }
-    const input = applyMore(quickFormToInput(form, rub), more, rub, 'transfer')
+    const input = applyMore(quickFormToInput(form, rub), more, rub, form)
     if (input.type !== 'transfer') throw new Error('kind')
     expect(input.debt).toBe('lend')
   })
 
   it('marks a transfer from a contact as borrowed', () => {
     const form = { ...emptyQuickForm('transfer', ''), toStoreId: 'b', amount: '10', fromContactId: 'c1' }
-    const input = applyMore(quickFormToInput(form, rub), { ...emptyQuickMore(), asDebt: true }, rub, 'transfer')
+    const input = applyMore(quickFormToInput(form, rub), { ...emptyQuickMore(), asDebt: true }, rub, form)
     if (input.type !== 'transfer') throw new Error('kind')
     expect(input.debt).toBe('borrow')
   })
 
   it('leaves debt null for a wallet-to-wallet transfer', () => {
-    const input = applyMore(base('transfer'), { ...emptyQuickMore(), asDebt: true }, rub, 'transfer')
+    const input = applyMore(base('transfer'), { ...emptyQuickMore(), asDebt: true }, rub, formOf('transfer'))
     if (input.type !== 'transfer') throw new Error('kind')
     expect(input.debt).toBeNull()
   })
 
   it('keeps an exchange to a fee and the property', () => {
-    const input = applyMore(base('convert'), { ...emptyQuickMore(), fee: '2', asDebt: true }, rub, 'convert')
+    const input = applyMore(base('convert'), { ...emptyQuickMore(), fee: '2', asDebt: true }, rub, formOf('convert'))
     expect(input).toMatchObject({ type: 'convert', fee: { amount: '2' } })
   })
 })

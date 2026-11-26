@@ -1,7 +1,14 @@
 import type { PendingAttachment } from '@/features/attachment-edit'
 import { hasContactSide, quickDebtEffect } from '@/features/debt-manage'
-import type { QuickKind } from '@/features/transaction-create'
+import { type QuickFormState, type QuickKind, quickTransferSides } from '@/features/transaction-create'
 import { positiveAmount } from '@/shared/lib/form'
+
+/** True for a transfer with exactly one contact side: only that one can be a loan. The one home of the rule. */
+export function quickContactSide(form: QuickFormState): boolean {
+  if (form.kind !== 'transfer') return false
+  const { from, to } = quickTransferSides(form)
+  return hasContactSide(from, to)
+}
 
 /** The rare fields of the quick form, behind «More». All of them are optional. */
 export interface QuickMore {
@@ -63,9 +70,9 @@ export function applyMore(
   input: TransactionInput,
   more: QuickMore,
   asset: AssetRef,
-  kind: QuickKind,
+  form: QuickFormState,
 ): TransactionInput {
-  const fields = moreFieldsOf(kind, input.type === 'transfer' && hasContactSide(input.from, input.to))
+  const fields = moreFieldsOf(form.kind, quickContactSide(form))
   const has = (field: QuickMoreField) => fields.includes(field)
   const ident: AssetIdent = {
     symbol: asset.symbol,

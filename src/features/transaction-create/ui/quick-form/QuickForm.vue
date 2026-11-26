@@ -2,9 +2,6 @@
 import { computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { CategorySelect } from '@/features/category-select'
-import { ContactPicker } from '@/features/contact-select'
-import { ExchangeFields } from '@/features/currency-convert'
 import { useCategories } from '@/shared/api/queries'
 import { categoryOptions } from '@/shared/lib/categories'
 import type { FieldError } from '@/shared/lib/form'
@@ -24,8 +21,15 @@ import { TransferSideField } from '../transfer-side'
 /**
  * The body of the quick add: the kind switch, the hero amount (keypad on a phone), the wallet,
  * the category, the counterparty, the date and the note. It validates nothing itself: it shows what the owner passes in
- * `errors` (after a save was tried, rule 13).
+ * `errors` (after a save was tried, rule 13). The pieces of sibling features come in through slots, put together by
+ * the widget: `#category` (the options and the invalid flag), `#contact` (which side, the field id), `#exchange`
+ * (what was given and the two asset symbols).
  */
+defineSlots<{
+  category(props: { options: { value: string; label: string }[]; invalid: boolean }): unknown
+  contact(props: { side: 'from' | 'to' | 'party'; id: string; invalid: boolean }): unknown
+  exchange(props: { gave: string; from: string; to: string; error?: string; invalid: boolean }): unknown
+}>()
 const props = defineProps<{ errors: Partial<Record<QuickField, FieldError | undefined>> }>()
 const form = defineModel<QuickFormState>('form', { required: true })
 const { t } = useI18n()
@@ -76,7 +80,7 @@ function pickKind(value: unknown) {
         :can-contact="form.kind === 'transfer' && !form.toContactId"
         :error="props.errors.storeId ?? undefined"
       >
-        <template #contact="{ id, invalid }"><ContactPicker :id="id" v-model="form.fromContactId" :invalid="invalid" /></template>
+        <template #contact="{ id, invalid }"><slot name="contact" side="from" :id="id" :invalid="invalid" /></template>
       </TransferSideField>
       <TransferSideField
         id="quick-to-store"
@@ -86,12 +90,12 @@ function pickKind(value: unknown) {
         :can-contact="form.kind === 'transfer' && !form.fromContactId"
         :error="props.errors.toStoreId ?? undefined"
       >
-        <template #contact="{ id, invalid }"><ContactPicker :id="id" v-model="form.toContactId" :invalid="invalid" /></template>
+        <template #contact="{ id, invalid }"><slot name="contact" side="to" :id="id" :invalid="invalid" /></template>
       </TransferSideField>
     </template>
-    <ExchangeFields
+    <slot
       v-if="exchange"
-      v-model="form.toAmount"
+      name="exchange"
       :gave="form.amount"
       :from="gaveAsset?.symbol.toLowerCase() ?? ''"
       :to="form.toStoreId ? (gotAsset?.symbol.toLowerCase() ?? '') : ''"
@@ -99,7 +103,7 @@ function pickKind(value: unknown) {
       :invalid="Boolean(props.errors.toAmount)"
     />
     <FormField v-else-if="!isTwoWalletKind(form.kind)" for="quick-category" :label="t('quickAdd.category')" required :error="props.errors.category ?? undefined">
-      <CategorySelect v-model="form.category" :options="options" :invalid="Boolean(props.errors.category)" />
+      <slot name="category" :options="options" :invalid="Boolean(props.errors.category)" />
     </FormField>
 
     <FormField for="quick-date" :label="t('quickAdd.date')" :error="props.errors.timestamp ?? undefined">
@@ -107,7 +111,7 @@ function pickKind(value: unknown) {
     </FormField>
 
     <FormField v-if="!isTwoWalletKind(form.kind)" for="quick-contact" :label="t('quickAdd.contact')">
-      <ContactPicker id="quick-contact" v-model="form.contactId" />
+      <slot name="contact" side="party" id="quick-contact" :invalid="false" />
     </FormField>
 
     <FormField for="quick-note" :label="t('quickAdd.note')">

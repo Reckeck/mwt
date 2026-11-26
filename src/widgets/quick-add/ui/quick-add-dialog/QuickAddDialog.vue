@@ -16,6 +16,9 @@ import {
   useQuickAsset,
   useQuickSave,
 } from '@/features/transaction-create'
+import { CategorySelect } from '@/features/category-select'
+import { ContactPicker } from '@/features/contact-select'
+import { ExchangeFields } from '@/features/currency-convert'
 import { useStoreTree } from '@/shared/api/queries'
 import { toLocalInput } from '@/shared/lib/datetime'
 import { useFormValidation } from '@/shared/lib/form'
@@ -28,7 +31,7 @@ import { Kbd } from '@/shared/ui/kbd'
 import { txId } from '@/shared/lib/transactions'
 
 import { rememberStore, startForm } from '../../lib/quick-add-start'
-import { applyMore, emptyQuickMore, moreError } from '../../lib/quick-more'
+import { applyMore, emptyQuickMore, moreError, quickContactSide } from '../../lib/quick-more'
 import { useLinkToEvent } from '../../model/use-link-event'
 import { useQuickAddSeries } from '../../model/use-quick-add-series'
 import { useQuickOverrun } from '../../model/use-quick-overrun'
@@ -57,10 +60,7 @@ const check = useFormValidation<QuickField | 'fee'>(() => ({ ...quickErrors(form
 const waitingForAsset = ref(false)
 const attach = useAttachPending()
 const linkToEvent = useLinkToEvent()
-/** A transfer with a contact on one side can be a loan. */
-const contactSide = computed(
-  () => form.value.kind === 'transfer' && Boolean(form.value.toContactId) !== Boolean(form.value.fromContactId),
-)
+const contactSide = computed(() => quickContactSide(form.value))
 const overruns = useQuickOverrun(() => ({
   kind: form.value.kind,
   category: form.value.category,
@@ -137,7 +137,7 @@ const assetsReady = computed(() => Boolean(asset.value) && (form.value.kind !== 
 function write() {
   waitingForAsset.value = false
   const input = quickFormToInput(form.value, asset.value as AssetRef, toAsset.value)
-  save.mutate(applyMore(input, more.value, asset.value as AssetRef, form.value.kind))
+  save.mutate(applyMore(input, more.value, asset.value as AssetRef, form.value))
 }
 watch(assetsReady, (ready) => {
   if (ready && waitingForAsset.value) write()
@@ -164,7 +164,17 @@ function submit(another: boolean, event?: Event) {
     >
       <p v-if="tree.isSuccess.value && !walletIds.length" class="text-sm text-muted-foreground">{{ t('quickAdd.noStores') }}</p>
       <div v-else class="grid gap-4">
-        <QuickForm v-model:form="form" :errors="shown" />
+        <QuickForm v-model:form="form" :errors="shown">
+          <template #category="{ options, invalid }"><CategorySelect v-model="form.category" :options="options" :invalid="invalid" /></template>
+          <template #contact="{ side, id, invalid }">
+            <ContactPicker v-if="side === 'from'" :id="id" v-model="form.fromContactId" :invalid="invalid" />
+            <ContactPicker v-else-if="side === 'to'" :id="id" v-model="form.toContactId" :invalid="invalid" />
+            <ContactPicker v-else :id="id" v-model="form.contactId" :invalid="invalid" />
+          </template>
+          <template #exchange="{ gave, from, to, error, invalid }">
+            <ExchangeFields v-model="form.toAmount" :gave="gave" :from="from" :to="to" :error="error" :invalid="invalid" />
+          </template>
+        </QuickForm>
         <QuickMoreSheet v-model="more" :kind="form.kind" :contact-side="contactSide" :fee-error="check.error('fee')" />
         <OverrunAlert v-for="item in overruns" :key="item.id" :overrun="item" />
         <MissingSummary :labels="missing" />

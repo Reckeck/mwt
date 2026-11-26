@@ -94,6 +94,11 @@ function transferSide(contactId: string, storeId: string): AccountRef {
   return contactId ? { contact: { contact_id: contactId, account_id: null } } : { store: storeId }
 }
 
+/** The two sides of a quick transfer, as the backend takes them (a contact where one is picked). */
+export function quickTransferSides(form: QuickFormState): { from: AccountRef; to: AccountRef } {
+  return { from: transferSide(form.fromContactId, form.storeId), to: transferSide(form.toContactId, form.toStoreId) }
+}
+
 /** The backend input of the form; `asset` is the wallet's own (see `use-quick-asset`), `toAsset` the destination wallet's (an exchange). */
 export function quickFormToInput(
   form: QuickFormState,
@@ -146,8 +151,7 @@ export function quickFormToInput(
       type: 'transfer',
       common,
       fee: null,
-      from: transferSide(form.fromContactId, form.storeId),
-      to: transferSide(form.toContactId, form.toStoreId),
+      ...quickTransferSides(form),
       asset: ident,
       amount,
       network: null,
