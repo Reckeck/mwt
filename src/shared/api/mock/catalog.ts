@@ -18,11 +18,25 @@ export function mockImportSettings(): ImportSettings {
 }
 
 export const mockEnvelopes: Envelope[] = []
-/** Change what an envelope holds the way the core does: an entry of its journal, `allocated` is the sum. */
-export function recordEnvelopeMove(envelope: Envelope, delta: number): void {
-  if (delta === 0) return
-  envelope.moves.push({ id: crypto.randomUUID(), delta: String(delta), at: new Date().toISOString() })
-  envelope.allocated = String(envelope.moves.reduce((sum, entry) => sum + Number(entry.delta), 0))
+/**
+ * Change what an envelope holds the way the core does: an entry of its journal, `allocated` is the sum.
+ * A distribution passes the income it came from (`incomeRef`, spec S9) and the income's date (`at`).
+ */
+export function recordEnvelopeMove(
+  envelope: Envelope,
+  delta: number,
+  link?: { incomeRef: string; at: string },
+): EnvelopeMove | undefined {
+  if (delta === 0) return undefined
+  const entry: EnvelopeMove = {
+    id: crypto.randomUUID(),
+    delta: String(delta),
+    at: link?.at ?? new Date().toISOString(),
+    ...(link ? { income_ref: link.incomeRef } : {}),
+  }
+  envelope.moves.push(entry)
+  envelope.allocated = String(envelope.moves.reduce((sum, move) => sum + Number(move.delta), 0))
+  return entry
 }
 
 export const mockDebtTerms: DebtTerms[] = []

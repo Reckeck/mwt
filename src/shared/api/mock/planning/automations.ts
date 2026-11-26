@@ -6,6 +6,7 @@ import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTota
 import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
 import { deleteGoal, restoreGoal } from './goal-delete'
 import { forMonthKey } from './salary-seed'
+import { bookRun, findTemplate } from './templates'
 import {
   automations,
   budgets,
@@ -53,6 +54,7 @@ export function planAutomations(
         time: input.time ?? null,
         asks: input.asks ?? false,
         ...(input.for_month_offset == null ? {} : { for_month_offset: input.for_month_offset }),
+        ...templateLink(input.operation_template_id),
       }
       automations.push(automation)
       syncWorkflow(automation)
@@ -75,6 +77,7 @@ export function planAutomations(
           time: input.automation.time ?? null,
           asks: input.automation.asks ?? false,
           for_month_offset: input.automation.for_month_offset,
+          ...templateLink(input.automation.operation_template_id),
         }),
       )
     }
@@ -100,7 +103,7 @@ export function planAutomations(
       }
       if ('topup' in tx && automation.for_month_offset != null)
         tx.topup.details.for_month = forMonthKey(iso(now()), automation.for_month_offset)
-      ctx.transactions.unshift(tx)
+      if (bookRun(automation, tx, runId, ctx.transactions)) return tx
       runs.push({
         id: runId,
         automation_id: automation.id,
@@ -233,4 +236,11 @@ export function planAutomations(
 function updated(automation: Automation): Automation {
   syncWorkflow(automation)
   return listed(automation)
+}
+
+/** T5: the template an automation takes its period and distribution rules from; it must exist. */
+function templateLink(id: string | undefined): { operation_template_id?: string } {
+  if (!id) return {}
+  findTemplate(id)
+  return { operation_template_id: id }
 }
