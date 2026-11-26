@@ -2,14 +2,13 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import { AutomationAmountDialog } from '@/features/automation-edit'
 import { useRoute, useRouter } from 'vue-router'
 
 import { Money } from '@/entities/currency'
 import { entityKey, entityLocation } from '@/shared/lib/entity-link'
 import { formatDateTime, formatDayMonthShort } from '@/shared/lib/format'
 import { scheduleText } from '@/shared/lib/planning'
-import { txId, txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
+import { txMeta, txPrincipalLegs } from '@/shared/lib/transactions'
 import { Badge } from '@/shared/ui/badge'
 import { Button } from '@/shared/ui/button'
 import { Glance } from '@/shared/ui/glance'
@@ -28,7 +27,6 @@ const route = useRoute()
 const router = useRouter()
 
 const open = ref(false)
-const amountOpen = ref(false)
 const glance = useAutomationGlance(() => props.automationId, () => props.runId, open)
 
 const automation = computed(() => glance.automation.value)
@@ -59,10 +57,6 @@ function toJournal() {
 }
 const leg = computed(() => txPrincipalLegs(props.tx)[0] ?? null)
 const income = computed(() => Number(leg.value?.amount ?? 0) > 0)
-function correct() {
-  open.value = false
-  amountOpen.value = true
-}
 </script>
 
 <template>
@@ -99,18 +93,9 @@ function correct() {
       </dl>
     </template>
     <template #actions>
-      <Button v-if="automation" variant="outline" size="sm" data-glance-auto-amount @click="correct">{{ t('glance.auto.correct') }}</Button>
       <Button variant="link" size="sm" class="h-auto px-0 text-sm" data-glance-auto-journal @click="toJournal">
         {{ t('glance.auto.journal') }} →
       </Button>
     </template>
   </Glance>
-  <AutomationAmountDialog
-    v-if="automation"
-    v-model:open="amountOpen"
-    :tx-id="txId(props.tx)"
-    :name="automation.name"
-    :estimate="glance.run.value?.amount ?? ''"
-    :symbol="glance.run.value?.symbol ?? ''"
-  />
 </template>

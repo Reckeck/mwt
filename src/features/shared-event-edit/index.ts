@@ -1,5 +1,0 @@
-export { default as SharedEventEditDialog } from './ui/SharedEventEditDialog.vue'
-export { default as GuestDetailsDialog } from './ui/GuestDetailsDialog.vue'
-export * from './shared-event-edit.constants'
-export * from './shared-event-edit.types'
-export { hasGuestDetails, guestDraft } from './model/guest-details'
