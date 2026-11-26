@@ -14,7 +14,7 @@ export const router = createRouter({
     {
       path: '/unlock',
       name: 'unlock',
-      component: routePlaceholder,
+      component: () => import('@/pages/unlock').then((page) => page.Unlock),
       meta: { public: true },
     },
     {
