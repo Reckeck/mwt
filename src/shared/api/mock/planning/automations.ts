@@ -144,10 +144,14 @@ export function planAutomations(
       remove(budgets, String(args?.id))
       return {}
     case 'get_budget_status': {
-      const totals = monthTotals(ctx, currentMonth(), (args?.basis as MockBasis | null) ?? 'period')
+      // R3, R4: only a Month budget follows the basis; Day and Week stay on the money date.
+      const basis = (args?.basis as MockBasis | null) ?? 'period'
+      const monthly = monthTotals(ctx, currentMonth(), basis)
+      const byDate = monthTotals(ctx, currentMonth(), 'money_date')
       return budgets
         .filter((budget) => budget.active)
         .map((budget): BudgetStatus => {
+          const totals = budget.period === 'month' ? monthly : byDate
           const spent = totals.fixed + totals.daily
           const limit = Number(budget.limit)
           return {

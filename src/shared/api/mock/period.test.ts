@@ -161,3 +161,59 @@ describe('A8 the month summary reads money date or period (R2, T29)', () => {
     expect(Number(novByPeriod.daily)).toBeGreaterThan(0)
   })
 })
+
+describe('R3, R4 a budget status follows the basis only for a Month budget (T53)', () => {
+  const card = newStore('Card T53', 'bank', '#555555')
+  mockStores.push(card)
+  const status = async (period: 'day' | 'week' | 'month', basis: 'period' | 'money_date') => {
+    const created = (await mock('create_budget', {
+      input: { active: true, target: 'total', period, limit: '1000000', currency: 'USD', warn: false },
+    })) as Budget
+    const all = (await mock('get_budget_status', { basis })) as BudgetStatus[]
+    const found = all.find((entry) => entry.budget.id === created.id)
+    await mock('delete_budget', { id: created.id })
+    return Number(found?.spent)
+  }
+
+  it('counts an operation for last month by its money date in Day and Week budgets, by basis in Month', async () => {
+    const today = new Date()
+    const previous = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1))
+    const start = previous.toISOString().slice(0, 10)
+    const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0)).toISOString().slice(0, 10)
+    const baseline = {
+      day: await status('day', 'period'),
+      week: await status('week', 'period'),
+      monthPeriod: await status('month', 'period'),
+      monthDate: await status('month', 'money_date'),
+    }
+    await mock('add_transaction', {
+      input: {
+        type: 'payment',
+        common: {
+          timestamp: today.toISOString(),
+          comment: '',
+          categories: ['food'],
+          flow_id: null,
+          contact_id: null,
+          price_usd: null,
+          fx_override: null,
+          price: null,
+          price_currency: null,
+          period: { kind: 'range', start, end },
+        },
+        store_id: card.id,
+        asset: RUB,
+        amount: '5000',
+        fee: null,
+        details: {},
+        to: null,
+      },
+    })
+    for (const basis of ['period', 'money_date'] as const) {
+      expect(await status('day', basis)).toBeGreaterThan(baseline.day)
+      expect(await status('week', basis)).toBeGreaterThan(baseline.week)
+    }
+    expect(await status('month', 'period')).toBe(baseline.monthPeriod)
+    expect(await status('month', 'money_date')).toBeGreaterThan(baseline.monthDate)
+  })
+})
