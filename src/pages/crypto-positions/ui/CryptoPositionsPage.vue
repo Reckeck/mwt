@@ -10,7 +10,7 @@ import { PageHeader } from '@/shared/ui/page-header'
 import { SectionState } from '@/shared/ui/section-state'
 import { SwitchRow } from '@/shared/ui/switch-row'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
-import { TradingChart } from '@/widgets/trading-chart'
+import { PriceChart } from '@/widgets/price-chart'
 
 import PositionsAddresses from './PositionsAddresses.vue'
 
@@ -93,6 +93,6 @@ const pickProtocol = (value: unknown) => {
       </div>
     </SectionState>
     <PositionsAddresses />
-    <TradingChart />
+    <PriceChart />
   </div>
 </template>

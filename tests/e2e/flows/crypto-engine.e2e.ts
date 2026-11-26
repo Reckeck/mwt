@@ -32,7 +32,7 @@ for (const width of [1280, 390] as const) {
     await app.waitFor(`return document.querySelector('[data-crypto-quarantine]') !== null`, 'the quarantine block')
     expect(await app.text('[data-crypto-quarantine]')).toMatch(/PEPE2/)
     await app.waitFor(
-      `return document.querySelector('[data-trading-chart-plot] canvas, [data-trading-chart-plot] svg') !== null`,
+      `return document.querySelector('[data-price-chart-plot] canvas, [data-price-chart-plot] svg') !== null`,
       'the price chart',
     )
     await app.screenshot(`crypto-engine-1-addresses-${width}`)

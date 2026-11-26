@@ -16,7 +16,7 @@ const MODULE = [
   'src/entities/crypto-token',
   'src/entities/crypto-position',
   'src/pages/crypto-positions',
-  'src/widgets/trading-chart',
+  'src/widgets/price-chart',
 ].map((part) => join(ROOT, part))
 
 /**

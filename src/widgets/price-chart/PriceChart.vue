@@ -48,7 +48,7 @@ function pickStep(value: unknown) {
 </script>
 
 <template>
-  <Card class="grid gap-4 p-4 md:p-6" data-trading-chart>
+  <Card class="grid gap-4 p-4 md:p-6" data-price-chart>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-base font-semibold">{{ t('cryptoTrack.chart.title') }}</h2>
       <div class="flex flex-wrap gap-2">
@@ -70,7 +70,7 @@ function pickStep(value: unknown) {
       skeleton="list"
       @retry="candles.refetch()"
     >
-      <Chart :option="option" class="h-56 w-full md:h-72" role="img" :aria-label="t('cryptoTrack.chart.title')" data-trading-chart-plot />
+      <Chart :option="option" class="h-56 w-full md:h-72" role="img" :aria-label="t('cryptoTrack.chart.title')" data-price-chart-plot />
     </SectionState>
   </Card>
 </template>

@@ -13,7 +13,7 @@ const SLICES = [
   'src/entities/crypto-token',
   'src/entities/crypto-position',
   'src/pages/crypto-positions',
-  'src/widgets/trading-chart',
+  'src/widgets/price-chart',
 ]
 const ALLOWED = new Set([
   'crypto_list_accounts',
