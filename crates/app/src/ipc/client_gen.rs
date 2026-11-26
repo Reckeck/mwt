@@ -179,6 +179,7 @@ mod tests {
         );
     }
 
+    /// A10: the generated client (client.gen.ts) matches the #[ipc] commands.
     #[test]
     fn client_gen_is_current() {
         let generated = render_client(CLIENT_COMMANDS);

@@ -55,7 +55,7 @@ pub fn day_of(raw: &str) -> Option<NaiveDate> {
 
 /// The calendar of the user's day: the vault's zone (`schedule_timezone`,
 /// the same on every device), UTC until a device wrote one.
-fn calendar_of(doc: &VaultDoc) -> Calendar {
+pub fn calendar_of(doc: &VaultDoc) -> Calendar {
     Calendar::new(
         doc.settings
             .schedule_timezone
@@ -604,6 +604,8 @@ pub fn plan_due_interest(books: &Books<'_>, today: NaiveDate) -> Vec<Transaction
             planned_at: period.clone(),
         };
         drafts.push(Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta,
             store_id: store.id.clone(),
             asset,

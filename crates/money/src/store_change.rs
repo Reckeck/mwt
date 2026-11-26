@@ -152,9 +152,7 @@ fn other_balances(
 ) -> HashMap<String, Amount> {
     let mut totals: HashMap<String, Amount> = HashMap::new();
     for (index, tx) in transactions.iter().enumerate() {
-        if secs_or_now(&tx.meta().timestamp) > at.secs {
-            continue;
-        }
+        let tx_secs = secs_or_now(&tx.meta().timestamp);
         if ranks
             .get(&index)
             .is_some_and(|other| other.key() >= at.key())
@@ -162,7 +160,10 @@ fn other_balances(
             continue;
         }
         for leg in tx.legs() {
-            if leg.store_id == store_id && !leg.asset.is_derivative() {
+            if leg.store_id == store_id
+                && !leg.asset.is_derivative()
+                && leg.secs(tx_secs) <= at.secs
+            {
                 *totals.entry(leg.asset.key()).or_default() += leg.amount;
             }
         }
@@ -766,6 +767,8 @@ mod tests {
 
     fn topup(id: &str, store: &str, raw: &str, timestamp: &str) -> Transaction {
         Transaction::Topup(TopupTx {
+            parts: Vec::new(),
+            distribution: None,
             meta: meta(id, timestamp),
             store_id: store.into(),
             asset: rub(),

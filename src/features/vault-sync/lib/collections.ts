@@ -9,6 +9,7 @@ export const SYNC_COLLECTIONS = [
   'goals',
   'reminders',
   'debt_terms',
+  'operation_templates',
   'shared_events',
   'valuations',
   'manual_prices',

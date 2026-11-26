@@ -117,6 +117,61 @@ impl TxOrigin {
     }
 }
 
+/// The kind of an operation period (spec op-period P1, P2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum PeriodKind {
+    Month,
+    Half,
+    Quarter,
+    Year,
+    Range,
+}
+
+/// What an operation is «for»: a span of days in the user's zone (spec P1).
+/// `start` and `end` are plain dates `YYYY-MM-DD`, both inclusive.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct OpPeriod {
+    pub kind: PeriodKind,
+    pub start: String,
+    pub end: String,
+}
+
+/// How the user got the shares of a spread (spec P5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum SpreadMode {
+    Even,
+    ByDays,
+    Manual,
+}
+
+/// One month's share of a spread operation.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct MonthShare {
+    /// Month key `YYYY-MM`.
+    pub month: String,
+    pub amount: Amount,
+}
+
+/// An operation spread over the months of its period. `shares` is always
+/// stored, so a later reading never depends on a changed rounding rule.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct Spread {
+    pub mode: SpreadMode,
+    pub shares: Vec<MonthShare>,
+}
+
 /// Fields every transaction carries, whatever it is.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ts", derive(ts_rs::TS))]
@@ -145,6 +200,19 @@ pub struct TxMeta {
     #[serde(default)]
     #[cfg_attr(feature = "ts", ts(as = "Option<bool>", optional))]
     pub keep: bool,
+    /// What the operation is «for» (spec P1); none means the month of the date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub period: Option<OpPeriod>,
+    /// Per-month shares of the amount over `period` (spec P5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub spread: Option<Spread>,
+    /// The income whose distribution made this operation: a back-reference
+    /// for integrity checks only (spec S9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub income_ref: Option<String>,
 }
 
 impl TxMeta {
@@ -159,6 +227,9 @@ impl TxMeta {
             origin: TxOrigin::Manual,
             utility_item_id: None,
             keep: false,
+            period: None,
+            spread: None,
+            income_ref: None,
         }
     }
 }
@@ -242,9 +313,20 @@ pub struct Leg {
     /// Currency `price_base` is in; see [`PriceStamp::price_base_currency`].
     pub price_base_currency: Option<String>,
     pub fx_override: Option<Amount>,
+    /// Own money date of this leg when it differs from the transaction's
+    /// (a part of an income that arrived on another day); `None` = the transaction's.
+    pub timestamp: Option<String>,
 }
 
 impl Leg {
+    /// When this leg's money moved, in seconds: its own date when it has one,
+    /// else the transaction's `tx_secs`.
+    pub fn secs(&self, tx_secs: i64) -> i64 {
+        self.timestamp
+            .as_deref()
+            .map_or(tx_secs, mwt_base::time::secs_or_now)
+    }
+
     fn new(
         store_id: &str,
         asset: &AssetRef,
@@ -262,6 +344,7 @@ impl Leg {
             price_base: None,
             price_base_currency: None,
             fx_override: None,
+            timestamp: None,
         };
         price.on(&mut leg);
         leg
@@ -352,6 +435,90 @@ pub struct TopupTx {
     pub from: Option<AccountRef>,
     pub details: KindDetails,
     pub price: PriceStamp,
+    /// «Arrived in parts» (spec S1): empty = a single-store income. When set,
+    /// `amount` is the total and `store_id` is the first part's store.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(feature = "ts", ts(as = "Option<Vec<ReceivedPart>>", optional))]
+    pub parts: Vec<ReceivedPart>,
+    /// «Distribute myself» (spec S6): `None` = not distributed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub distribution: Option<Vec<DistributionPart>>,
+}
+
+/// One receiving part of an income that arrived in parts (spec S1).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct ReceivedPart {
+    pub store_id: String,
+    pub amount: Amount,
+    /// The part's own date; `None` = the income's `timestamp`.
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub timestamp: Option<String>,
+}
+
+/// What the user (or the rule) asked for in a distribution part (spec S6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum DistKind {
+    Sum { amount: Amount },
+    Percent { pct: Amount },
+    Remainder,
+}
+
+/// Where a distribution part goes; `None` only for the remainder (spec S6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum DistTarget {
+    Store { id: String },
+    Envelope { id: String },
+    Goal { goal_id: String, store_id: String },
+    None,
+}
+
+/// State of a distribution part; `planned` is an additive variant of v3.4 (spec S15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum PartStatus {
+    Done,
+}
+
+/// The record a distribution part produced; a back-pointer for integrity checks (spec S6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum EffectRef {
+    Transfer {
+        tx_id: String,
+    },
+    EnvelopeMove {
+        envelope_id: String,
+        move_id: String,
+    },
+}
+
+/// One stored part of a distributed income (spec S6).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct DistributionPart {
+    pub kind: DistKind,
+    pub target: DistTarget,
+    /// Resolved amount in the income's asset, a stored snapshot.
+    pub amount: Amount,
+    pub status: PartStatus,
+    #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional))]
+    pub effect: Option<EffectRef>,
 }
 
 /// "Pay": money leaves a store for good (a purchase, a bill, interest).
@@ -784,12 +951,19 @@ impl Transaction {
         let mut legs = Vec::new();
         match self {
             Self::Topup(tx) => {
-                legs.push(Leg::in_coming(
-                    &tx.store_id,
-                    &tx.asset,
-                    tx.amount,
-                    &tx.price,
-                ));
+                if tx.parts.is_empty() {
+                    legs.push(Leg::in_coming(
+                        &tx.store_id,
+                        &tx.asset,
+                        tx.amount,
+                        &tx.price,
+                    ));
+                }
+                for part in &tx.parts {
+                    let mut leg = Leg::in_coming(&part.store_id, &tx.asset, part.amount, &tx.price);
+                    leg.timestamp.clone_from(&part.timestamp);
+                    legs.push(leg);
+                }
                 push_fee(&mut legs, Some(&tx.store_id), &tx.fee);
             }
             Self::Payment(tx) => {
@@ -1143,6 +1317,8 @@ mod tests {
             from: None,
             details: KindDetails::default(),
             price: PriceStamp::default(),
+            parts: Vec::new(),
+            distribution: None,
         });
         assert_eq!(
             signed(&topup.legs()),
@@ -1410,5 +1586,163 @@ mod tests {
             let back: Transaction = serde_json::from_str(&json).unwrap();
             assert_eq!(back, tx);
         }
+    }
+
+    fn meta_with_period() -> TxMeta {
+        let mut meta = TxMeta::new("rent");
+        meta.id = "tx-1".into();
+        meta.timestamp = "2026-11-05T10:00:00Z".into();
+        meta.period = Some(OpPeriod {
+            kind: PeriodKind::Range,
+            start: "2026-10-16".into(),
+            end: "2026-12-15".into(),
+        });
+        meta.spread = Some(Spread {
+            mode: SpreadMode::Even,
+            shares: vec![
+                MonthShare {
+                    month: "2026-10".into(),
+                    amount: amount("50"),
+                },
+                MonthShare {
+                    month: "2026-11".into(),
+                    amount: amount("50"),
+                },
+            ],
+        });
+        meta.income_ref = Some("income-1".into());
+        meta
+    }
+
+    /// op-period M1: the new fields round-trip through JSON and MessagePack.
+    #[test]
+    fn op_period_meta_round_trips_json_and_msgpack() {
+        for meta in [TxMeta::new("plain"), meta_with_period()] {
+            let json = serde_json::to_string(&meta).unwrap();
+            assert_eq!(serde_json::from_str::<TxMeta>(&json).unwrap(), meta);
+            let packed = rmp_serde::to_vec_named(&meta).unwrap();
+            assert_eq!(rmp_serde::from_slice::<TxMeta>(&packed).unwrap(), meta);
+        }
+    }
+
+    /// op-period M1/M2: an old JSON without the new fields reads as today's value.
+    #[test]
+    fn op_period_old_json_deserialises_without_new_fields() {
+        let old = r#"{"id":"a","timestamp":"2026-01-01T00:00:00Z","comment":"c",
+            "categories":[],"flow_id":null,"contact_id":null,"origin":"manual"}"#;
+        let meta: TxMeta = serde_json::from_str(old).unwrap();
+        assert_eq!(meta.period, None);
+        assert_eq!(meta.spread, None);
+        assert_eq!(meta.income_ref, None);
+    }
+
+    /// op-period S9: `income_ref` is not written when none.
+    #[test]
+    fn op_period_income_ref_skipped_when_none() {
+        let json = serde_json::to_string(&TxMeta::new("x")).unwrap();
+        assert!(!json.contains("income_ref"));
+    }
+
+    fn topup(parts: Vec<ReceivedPart>, distribution: Option<Vec<DistributionPart>>) -> Transaction {
+        let mut meta = TxMeta::new("salary");
+        meta.timestamp = "2026-11-05T09:00:00Z".into();
+        Transaction::Topup(TopupTx {
+            meta,
+            store_id: "card".into(),
+            asset: usd(),
+            amount: amount("120000"),
+            fee: None,
+            from: None,
+            details: KindDetails::default(),
+            price: PriceStamp::default(),
+            parts,
+            distribution,
+        })
+    }
+
+    #[test]
+    fn income_in_parts_books_one_dated_leg_per_part() {
+        let tx = topup(
+            vec![
+                ReceivedPart {
+                    store_id: "card".into(),
+                    amount: amount("100000"),
+                    timestamp: None,
+                },
+                ReceivedPart {
+                    store_id: "cash".into(),
+                    amount: amount("20000"),
+                    timestamp: Some("2026-11-07T09:00:00Z".into()),
+                },
+            ],
+            None,
+        );
+        let legs = tx.legs();
+        assert_eq!(
+            signed(&legs),
+            vec![
+                ("card".into(), "100000".into(), LegRole::Principal),
+                ("cash".into(), "20000".into(), LegRole::Principal),
+            ]
+        );
+        assert_eq!(legs[0].timestamp, None);
+        assert_eq!(legs[1].timestamp.as_deref(), Some("2026-11-07T09:00:00Z"));
+    }
+
+    #[test]
+    fn distributed_income_keeps_one_full_leg_on_the_card() {
+        let tx = topup(
+            Vec::new(),
+            Some(vec![DistributionPart {
+                kind: DistKind::Remainder,
+                target: DistTarget::None,
+                amount: amount("120000"),
+                status: PartStatus::Done,
+                effect: None,
+            }]),
+        );
+        assert_eq!(
+            signed(&tx.legs()),
+            vec![("card".into(), "120000".into(), LegRole::Principal)]
+        );
+    }
+
+    #[test]
+    fn old_topup_without_the_new_fields_round_trips() {
+        let tx = topup(Vec::new(), None);
+        let mut value = serde_json::to_value(&tx).unwrap();
+        let body = value.get_mut("topup").unwrap().as_object_mut().unwrap();
+        body.remove("parts");
+        body.remove("distribution");
+        let packed = rmp_serde::to_vec_named(&value).unwrap();
+        let back: Transaction = serde_json::from_value(value).unwrap();
+        assert_eq!(back, tx);
+        assert_eq!(rmp_serde::from_slice::<Transaction>(&packed).unwrap(), tx);
+    }
+
+    #[test]
+    fn distribution_part_wire_shape() {
+        let part = DistributionPart {
+            kind: DistKind::Sum {
+                amount: amount("5"),
+            },
+            target: DistTarget::Goal {
+                goal_id: "g".into(),
+                store_id: "s".into(),
+            },
+            amount: amount("5"),
+            status: PartStatus::Done,
+            effect: Some(EffectRef::EnvelopeMove {
+                envelope_id: "e".into(),
+                move_id: "m".into(),
+            }),
+        };
+        let json = serde_json::to_value(&part).unwrap();
+        assert_eq!(json["status"], "done");
+        assert!(json["effect"].get("envelope_move").is_some());
+        assert_eq!(
+            serde_json::from_value::<DistributionPart>(json).unwrap(),
+            part
+        );
     }
 }

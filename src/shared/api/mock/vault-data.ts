@@ -144,6 +144,7 @@ export function mockVaultDoc(): VaultDoc {
     manual_prices: [],
     envelopes: mockEnvelopes,
     debt_terms: mockDebtTerms,
+    operation_templates: [],
     shared_events: mockSharedEvents,
     key_rates: [],
     notification_log: [],

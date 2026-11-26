@@ -9,6 +9,9 @@ pub mod categories;
 #[cfg(test)]
 mod categories_tests;
 pub mod cost_basis;
+pub mod distribution;
+#[cfg(test)]
+mod distribution_tests;
 pub mod enrichment;
 pub mod inflation;
 #[cfg(test)]

@@ -1056,3 +1056,22 @@ fn pnl_counts_a_fee_without_a_rate_as_unpriced() {
     assert_eq!(report.unpriced, 1);
     assert_eq!(report.total_fees, Amount::ZERO);
 }
+
+/// R3 (month_allowance): the calendar's pool and allowance stay on the money date,
+/// even when the income is labelled for another month.
+#[test]
+fn the_calendar_pool_ignores_the_period_label_of_the_income() {
+    let (_dir, mut vault, card) = vault_with_card();
+    let mut salary = earn(&card, "3100", "2026-03-01T08:00:00Z");
+    salary.meta_mut().period = Some(mwt_model::OpPeriod {
+        kind: mwt_model::PeriodKind::Range,
+        start: "2026-02-01".into(),
+        end: "2026-02-28".into(),
+    });
+    crate::usecases::money::transactions::add_transaction(&mut vault, salary).unwrap();
+    let now = secs("2026-03-20T12:00:00Z");
+    let calendar =
+        crate::reports::overview::calendar_month(&vault.books(), "2026-03", now, "UTC").unwrap();
+    assert_eq!(calendar.pool.map(|pool| pool.income), Some(amount("3100")));
+    assert_eq!(calendar.allowance, Some(amount("90")));
+}

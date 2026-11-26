@@ -225,6 +225,7 @@ fn opening_entry_is_shared_by_two_devices() {
         id: format!("open:{id}"),
         delta: amount("40"),
         at: envelope_of(&left, &id).created_at,
+        income_ref: None,
     }];
     assert_eq!(envelope_of(&left, &id).moves, opening);
     assert_eq!(envelope_of(&right, &id).moves, opening);

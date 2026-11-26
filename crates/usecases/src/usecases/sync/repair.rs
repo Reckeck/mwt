@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use super::peer_sync;
+use super::repair_distribution::repair_distributions;
 use crate::error::Result;
 use crate::ipc_contract::MergeTarget;
 use crate::model::notify::{NoticeCategory, notice};
@@ -132,6 +133,12 @@ fn run_rules(vault: &mut Session) -> RepairReport {
     repair_shares(&mut vault.doc, &mut report);
     repair_event_links(&mut vault.doc, &mut report);
     repair_event_money(&mut vault.doc, &mut report);
+    // S11. After the money and the records it points to are settled: a distribution part whose
+    // effect is gone, a back-reference to an income that is gone.
+    repair_distributions(&mut vault.doc, &mut report);
+    // T2. Last: a template names a category, store or contact that is gone.
+    report.dropped_template_refs =
+        crate::planning::templates::drop_dangling_references(&mut vault.doc);
     // R8. Things another device deleted may still be named by a record
     // that arrived (an emergency account, an inflation source). Shared
     // events keep their references: a settlement or item that names a

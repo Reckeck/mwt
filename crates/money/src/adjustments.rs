@@ -50,11 +50,12 @@ fn balances_where(
     let mut assets: HashMap<String, AssetRef> = HashMap::new();
     let mut totals: HashMap<String, Amount> = HashMap::new();
     for tx in &doc.transactions {
-        if skip(tx) || secs_or_now(&tx.meta().timestamp) > limit {
+        if skip(tx) {
             continue;
         }
+        let tx_secs = secs_or_now(&tx.meta().timestamp);
         for leg in tx.legs() {
-            if leg.store_id != store_id || leg.asset.is_derivative() {
+            if leg.store_id != store_id || leg.asset.is_derivative() || leg.secs(tx_secs) > limit {
                 continue;
             }
             let key = leg.asset.key();

@@ -154,17 +154,23 @@ impl WorkflowHost for Session {
     }
 
     fn budget_status(&self, now: i64, zone: &str) -> Vec<BudgetReading> {
-        crate::usecases::planning::budget::budget_status(&self.books(), now, zone)
-            .into_iter()
-            .map(|status| BudgetReading {
-                id: status.budget.id,
-                currency: status.budget.currency,
-                remaining: status.remaining,
-                used: status.used,
-                period_start: status.period_start,
-                period_end: status.period_end,
-            })
-            .collect()
+        // Workflow runs stay on the money date (Q10, R4), whatever the budget default.
+        crate::usecases::planning::budget::budget_status_by(
+            &self.books(),
+            now,
+            zone,
+            Some(crate::planning::flows::Basis::MoneyDate),
+        )
+        .into_iter()
+        .map(|status| BudgetReading {
+            id: status.budget.id,
+            currency: status.budget.currency,
+            remaining: status.remaining,
+            used: status.used,
+            period_start: status.period_start,
+            period_end: status.period_end,
+        })
+        .collect()
     }
 
     fn data_source(&self, id: &str) -> Option<DataSource> {

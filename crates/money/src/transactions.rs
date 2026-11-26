@@ -13,6 +13,7 @@ use mwt_model::{Transaction, TxOrigin};
 /// Fill what the user does not type: the purchase price of property
 /// (its unit price is in the base currency at the time of buying).
 pub fn complete_transaction(books: &Books, tx: &mut Transaction) {
+    normalize_parts(tx);
     let Transaction::Topup(inner) = tx else {
         return;
     };
@@ -30,6 +31,21 @@ pub fn complete_transaction(books: &Books, tx: &mut Transaction) {
     inner.price.price_usd = fx_at(books, base, &inner.meta.timestamp)
         .filter(|rate| !rate.is_zero())
         .map(|rate| unit_price / rate);
+}
+
+/// S2, S1: an income in parts drops its zero parts and keeps `store_id` on the
+/// first part's store. No parts: nothing changes.
+pub fn normalize_parts(tx: &mut Transaction) {
+    let Transaction::Topup(inner) = tx else {
+        return;
+    };
+    if inner.parts.is_empty() {
+        return;
+    }
+    inner.parts.retain(|part| !part.amount.is_zero());
+    if let Some(first) = inner.parts.first() {
+        inner.store_id.clone_from(&first.store_id);
+    }
 }
 
 /// An edit of one operation that names only what it changes (F4): the new

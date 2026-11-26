@@ -5,6 +5,7 @@ import { txId, txMeta } from '@/shared/lib/transactions'
 import { resolve } from './core'
 import type { MockCommands } from './core'
 import { mockTransactions } from './demo'
+import { prepareDelete } from './planning/distribution'
 import { mockLinkProperty, mockPropertyLinks } from './property-links'
 
 function indexOf(id: string): number {
@@ -24,6 +25,7 @@ export const bulkCommands: MockCommands = {
   delete_transactions: ({ args }) => {
     const ids = (args?.ids as string[]) ?? []
     ids.forEach(indexOf)
+    ids.forEach(prepareDelete)
     const deleted: DeletedTransaction[] = ids.map((id) => {
       const property_id = mockPropertyLinks.find((row) => row.tx_id === id)?.property_id ?? null
       const [transaction] = mockTransactions.splice(indexOf(id), 1)

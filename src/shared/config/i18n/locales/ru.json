@@ -4224,6 +4224,7 @@
   "sync.coll.manual_prices": "Цены, заданные вручную",
   "sync.coll.envelopes": "Конверты",
   "sync.coll.debt_terms": "Условия долгов",
+  "sync.coll.operation_templates": "Шаблоны операций",
   "sync.coll.shared_events": "Общие расходы",
   "sync.coll.key_rates": "Ключевая ставка",
   "sync.coll.workflow_runs": "Запуски схем",

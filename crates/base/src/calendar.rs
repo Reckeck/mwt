@@ -6,6 +6,7 @@
 
 pub mod date_label;
 pub mod for_month;
+pub mod period;
 pub mod workdays;
 
 use chrono::{Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, TimeZone, Utc};

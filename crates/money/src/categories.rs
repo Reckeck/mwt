@@ -84,6 +84,7 @@ pub fn plan_create_category(
         archived: false,
         essential: None,
         passive: None,
+        period_rule: None,
     })
 }
 

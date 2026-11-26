@@ -34,6 +34,7 @@ mod schedule_moments;
 mod shared_event;
 mod store;
 mod sync_state;
+mod template;
 mod transaction;
 mod vault;
 mod workflow;
@@ -114,12 +115,17 @@ pub use sync_state::{
     SyncJournalOutcome, SyncState, SyncSummary, TOMBSTONE_DAYS, TransferRecord, TrustedPeer,
     acked_through, device_tag, is_own_device,
 };
+pub use template::{
+    DistributionRow, DistributionRule, OnOtherAmount, OperationTemplate, PeriodRule, RuleHalf,
+    TemplateKind,
+};
 pub use transaction::{
     AccountRef, AdjustmentLine, AdjustmentTx, AssetSellTx, CashNote, ConvertSide, ConvertTx,
-    DebtEffect, DefiAction, DefiTx, Fee, FuturesAction, FuturesCategory, FuturesDirection,
-    KindDetails, Leg, LegRole, Liquidity, PaymentTx, PriceStamp, TopupTx, TradeFuturesTx,
-    TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind, TxMeta, TxOrigin, allowed_kinds,
-    default_kind,
+    DebtEffect, DefiAction, DefiTx, DistKind, DistTarget, DistributionPart, EffectRef, Fee,
+    FuturesAction, FuturesCategory, FuturesDirection, KindDetails, Leg, LegRole, Liquidity,
+    MonthShare, OpPeriod, PartStatus, PaymentTx, PeriodKind, PriceStamp, ReceivedPart, Spread,
+    SpreadMode, TopupTx, TradeFuturesTx, TradeSide, TradeSpotTx, Transaction, TransferTx, TxKind,
+    TxMeta, TxOrigin, allowed_kinds, default_kind,
 };
 #[cfg(feature = "schema")]
 pub use vault::json_schema;

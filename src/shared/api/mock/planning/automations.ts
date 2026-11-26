@@ -1,10 +1,13 @@
 /** Commands: automations, budgets, goals and their simulation. */
 
 import { txMeta } from '@/shared/lib/transactions'
+import type { MockBasis } from '../period'
 import { currentMonth, dailyBudget, goalProgress, money, monthSummary, monthTotals } from './budget-calc'
 import { dropWorkflow, listed, mainOf, syncWorkflow } from './automation-workflow'
 import { deleteGoal, restoreGoal } from './goal-delete'
 import { forMonthKey } from './salary-seed'
+import { bookRun } from './automation-run'
+import { findTemplate } from './template-store'
 import {
   automations,
   budgets,
@@ -52,6 +55,7 @@ export function planAutomations(
         time: input.time ?? null,
         asks: input.asks ?? false,
         ...(input.for_month_offset == null ? {} : { for_month_offset: input.for_month_offset }),
+        ...templateLink(input.operation_template_id),
       }
       automations.push(automation)
       syncWorkflow(automation)
@@ -74,6 +78,7 @@ export function planAutomations(
           time: input.automation.time ?? null,
           asks: input.automation.asks ?? false,
           for_month_offset: input.automation.for_month_offset,
+          ...templateLink(input.automation.operation_template_id),
         }),
       )
     }
@@ -99,7 +104,7 @@ export function planAutomations(
       }
       if ('topup' in tx && automation.for_month_offset != null)
         tx.topup.details.for_month = forMonthKey(iso(now()), automation.for_month_offset)
-      ctx.transactions.unshift(tx)
+      if (bookRun(automation, tx, runId, ctx.transactions)) return tx
       runs.push({
         id: runId,
         automation_id: automation.id,
@@ -139,10 +144,14 @@ export function planAutomations(
       remove(budgets, String(args?.id))
       return {}
     case 'get_budget_status': {
-      const totals = monthTotals(ctx, currentMonth())
+      // R3, R4: only a Month budget follows the basis; Day and Week stay on the money date.
+      const basis = (args?.basis as MockBasis | null) ?? 'period'
+      const monthly = monthTotals(ctx, currentMonth(), basis)
+      const byDate = monthTotals(ctx, currentMonth(), 'money_date')
       return budgets
         .filter((budget) => budget.active)
         .map((budget): BudgetStatus => {
+          const totals = budget.period === 'month' ? monthly : byDate
           const spent = totals.fixed + totals.daily
           const limit = Number(budget.limit)
           return {
@@ -159,7 +168,12 @@ export function planAutomations(
     case 'get_daily_budget':
       return dailyBudget(ctx, settings.daily_budget_mode, rate)
     case 'get_month_summary':
-      return monthSummary(ctx, String(args?.month ?? currentMonth()), rate)
+      return monthSummary(
+        ctx,
+        String(args?.month ?? currentMonth()),
+        rate,
+        (args?.basis as MockBasis | null) ?? 'period',
+      )
     case 'list_goals':
       return [...goals].sort((left, right) => right.priority - left.priority)
     case 'create_goal': {
@@ -227,4 +241,11 @@ export function planAutomations(
 function updated(automation: Automation): Automation {
   syncWorkflow(automation)
   return listed(automation)
+}
+
+/** T5: the template an automation takes its period and distribution rules from; it must exist. */
+function templateLink(id: string | undefined): { operation_template_id?: string } {
+  if (!id) return {}
+  findTemplate(id)
+  return { operation_template_id: id }
 }

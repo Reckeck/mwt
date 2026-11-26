@@ -118,7 +118,7 @@ pub(crate) fn where_report(books: &Books, ctx: &Ctx) -> WhereReport {
     let mut income = Amount::ZERO;
     let mut categories: BTreeMap<String, (Amount, u32)> = BTreeMap::new();
     for flow in report_flows(books, ctx, from, to) {
-        let month = mwt_base::calendar::first_of_month(flow.date);
+        let month = Ctx::flow_month(&flow);
         let value = ctx.shown(flow.value, month);
         match flow.class {
             FlowClass::Income => income += value,

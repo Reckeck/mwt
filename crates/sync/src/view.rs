@@ -880,6 +880,147 @@ mod tests {
         assert_eq!(join(coll, &fields), tx);
     }
 
+    /// M1/M4: the op-period fields of a transaction are fields of their own, each one
+    /// merged on its own, and join back unchanged (`parts` and `distribution` are arrays
+    /// kept whole as one field).
+    #[test]
+    fn m1_op_period_fields_of_a_transaction_split_and_join_back() {
+        let coll = find("transactions").expect("rule");
+        let tx = json!({"topup": {
+            "meta": {
+                "id": "t1",
+                "period": {"kind": "half", "start": "2026-10-16", "end": "2026-10-31"},
+                "spread": {"mode": "even", "shares": []},
+                "income_ref": "t0"
+            },
+            "amount": "5",
+            "parts": [{"store_id": "s1", "amount": "2"}, {"store_id": "s2", "amount": "3"}],
+            "distribution": [{"kind": "remainder", "target": "none", "amount": "5", "status": "done"}]
+        }});
+        let fields = split(coll, &tx);
+        for name in [
+            "meta.period",
+            "meta.spread",
+            "meta.income_ref",
+            "parts",
+            "distribution",
+        ] {
+            assert!(fields.fields.contains_key(name), "no field `{name}`");
+        }
+        assert_eq!(join(coll, &fields), tx);
+    }
+
+    /// A topup that exists on two devices with the given fields; stamps per field.
+    fn topup_state(body: Value, stamps: &[(&str, u64, &str)]) -> crate::state::RecordState {
+        use crate::stamp::Stamp;
+        crate::state::RecordState {
+            value: Some(json!({"topup": body})),
+            stamps: Some(RecordStamps {
+                created: Stamp::new(1, 0, "a"),
+                fields: stamps
+                    .iter()
+                    .map(|(name, wall, device)| ((*name).to_string(), Stamp::new(*wall, 0, device)))
+                    .collect(),
+            }),
+            tombstone: None,
+        }
+    }
+
+    fn distribution(amounts: &[&str]) -> Value {
+        Value::Array(
+            amounts
+                .iter()
+                .map(|amount| {
+                    json!({"kind": "remainder", "target": "none", "amount": amount, "status": "done"})
+                })
+                .collect(),
+        )
+    }
+
+    /// Q18: `distribution` is one field of its own: two devices that edited it offline end with
+    /// the list of the later edit, never a mix of both, the same on both sides.
+    #[test]
+    fn q18_two_devices_editing_one_distribution_end_with_one_list() {
+        let coll = find("transactions").expect("rule");
+        let left = topup_state(
+            json!({"meta": {"id": "t1"}, "amount": "10", "distribution": distribution(&["4", "6"])}),
+            &[("distribution", 10, "a")],
+        );
+        let right = topup_state(
+            json!({"meta": {"id": "t1"}, "amount": "10", "distribution": distribution(&["10"])}),
+            &[("distribution", 20, "b")],
+        );
+        let there = crate::merge::merge(coll, &left, &right).state;
+        let back = crate::merge::merge(coll, &right, &left).state;
+        assert_eq!(there, back, "merge must not depend on the side");
+        let merged = there.value.expect("alive");
+        assert_eq!(merged["topup"]["distribution"], distribution(&["10"]));
+        assert_eq!(
+            merged["topup"]["distribution"].as_array().map(Vec::len),
+            Some(1)
+        );
+    }
+
+    /// M1: period, spread and income_ref merge one by one: each edit survives from its own side.
+    #[test]
+    fn m1_meta_period_spread_and_income_ref_merge_per_field() {
+        let coll = find("transactions").expect("rule");
+        let left = topup_state(
+            json!({"meta": {"id": "t1", "period": {"kind": "month"}, "income_ref": "i1"}, "amount": "5"}),
+            &[("meta.period", 20, "a")],
+        );
+        let right = topup_state(
+            json!({"meta": {"id": "t1", "period": {"kind": "half"}, "spread": {"mode": "even"}}, "amount": "5"}),
+            &[("meta.period", 10, "b"), ("meta.spread", 20, "b")],
+        );
+        let merged = crate::merge::merge(coll, &left, &right)
+            .state
+            .value
+            .expect("alive");
+        let meta = &merged["topup"]["meta"];
+        assert_eq!(meta["period"], json!({"kind": "month"}));
+        assert_eq!(meta["spread"], json!({"mode": "even"}));
+        assert_eq!(meta["income_ref"], json!("i1"));
+    }
+
+    /// M4: a meta field this build does not know (as `utility_item_id` once was) is carried by
+    /// the merge, from either side, and not dropped.
+    #[test]
+    fn m4_merge_keeps_unknown_meta_fields() {
+        let coll = find("transactions").expect("rule");
+        let newer = topup_state(
+            json!({"meta": {"id": "t1", "future_field": {"x": 1}}, "amount": "5"}),
+            &[("meta.future_field", 20, "a")],
+        );
+        let older = topup_state(json!({"meta": {"id": "t1"}, "amount": "5"}), &[]);
+        for (left, right) in [(&newer, &older), (&older, &newer)] {
+            let merged = crate::merge::merge(coll, left, right)
+                .state
+                .value
+                .expect("alive");
+            assert_eq!(merged["topup"]["meta"]["future_field"], json!({"x": 1}));
+        }
+    }
+
+    /// T1: an operation template is a record of its own, keyed by its id.
+    #[test]
+    fn t1_operation_templates_are_records_keyed_by_id() {
+        let coll = find("operation_templates").expect("rule");
+        let template = json!({"id": "tpl1", "name": "Salary", "kind": "income"});
+        assert_eq!(record_key(coll, &template).as_deref(), Some("tpl1"));
+        assert_eq!(join(coll, &split(coll, &template)), template);
+    }
+
+    /// Q14: the migration marker travels with the group's settings.
+    #[test]
+    fn q14_migrations_done_travels_in_settings() {
+        let doc = json!({"settings": {"minimize_to_tray": false, "migrations_done": ["m6"]}});
+        assert_eq!(
+            read(&doc, "settings:").expect("settings"),
+            json!({"migrations_done": ["m6"]})
+        );
+    }
+
     /// A crypto record is named by its own words, never by its key: a token
     /// by its symbol, an operation by what it did and when.
     #[test]

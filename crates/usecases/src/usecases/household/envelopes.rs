@@ -9,10 +9,12 @@ use crate::model::ids::StoreId;
 use crate::model::planning::Envelope;
 use crate::model::vault::now_iso;
 use crate::planning::envelopes::{
-    EnvelopeDraft, check_draft_against, check_draft_name, new_envelope, plan_fund_envelope,
-    plan_fund_goal, plan_move_between_envelopes, plan_update_envelope, settle_envelopes as settle,
+    EnvelopeDraft, GoalFunding, check_draft_against, check_draft_name, new_envelope,
+    plan_fund_envelope, plan_fund_goal, plan_move_between_envelopes, plan_update_envelope,
+    settle_envelopes as settle,
 };
 use crate::service::Session;
+use mwt_model::VaultDoc;
 
 fn missing_envelope() -> Error {
     Error::Missing("envelope".into())
@@ -90,11 +92,37 @@ pub fn move_between_envelopes(
 
 /// Delete an envelope; whatever it held simply becomes free again.
 pub fn delete_envelope(vault: &mut Session, id: &str) -> Result<()> {
+    let linked = vault.doc.envelopes.iter().any(|envelope| {
+        envelope.id == id
+            && envelope
+                .moves
+                .iter()
+                .any(|entry| entry.income_ref.is_some())
+    });
+    if linked {
+        return Err(crate::money::distribution::linked_to_income(
+            "a move of this envelope",
+        ));
+    }
     vault.transact(|tx| {
         tx.collection::<Envelope>()
             .remove(id)
             .map(|_| ())
             .map_err(|_| missing_envelope())
+    })
+}
+
+/// The id of a goal's envelope on a card: the one that exists, else the
+/// stable id named by goal, wallet and asset (two devices that start funding
+/// the same goal make one envelope). The one home of that naming rule.
+pub(crate) fn goal_envelope_for(
+    _doc: &VaultDoc,
+    funding: &GoalFunding,
+    goal_id: &str,
+    store_id: &str,
+) -> String {
+    funding.envelope_id.clone().unwrap_or_else(|| {
+        crate::sync::sync_ids::goal_envelope_id(goal_id, store_id, &funding.asset.key())
     })
 }
 
@@ -111,16 +139,10 @@ pub fn fund_goal(
     if !funding.take.is_positive() {
         return Ok(Amount::ZERO);
     }
-    let id = match funding.envelope_id {
+    let id = match funding.envelope_id.clone() {
         Some(id) => id,
         None => {
-            // Named by goal, wallet and asset: two devices that start
-            // funding the same goal make one envelope.
-            let id = crate::sync::sync_ids::goal_envelope_id(
-                goal_id,
-                store_id.as_str(),
-                &funding.asset.key(),
-            );
+            let id = goal_envelope_for(&vault.doc, &funding, goal_id, store_id.as_str());
             let draft = EnvelopeDraft {
                 store_id: store_id.to_string(),
                 name: funding.goal_name,
