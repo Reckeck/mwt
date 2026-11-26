@@ -103,7 +103,13 @@ const pct = (value: string | undefined) => Math.min(100, Math.max(0, Number(valu
           <div class="flex items-start justify-between gap-2">
             <div class="grid min-w-0 gap-1">
               <p class="flex min-w-0 items-center gap-2">
-                <Button variant="link" class="h-auto min-w-0 justify-start truncate p-0 font-medium" data-goal-open @click="nav.open({ kind: 'goal', id: goal.id })">{{ goal.name }}</Button>
+                <Button
+                  variant="link"
+                  class="h-auto min-w-0 justify-start truncate p-0 font-medium"
+                  data-goal-open
+                  @click="nav.open({ kind: 'goal', id: goal.id })"
+                  >{{ goal.name }}</Button
+                >
                 <Badge v-if="!goal.active" variant="neutral">{{ t('goalCard.pausedBadge') }}</Badge>
               </p>
               <div class="flex items-center gap-0.5" :aria-label="t('goal.priorityValue', { value: goal.priority })">
