@@ -1,3 +1,4 @@
+// check-ui-ignore raw-color: theme fixtures are colour data fed to the parser, not UI styling
 import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'

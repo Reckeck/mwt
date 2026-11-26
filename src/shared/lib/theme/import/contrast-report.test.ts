@@ -1,3 +1,4 @@
+// check-ui-ignore raw-color: theme fixtures are colour data fed to the parser, not UI styling
 import { describe, expect, it } from 'vitest'
 import { builtinThemes } from '../registry'
 import { reportContrast } from './contrast-report'
