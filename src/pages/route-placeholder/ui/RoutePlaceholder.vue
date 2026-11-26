@@ -11,5 +11,5 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <EmptyState :title="t('routePlaceholder.title')" :description="t('routePlaceholder.description')" />
+  <EmptyState data-route-placeholder :title="t('routePlaceholder.title')" :description="t('routePlaceholder.description')" />
 </template>

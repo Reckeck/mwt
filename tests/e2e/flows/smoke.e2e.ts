@@ -12,5 +12,7 @@ test('a route of a deleted screen still resolves and shows the placeholder', asy
   await app.unlock()
   await app.at('/transactions')
   await app.waitFor(`return document.querySelector('[data-tour="quick-add"]') !== null`, 'the shell to mount')
+  await app.waitFor(`return document.querySelector('[data-route-placeholder]') !== null`, 'the route placeholder')
+  expect(await app.exists('[data-route-placeholder]')).toBe(true)
   expect(await app.exists('[role="dialog"]')).toBe(false)
 })
