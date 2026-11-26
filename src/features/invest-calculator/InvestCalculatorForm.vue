@@ -85,7 +85,7 @@ function pickMode(value: unknown) {
           for="calc-years"
           :label="t('invest.term')"
           :error="error('years') ?? error('months')"
-          class="@max-sm:col-span-2"
+          class="col-span-2"
         >
           <div class="grid grid-cols-2 gap-2">
             <AmountInput id="calc-years" v-model="form.years" :decimals="0" placeholder="0">
