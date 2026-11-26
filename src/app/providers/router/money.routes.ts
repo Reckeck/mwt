@@ -27,7 +27,7 @@ export const moneyRoutes: RouteRecordRaw = {
     {
       path: 'wealth',
       name: 'money-wealth',
-      component: routePlaceholder,
+      component: () => import('@/pages/money').then((page) => page.MoneyWealth),
       meta: { i18n: 'nav.money', group: 'wealth' },
     },
     {
