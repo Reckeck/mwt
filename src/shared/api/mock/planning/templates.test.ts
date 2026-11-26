@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { mockEnvelopes } from '../catalog'
-import { mockStores, newStore } from '../demo'
+import { mockNotices, mockStores, mockTransactions, newStore } from '../demo'
+import { runs as workflowRuns, waits } from '../workflows/state'
 import { mock } from '../dispatch'
 import { automations } from './state'
 
@@ -28,6 +29,7 @@ interface Setup {
   amount?: string
   mode?: OnOtherAmount
   percentOnly?: boolean
+  over?: boolean
 }
 
 /** A card, a deposit, two envelopes and a salary template over them. */
@@ -43,17 +45,22 @@ async function template(name: string, setup: Setup = {}) {
     ).id
   const vacation = await envelope('Vacation')
   const gifts = await envelope('Gifts')
-  const rows: DistributionRow[] = setup.percentOnly
+  const rows: DistributionRow[] = setup.over
     ? [
-        { kind: { percent: { pct: '5' } }, target: { envelope: { id: vacation } } },
+        { kind: { sum: { amount: '130000' } }, target: { store: { id: deposit.id } } },
         { kind: 'remainder', target: 'none' },
       ]
-    : [
-        { kind: { sum: { amount: '20000' } }, target: { store: { id: deposit.id } } },
-        { kind: { percent: { pct: '5' } }, target: { envelope: { id: vacation } } },
-        { kind: { sum: { amount: '3000' } }, target: { envelope: { id: gifts } } },
-        { kind: 'remainder', target: 'none' },
-      ]
+    : setup.percentOnly
+      ? [
+          { kind: { percent: { pct: '5' } }, target: { envelope: { id: vacation } } },
+          { kind: 'remainder', target: 'none' },
+        ]
+      : [
+          { kind: { sum: { amount: '20000' } }, target: { store: { id: deposit.id } } },
+          { kind: { percent: { pct: '5' } }, target: { envelope: { id: vacation } } },
+          { kind: { sum: { amount: '3000' } }, target: { envelope: { id: gifts } } },
+          { kind: 'remainder', target: 'none' },
+        ]
   const input: OperationTemplateInput = {
     name,
     kind: 'income',
@@ -162,5 +169,69 @@ describe('A4 an advance of 30 000 (D1, D6, D8, T4, T5)', () => {
     })
     expect(await partsOf(result.transaction)).toEqual(['1500', '28500'])
     expect(allocated(vacation)).toBe(1500)
+  })
+})
+
+describe('D12/Q11, D9/Q12 an automation run books like the core', () => {
+  async function automationOf(name: string, setup: Setup) {
+    const { made, card, input } = await template(name, setup)
+    const created = (await mock('create_automation', {
+      input: {
+        name,
+        active: true,
+        schedule: { monthly: { day: 5 } },
+        starts_at: '2026-11-05T09:00:00Z',
+        operation_template_id: made.id,
+        template: {
+          type: 'topup',
+          common: {
+            timestamp: '2026-11-05T09:00:00Z',
+            comment: '',
+            categories: ['salary'],
+            flow_id: null,
+            contact_id: null,
+            price_usd: null,
+            fx_override: null,
+            price: null,
+            price_currency: null,
+          },
+          store_id: card.id,
+          asset: RUB,
+          amount: input.amount ?? '120000',
+          fee: null,
+          details: {},
+          from: null,
+          parts: [],
+        },
+      },
+    })) as Automation
+    return created
+  }
+
+  it('over: the income is booked alone and a notice says it is not distributed', async () => {
+    const automation = await automationOf('Over D12', { over: true })
+    const before = mockTransactions.length
+    const tx = (await mock('run_automation', { id: automation.id })) as Transaction
+    expect(mockTransactions.some((stored) => stored === tx || JSON.stringify(stored) === JSON.stringify(tx))).toBe(true)
+    expect(mockTransactions.length).toBe(before + 1)
+    expect(await partsOf(tx)).toEqual([])
+    expect(mockNotices.some((notice) => notice.key.startsWith('automation-undistributed:'))).toBe(true)
+  })
+
+  it('ask: the run leaves a question and confirm_distribution books and answers it', async () => {
+    const automation = await automationOf('Ask D9', { mode: 'ask' })
+    const before = mockTransactions.length
+    await mock('run_automation', { id: automation.id })
+    expect(mockTransactions.length).toBe(before)
+    const asking = workflowRuns.find((run) => run.workflow_id === automation.id)
+    expect(asking && typeof asking.outcome === 'object' && 'asking' in asking.outcome).toBe(true)
+    if (!asking) throw new Error('no run')
+    expect(waits.some((wait) => wait.run_id === asking.id)).toBe(true)
+    const booked = (await mock('confirm_distribution', {
+      input: { run_id: asking.id, amount: '120000', mode: 'shrink_remainder' },
+    })) as Transaction
+    expect(await partsOf(booked)).toEqual(['20000', '6000', '3000', '91000'])
+    expect(waits.some((wait) => wait.run_id === asking.id)).toBe(false)
+    expect(asking.outcome).toBe('done')
   })
 })

@@ -206,6 +206,11 @@ export function prepareDelete(id: string): void {
   if ('topup' in found && found.topup.distribution) atomically(() => rewrite(id, null))
 }
 
+/** S11 guard: an envelope that holds a move of an income's distribution is not deleted on its own. */
+export function prepareEnvelopeDelete(envelope: Envelope): void {
+  if (envelope.moves.some((move) => move.income_ref)) linked('this envelope')
+}
+
 const effectShape = (tx: Transaction) =>
   'transfer' in tx
     ? JSON.stringify([tx.transfer.from, tx.transfer.to, tx.transfer.asset.symbol, tx.transfer.amount])

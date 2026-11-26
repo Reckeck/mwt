@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { mock } from './dispatch'
-import { mockStores, mockTransactions, newStore } from './demo'
+import { mockBalanceOf, mockStores, mockTransactions, newStore } from './demo'
 
 const RUB: AssetIdent = { symbol: 'RUB', name: 'Russian Ruble', coingecko_id: null, chain: null, contract: null }
 /** The mock may refuse by throwing or by rejecting: both come back as the error. */
@@ -61,6 +61,8 @@ describe('A5 an income in parts (S1-S5)', () => {
     ])
     expect(stored.topup.parts?.[1].timestamp).toBe('2026-11-07T10:00:00Z')
     expect(mockTransactions.filter((tx) => 'transfer' in tx).length).toBe(transfers)
+    expect(mockBalanceOf(tinkoff.id, 'RUB')).toBe(100000)
+    expect(mockBalanceOf(cash.id, 'RUB')).toBe(20000)
   })
 
   it('refuses 100 000 + 19 999 and a single part, and writes nothing', async () => {

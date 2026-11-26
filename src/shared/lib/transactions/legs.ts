@@ -11,6 +11,8 @@ export interface TxLegView {
   role: LegRole
   to_store_id: string | null
   price_usd: string | null
+  /** The leg's own money date when it differs from the transaction's (an income part with a date). */
+  at?: string
 }
 
 export function accountStoreId(ref: AccountRef | null | undefined): string | null {
@@ -41,7 +43,12 @@ export function txLegs(tx: Transaction): TxLegView[] {
   switch (txKind(tx)) {
     case 'topup': {
       const record = body(tx, 'topup')
-      push(record.store_id, record.asset, record.amount, record.price)
+      if (record.parts?.length) {
+        for (const part of record.parts) {
+          push(part.store_id, record.asset, part.amount, record.price)
+          if (part.timestamp) legs[legs.length - 1].at = part.timestamp
+        }
+      } else push(record.store_id, record.asset, record.amount, record.price)
       pushFee(record.store_id, record.fee)
       break
     }

@@ -120,3 +120,67 @@ describe('A2b a distribution is edited and undone (S11, V1-V4)', () => {
     expect(allocated(parts.gifts)).toBe(0)
   })
 })
+
+describe('S11 a record a distribution owns is not changed on its own', () => {
+  const linkedMessage = /^LINKED_TO_INCOME/
+
+  async function distributed() {
+    const parts = await fixture()
+    await mock('distribute_income', { input: { income: { source: 'stored', id: parts.incomeId }, rows: rows(parts) } })
+    const tree = (await mock('get_income_distribution', { incomeId: parts.incomeId })) as IncomeTree
+    const transfer = tree.parts.find((entry) => entry.transfer)?.transfer
+    if (!transfer) throw new Error('no transfer')
+    return { parts, transfer }
+  }
+
+  it('refuses to delete the linked transfer, alone or in a bulk delete', async () => {
+    const { transfer } = await distributed()
+    const id = (transfer as { transfer: { meta: TxMeta } }).transfer.meta.id
+    const before = mockTransactions.length
+    expect((await refusal(() => mock('delete_transaction', { id })))?.message).toMatch(linkedMessage)
+    expect((await refusal(() => mock('delete_transactions', { ids: [id] })))?.message).toMatch(linkedMessage)
+    expect(mockTransactions.length).toBe(before)
+  })
+
+  it('refuses to delete an envelope holding a move of the distribution', async () => {
+    const { parts } = await distributed()
+    const refused = await refusal(() => mock('delete_envelope', { id: parts.vacation }))
+    expect(refused?.message).toMatch(linkedMessage)
+    expect(mockEnvelopes.some((entry) => entry.id === parts.vacation)).toBe(true)
+  })
+
+  it('refuses an amount edit of the linked transfer', async () => {
+    const { transfer } = await distributed()
+    const body = (transfer as { transfer: TransferTx }).transfer
+    const refused = await refusal(() =>
+      mock('update_transaction', {
+        input: {
+          id: body.meta.id,
+          transaction: {
+            type: 'transfer',
+            common: {
+              timestamp: body.meta.timestamp,
+              comment: '',
+              categories: [],
+              flow_id: null,
+              contact_id: null,
+              price_usd: null,
+              fx_override: null,
+              price: null,
+              price_currency: null,
+            },
+            from: body.from,
+            to: body.to,
+            asset: { ...body.asset },
+            amount: '1',
+            fee: null,
+            network: null,
+            tx_hash: null,
+            debt: null,
+          },
+        },
+      }),
+    )
+    expect(refused?.message).toMatch(linkedMessage)
+  })
+})

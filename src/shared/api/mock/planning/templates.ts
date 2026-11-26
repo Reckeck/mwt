@@ -7,7 +7,8 @@ import { txId, txMeta } from '@/shared/lib/transactions'
 import { mockCategories, mockContacts, mockTransactionFrom } from '../ledger'
 import { resolve } from '../core'
 import type { MockCommands } from '../core'
-import { mockBalanceOf, mockPush, mockStores, mockTransactions, priceOf } from '../demo'
+import { mockBalanceOf, mockNotices, mockPush, mockStores, mockTransactions, priceOf } from '../demo'
+import { runs as workflowRuns, waits } from '../workflows/state'
 import { periodOfRule } from '../period'
 import { previewAutomationDates } from './dates'
 import { applyDistribution } from './distribution'
@@ -21,6 +22,7 @@ import {
   placesOf,
   previewOf,
   resolveRule,
+  text,
 } from './distribution-rule'
 import { automations, fail, iso, now, runs, uuid } from './state'
 
@@ -212,6 +214,7 @@ function confirmDistribution(input: ConfirmDistributionInput): Transaction {
     if (rows) applyDistribution(txId(tx), rows)
   })
   waitingRuns.delete(input.run_id)
+  answerQuestion(input.run_id)
   runs.push({
     id: input.run_id,
     automation_id: automation.id,
@@ -223,6 +226,58 @@ function confirmDistribution(input: ConfirmDistributionInput): Transaction {
     symbol: tx.topup.asset.symbol,
   })
   return mockTransactions.find((stored) => txId(stored) === txId(tx)) ?? tx
+}
+
+/** D9, Q12: the question a run that asks leaves for the confirmation queue, keyed by the run id. */
+function leaveQuestion(automation: Automation, income: TopupTx, runId: string): void {
+  const stamp = iso(now())
+  const question = `${automation.name}: ${income.amount} ${income.asset.symbol}`
+  workflowRuns.unshift({
+    id: runId,
+    workflow_id: automation.id,
+    trigger: 'income',
+    started_at: stamp,
+    outcome: { asking: { node_id: 'ask', question, until: null } },
+    created: [],
+    queued: 0,
+    trace: [],
+    dry_run: false,
+  })
+  waits.push({
+    id: uuid(),
+    workflow_id: automation.id,
+    run_id: runId,
+    node_id: 'ask',
+    resume_at: stamp,
+    memo: '[]',
+    trigger: 'income',
+    kind: 'confirm',
+    question,
+    created_at: stamp,
+  })
+}
+
+/** I12: the answer closes the question of the run. */
+function answerQuestion(runId: string): void {
+  const index = waits.findIndex((entry) => entry.run_id === runId)
+  if (index >= 0) waits.splice(index, 1)
+  const run = workflowRuns.find((entry) => entry.id === runId)
+  if (run) run.outcome = 'done'
+}
+
+/** Q11: the income is booked alone and a notice says the distribution did not happen. */
+function noticeOver(automation: Automation, income: TopupTx, runId: string, over: number): void {
+  const stamp = iso(now())
+  mockNotices.push({
+    key: `automation-undistributed:${runId}`,
+    category: 'automation',
+    title: `“${automation.name}” on ${income.meta.timestamp.slice(0, 10)}: not distributed`,
+    body: `The rule asks ${text(over)} more than came; the income is booked undistributed`,
+    link: '/automations',
+    at: income.meta.timestamp,
+    delivered_at: stamp,
+    read: false,
+  })
 }
 
 /**
@@ -248,11 +303,17 @@ export function bookRun(automation: Automation, tx: Transaction, runId: string, 
     cardBeforeRows(income, false),
     placesOf(income.asset.symbol),
   )
-  if (resolved.ask) {
+  // An automation whose rule asks always puts the question ahead of the run (core `rule_asks`).
+  if (resolved.ask || ruled.rule.on_other_amount === 'ask') {
     waitingRuns.set(runId, { automationId: automation.id, income: tx })
+    leaveQuestion(automation, income, runId)
     return true
   }
-  if (resolved.over !== undefined) return overAllocated(resolved.over)
+  if (resolved.over !== undefined) {
+    list.unshift(tx)
+    noticeOver(automation, income, runId, resolved.over)
+    return false
+  }
   const rows = bookableRows(resolved)
   atomically(() => {
     list.unshift(tx)

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockReport } from './analytics/entry'
 import { mockCategories } from './ledger'
 import { mockTransactionFrom } from './ledger'
+import { mockStores, newStore } from './demo'
 import { mock } from './dispatch'
 import { periodOfRule } from './period'
 
@@ -96,5 +97,67 @@ describe('A6 the spread of an amount over months (P5-P8)', () => {
     const refused = await refusal(() => spread('manual', period, shares(['10', '20', '60'])))
     expect(refused?.code).toBe('INVALID_INPUT')
     expect(refused?.message).toBe('the shares do not add up to the amount')
+  })
+})
+
+describe('A8 the month summary reads money date or period (R2, T29)', () => {
+  const card = newStore('Card A8', 'bank', '#444444')
+  mockStores.push(card)
+  const add = (type: 'topup' | 'payment', amount: string, timestamp: string, category: string, period?: OpPeriod) =>
+    mock('add_transaction', {
+      input: {
+        type,
+        common: {
+          timestamp,
+          comment: '',
+          categories: [category],
+          flow_id: null,
+          contact_id: null,
+          price_usd: null,
+          fx_override: null,
+          price: null,
+          price_currency: null,
+          period,
+        },
+        store_id: card.id,
+        asset: RUB,
+        amount,
+        fee: null,
+        details: {},
+        ...(type === 'topup' ? { from: null, parts: [] } : { to: null }),
+      },
+    })
+  const summary = (monthKey: string, basis: 'period' | 'money_date') =>
+    mock('get_month_summary', { month: monthKey, basis }) as Promise<MonthSummary>
+
+  it('counts a 30 000 advance and a 120 000 salary by the money date or by their periods', async () => {
+    const income = async (monthKey: string, basis: 'period' | 'money_date') =>
+      Number((await summary(monthKey, basis)).income)
+    const before = {
+      novDate: await income('2026-11', 'money_date'),
+      novPeriod: await income('2026-11', 'period'),
+      octPeriod: await income('2026-10', 'period'),
+    }
+    await add('topup', '30000', '2026-11-20T09:00:00Z', 'salary', {
+      kind: 'half',
+      start: '2026-11-01',
+      end: '2026-11-15',
+    })
+    await add('topup', '120000', '2026-11-05T09:00:00Z', 'salary', {
+      kind: 'half',
+      start: '2026-10-16',
+      end: '2026-10-31',
+    })
+    await add('payment', '10000', '2026-11-10T09:00:00Z', 'food')
+    // The amounts are in roubles, the summary in the budget currency: compare in units of the 30 000.
+    const unit = (await income('2026-11', 'period')) - before.novPeriod
+    expect(unit).toBeGreaterThan(0)
+    expect((await income('2026-11', 'money_date')) - before.novDate).toBeCloseTo(unit * 5, 1)
+    expect((await income('2026-10', 'period')) - before.octPeriod).toBeCloseTo(unit * 4, 1)
+    const novByDate = await summary('2026-11', 'money_date')
+    const novByPeriod = await summary('2026-11', 'period')
+    expect(novByPeriod.daily).toBe(novByDate.daily)
+    expect(novByPeriod.fixed).toBe(novByDate.fixed)
+    expect(Number(novByPeriod.daily)).toBeGreaterThan(0)
   })
 })
