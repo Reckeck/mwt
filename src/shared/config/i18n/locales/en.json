@@ -6804,5 +6804,16 @@
   "quickAdd.noNetwork": "No network",
   "quickAdd.overrunTitle": "Over the category limit",
   "quickAdd.overrunBy": "This expense goes over the month limit by",
-  "quickAdd.missingTitle": "Fill in to save"
+  "quickAdd.missingTitle": "Fill in to save",
+  "goalCard.topUpTitle": "Top up «{name}»",
+  "goalCard.topUpAmount": "Amount, {currency}",
+  "goalCard.topUpDone": "Put aside for the goal",
+  "goalCard.topUpFailed": "Could not top up the goal",
+  "goalCard.pause": "Pause",
+  "goalCard.resume": "Resume",
+  "goalCard.paused": "Goal paused",
+  "goalCard.resumed": "Goal resumed",
+  "goalCard.pauseFailed": "Could not change the goal",
+  "goalCard.pausedHint": "Paused: not counted in the plan",
+  "goalCard.pausedBadge": "Paused"
 }

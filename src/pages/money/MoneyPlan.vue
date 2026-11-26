@@ -1,23 +1,36 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ChevronDown } from 'lucide-vue-next'
 
 import { BudgetList } from '@/widgets/budget-list'
 import { BudgetSettings } from '@/widgets/budget-settings'
+import { GoalDetailsSheet } from '@/widgets/goal-details'
+import { GoalList } from '@/widgets/goal-list'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/shared/ui/collapsible'
 import { Button } from '@/shared/ui/button'
 
 import PlanCarryOver from './ui/plan/PlanCarryOver.vue'
 import PlanEmergencyFund from './ui/plan/PlanEmergencyFund.vue'
 import PlanEnvelopes from './ui/plan/PlanEnvelopes.vue'
+import PlanGoals from './ui/plan/PlanGoals.vue'
 
 /**
- * The plan (Budget): limits as Budget rows, envelopes, the carry-over prompt and the emergency fund.
+ * The plan (Budget): limits as Budget rows, goals, envelopes, the carry-over prompt and the emergency fund.
+ * The full goal list with its calendar waits folded below.
  * The plan's own settings (savings rate, a usual month, the daily budget) wait folded below.
  */
 const { t } = useI18n()
 const settingsOpen = ref(false)
+const goalsOpen = ref(false)
+/** One goal page for the plan's goal rows and the full list. */
+const goalId = ref<string | null>(null)
+const goalCardOpen = computed({
+  get: () => goalId.value !== null,
+  set: (value) => {
+    if (!value) goalId.value = null
+  },
+})
 </script>
 
 <template>
@@ -28,11 +41,20 @@ const settingsOpen = ref(false)
         <BudgetList editable />
       </section>
       <div class="grid gap-4">
+        <PlanGoals @open="goalId = $event" />
         <PlanEmergencyFund />
         <PlanCarryOver />
       </div>
     </div>
     <PlanEnvelopes />
+    <Collapsible v-model:open="goalsOpen" class="grid gap-3">
+      <CollapsibleTrigger as-child>
+        <Button variant="ghost" size="sm" class="w-fit text-muted-foreground" data-plan-details>
+          {{ t('money.plan.details') }} <ChevronDown :class="['transition-transform', goalsOpen && 'rotate-180']" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent><GoalList v-if="goalsOpen" @open="goalId = $event" /></CollapsibleContent>
+    </Collapsible>
     <Collapsible v-model:open="settingsOpen" class="grid gap-3">
       <CollapsibleTrigger as-child>
         <Button variant="ghost" size="sm" class="w-fit text-muted-foreground" data-plan-settings>
@@ -41,5 +63,6 @@ const settingsOpen = ref(false)
       </CollapsibleTrigger>
       <CollapsibleContent><BudgetSettings v-if="settingsOpen" /></CollapsibleContent>
     </Collapsible>
+    <GoalDetailsSheet v-model:open="goalCardOpen" :goal-id="goalId" />
   </div>
 </template>

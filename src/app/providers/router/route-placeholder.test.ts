@@ -12,6 +12,7 @@ const REBUILT = new Set([
   'crypto-positions',
   'money-plan',
   'money-month',
+  'money-calculator',
 ])
 
 describe('route placeholder', () => {

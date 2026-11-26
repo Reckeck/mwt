@@ -6804,5 +6804,16 @@
   "quickAdd.noNetwork": "Без сети",
   "quickAdd.overrunTitle": "Выше лимита категории",
   "quickAdd.overrunBy": "Эта трата выходит за лимит периода на",
-  "quickAdd.missingTitle": "Чтобы сохранить, заполните"
+  "quickAdd.missingTitle": "Чтобы сохранить, заполните",
+  "goalCard.topUpTitle": "Пополнить «{name}»",
+  "goalCard.topUpAmount": "Сумма, {currency}",
+  "goalCard.topUpDone": "Сумма отложена на цель",
+  "goalCard.topUpFailed": "Не удалось пополнить цель",
+  "goalCard.pause": "Приостановить",
+  "goalCard.resume": "Возобновить",
+  "goalCard.paused": "Цель приостановлена",
+  "goalCard.resumed": "Цель возобновлена",
+  "goalCard.pauseFailed": "Не удалось изменить цель",
+  "goalCard.pausedHint": "Приостановлена: не учитывается в плане",
+  "goalCard.pausedBadge": "Приостановлена"
 }

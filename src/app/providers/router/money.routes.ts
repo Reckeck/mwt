@@ -52,7 +52,7 @@ export const moneyRoutes: RouteRecordRaw = {
     {
       path: 'calculator',
       name: 'money-calculator',
-      component: routePlaceholder,
+      component: () => import('@/pages/money').then((page) => page.MoneyCalculator),
       meta: { i18n: 'nav.money', group: 'calculator' },
     },
     {
