@@ -1,0 +1,4 @@
+/* c */ @import "http://evil/x.css";
+:root {
+  --background: #000;
+}

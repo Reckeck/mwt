@@ -1,6 +1,6 @@
 // check-ui-ignore raw-color: colour test vectors for the contrast maths
 import { describe, expect, it } from 'vitest'
-import { checkPairs, ColorParseError, contrastRatio } from './contrast'
+import { checkPairs, ColorParseError, contrastRatio, toHex } from './contrast'
 
 describe('contrastRatio', () => {
   it('black on white is 21', () => {
@@ -14,6 +14,15 @@ describe('contrastRatio', () => {
   it('accepts rgb() and hsl() forms', () => {
     expect(contrastRatio('rgb(0, 0, 0)', 'rgb(255 255 255)')).toBeCloseTo(21, 5)
     expect(contrastRatio('hsl(0 0% 0%)', 'hsl(0, 0%, 100%)')).toBeCloseTo(21, 5)
+  })
+
+  it('reads bare hsl() saturation and lightness as percentages in space syntax', () => {
+    expect(toHex('hsl(0 0 1)')).toBe('#030303')
+    expect(toHex('hsl(0 50 50)')).toBe('#bf4040')
+  })
+
+  it('refuses bare numbers in legacy comma hsl()', () => {
+    expect(() => toHex('hsl(0, 50, 50)')).toThrow(ColorParseError)
   })
 
   it('oklch red matches sRGB red (4.00 on white)', () => {
