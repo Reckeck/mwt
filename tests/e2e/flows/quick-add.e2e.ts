@@ -79,12 +79,22 @@ test('desktop: kind switch shows the destination of a transfer instead of a cate
   await app.waitFor(`return document.querySelector('#quick-category') !== null`, 'the category of an income')
 })
 
-test('desktop: the exchange shows the received amount and the rate; More holds the rare fields', async ({ app }) => {
+test('desktop: the exchange is two boxes, gave and got, with the deal rate under them', async ({ app }) => {
   await app.unlock()
   await app.at('/')
   await openQuickAdd(app)
-  await app.click('[data-kind="convert"]')
+  await app.click('[data-kind="transfer"]')
   await app.waitFor(`return document.querySelector('#quick-to-store') !== null`, 'the destination wallet')
+  // A wallet of another currency turns the transfer into an exchange.
+  await app.click('#quick-to-store')
+  await app.waitFor(`return document.querySelector('[role="dialog"] [aria-pressed]') !== null`, 'the wallet list')
+  await app.page.eval(
+    `const rows = [...document.querySelectorAll('[aria-pressed]')].filter((row) => !row.closest('${DIALOG}') && !/₽/.test(row.textContent)); rows[0]?.click(); return rows.length > 0`,
+  )
+  await app.waitFor(
+    `return document.querySelectorAll('${DIALOG} [data-exchange-side]').length === 2`,
+    'the two exchange boxes',
+  )
   expect(await app.exists('#quick-got')).toBe(true)
   expect(await app.exists('#quick-category')).toBe(false)
 
@@ -94,6 +104,9 @@ test('desktop: the exchange shows the received amount and the rate; More holds t
     `return document.querySelector('${DIALOG} [data-quick-missing]') !== null`,
     'the missing-fields summary',
   )
+  await app.type(AMOUNT, '1000')
+  await app.type('#quick-got', '10')
+  await app.waitFor(`return document.querySelector('${DIALOG} [data-exchange-summary]') !== null`, 'the deal rate')
 
   // «More» opens a sheet with the rare fields of an exchange: a fee, no payee.
   await app.click('[data-quick-more]')

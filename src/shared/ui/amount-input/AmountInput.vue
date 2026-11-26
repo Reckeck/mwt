@@ -17,6 +17,7 @@ import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
 
 import AmountCalculator from './AmountCalculator.vue'
+import { AMOUNT_BOX_SIZE, AMOUNT_SUFFIX_SIZE, AMOUNT_TEXT_SIZE } from './amount-input.constants'
 import type { AmountExprOutcome, AmountExpression, AmountInputProps } from './amount-input.types'
 import { useAmountExpression } from './use-amount-expression'
 
@@ -175,8 +176,7 @@ const hintText = computed(() => {
     :class="
       cn(
         '@container/amount flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-transparent transition-colors focus-within:ring-1 focus-within:ring-ring has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
-        props.size === 'lg' && 'h-12',
-        props.size === 'hero' && 'h-16 border-transparent px-1',
+        AMOUNT_BOX_SIZE[props.size ?? 'default'],
         cls,
       )
     "
@@ -195,8 +195,7 @@ const hintText = computed(() => {
         cn(
           'h-full w-0 min-w-0 flex-1 bg-transparent px-3 py-1 text-sm tabular-nums outline-none placeholder:text-muted-foreground',
           $slots.prefix && 'pl-1.5',
-          props.size === 'lg' && 'text-xl font-semibold',
-          props.size === 'hero' && 'text-hero text-right',
+          AMOUNT_TEXT_SIZE[props.size ?? 'default'],
         )
       "
       v-bind="rest"
@@ -232,7 +231,7 @@ const hintText = computed(() => {
     <div
       v-if="$slots.suffix"
       class="flex shrink-0 items-center pr-1"
-      :class="props.size === 'hero' && 'pr-3 text-xl text-muted-foreground'"
+      :class="AMOUNT_SUFFIX_SIZE[props.size ?? 'default']"
     >
       <slot name="suffix" />
     </div>

@@ -12,6 +12,7 @@ import {
   quickAssetStoreId,
   quickErrors,
   quickFormToInput,
+  isTwoWalletKind,
   quickWalletNodes,
   useQuickAsset,
   useQuickSave,
@@ -26,6 +27,7 @@ import { quickAddRequest } from '@/shared/lib/quick-add'
 import { useIsPhone } from '@/shared/lib/phone'
 import { Button } from '@/shared/ui/button'
 import { Dialog } from '@/shared/ui/dialog'
+import { FormField } from '@/shared/ui/form-field'
 import { Kbd } from '@/shared/ui/kbd'
 
 import { txId } from '@/shared/lib/transactions'
@@ -168,14 +170,19 @@ function submit(another: boolean, event?: Event) {
           <template #category="{ options, invalid }"><CategorySelect v-model="form.category" :options="options" :invalid="invalid" /></template>
           <template #contact="{ side, id, invalid }">
             <ContactPicker v-if="side === 'from'" :id="id" v-model="form.fromContactId" :invalid="invalid" />
-            <ContactPicker v-else-if="side === 'to'" :id="id" v-model="form.toContactId" :invalid="invalid" />
-            <ContactPicker v-else :id="id" v-model="form.contactId" :invalid="invalid" />
+            <ContactPicker v-else :id="id" v-model="form.toContactId" :invalid="invalid" />
           </template>
-          <template #exchange="{ gave, from, to, error, invalid }">
-            <ExchangeFields v-model="form.toAmount" :gave="gave" :from="from" :to="to" :error="error" :invalid="invalid" />
+          <template #exchange="{ gave, got, from, to }">
+            <ExchangeFields :gave="gave" :got="got" :from="from" :to="to" />
+          </template>
+          <template #more>
+            <QuickMoreSheet v-model="more" :kind="form.kind" :contact-side="contactSide" :fee-error="check.error('fee')">
+              <template v-if="!isTwoWalletKind(form.kind)" #contact>
+                <FormField for="quick-contact" :label="t('quickAdd.contact')"><ContactPicker id="quick-contact" v-model="form.contactId" /></FormField>
+              </template>
+            </QuickMoreSheet>
           </template>
         </QuickForm>
-        <QuickMoreSheet v-model="more" :kind="form.kind" :contact-side="contactSide" :fee-error="check.error('fee')" />
         <OverrunAlert v-for="item in overruns" :key="item.id" :overrun="item" />
         <MissingSummary :labels="missing" />
       </div>
@@ -185,9 +192,8 @@ function submit(another: boolean, event?: Event) {
       <p v-if="!phone" class="mr-auto flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground" data-quick-add-keys>
         <Kbd>Enter</Kbd>{{ t('quickAdd.keySave') }} · <Kbd>Ctrl Enter</Kbd>{{ t('quickAdd.keySaveMore') }}
       </p>
-      <Button v-if="!phone" variant="outline" @click="open = false">{{ t('actions.cancel') }}</Button>
       <Button form="quick-add-form" type="submit" data-quick-add-submit :class="phone && 'h-12 w-full'" :loading="save.isPending.value || waitingForAsset">
-        {{ t('quickAdd.submit') }}
+        {{ t(`quickAdd.save.${form.kind}`) }}
       </Button>
     </template>
   </Dialog>
