@@ -1,6 +1,9 @@
 /** Date-time input helpers shared by forms. */
 
+import { i18n } from '@/shared/config/i18n'
+
 import { formatDate } from './format'
+import { isDateWithinBounds, MAX_DATE_YEAR, MIN_DATE_YEAR } from './limits'
 
 /** `datetime-local` (local time, no zone) ⇄ RFC3339 UTC. */
 export function toIsoTimestamp(local: string): string | null {
@@ -39,4 +42,10 @@ export function toLocalInput(iso: string): string {
 export function keepOriginalMoment(local: string, original: string | null | undefined): string | null {
   if (original && toLocalInput(original) === local) return original
   return toIsoTimestamp(local)
+}
+
+/** Field message for a date outside the allowed years (blank passes), `null` when fine; shown on save. */
+export function dateBoundsError(value: string | null | undefined): string | null {
+  if (isDateWithinBounds(value)) return null
+  return i18n.global.t('validation.range', { min: MIN_DATE_YEAR, max: MAX_DATE_YEAR })
 }

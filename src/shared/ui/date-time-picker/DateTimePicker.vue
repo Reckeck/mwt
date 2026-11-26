@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { DateValue } from '@internationalized/date'
 import { CalendarDays } from 'lucide-vue-next'
 
+import { clampToDateBounds } from '@/shared/lib/limits'
 import { activeLocale } from '@/shared/lib/locale'
 import { cn } from '@/shared/lib/utils'
 import { Button } from '@/shared/ui/button'
@@ -12,7 +13,7 @@ import { TimeInput } from '@/shared/ui/time-input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 
 import type { DateTimePickerProps } from './date-time-picker.types'
-import { formatValue, fromParts, nowValue, timeOf, toCalendarDate } from './date-value'
+import { boundedDate, formatValue, fromParts, nowValue, timeOf, toCalendarDate } from './date-value'
 import MonthGrid from './MonthGrid.vue'
 
 /**
@@ -96,8 +97,8 @@ function clear() {
         v-if="props.mode === 'month'"
         :value="value"
         :locale="activeLocale"
-        :min="props.min"
-        :max="props.max"
+        :min="clampToDateBounds(props.min, 'min')"
+        :max="clampToDateBounds(props.max, 'max')"
         @pick="pickMonth"
       />
       <Calendar
@@ -105,8 +106,8 @@ function clear() {
         :model-value="day"
         :locale="activeLocale"
         :week-starts-on="weekStartsOn"
-        :min-value="toCalendarDate(props.min)"
-        :max-value="toCalendarDate(props.max)"
+        :min-value="boundedDate(props.min, 'min')"
+        :max-value="boundedDate(props.max, 'max')"
         layout="month-and-year"
         @update:model-value="pickDay"
       />

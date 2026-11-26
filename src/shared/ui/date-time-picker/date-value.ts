@@ -1,5 +1,7 @@
 import { CalendarDate, type DateValue, getLocalTimeZone, today } from '@internationalized/date'
 
+import { clampToDateBounds } from '@/shared/lib/limits'
+
 import type { DateTimePickerMode } from './date-time-picker.types'
 
 const pad = (value: number) => String(value).padStart(2, '0')
@@ -39,4 +41,9 @@ export function formatValue(mode: DateTimePickerMode, value: string, locale: str
   const day = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(js)
   const time = timeOf(value)
   return mode === 'datetime' && time ? `${day}, ${time}` : day
+}
+
+/** The picker's own `min`/`max`, never beyond the global date range (1970..2100 by default). */
+export function boundedDate(own: string | undefined, edge: 'min' | 'max'): CalendarDate {
+  return toCalendarDate(clampToDateBounds(own, edge)) as CalendarDate
 }
