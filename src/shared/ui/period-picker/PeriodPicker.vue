@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/shared/ui/popover'
 
 import MonthPanel from './MonthPanel.vue'
 import RangeSwitch from './RangeSwitch.vue'
+import { canStepRange } from './period-bounds'
 import { RANGE_PRESETS } from './range-presets'
 import type { PeriodPickerProps } from './period-picker.types'
 
@@ -45,7 +46,8 @@ function label(value: MonthRange): string {
 }
 const active = computed(() => presetOf(open.value ? draft.value : range.value))
 const chipPresets = PERIOD_PRESETS.filter((preset) => !RANGE_PRESETS.includes(preset))
-const atEnd = computed(() => range.value.to >= currentMonth())
+const atEnd = computed(() => range.value.to >= currentMonth() || !canStepRange(range.value, 1))
+const atStart = computed(() => !canStepRange(range.value, -1))
 
 function choose(preset: PeriodPreset) {
   range.value = presetRange(preset)
@@ -64,7 +66,7 @@ const TRIGGER =
 
 <template>
   <div class="flex min-w-0 items-center gap-2" data-period-picker>
-    <Button v-if="!phone" variant="outline" size="icon-sm" :aria-label="t('period.prev')" @click="range = stepRange(range, -1)">‹</Button>
+    <Button v-if="!phone" variant="outline" size="icon-sm" :aria-label="t('period.prev')" :disabled="atStart" @click="range = stepRange(range, -1)">‹</Button>
     <Popover v-if="!phone" v-model:open="open">
       <PopoverTrigger as-child>
         <button

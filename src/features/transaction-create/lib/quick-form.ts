@@ -1,3 +1,4 @@
+import { assetKey } from '@/shared/lib/asset-ref'
 import { dateBoundsError, keepOriginalMoment } from '@/shared/lib/datetime'
 import { positiveAmount, required, type FieldError } from '@/shared/lib/form'
 
@@ -13,6 +14,10 @@ export interface QuickFormState {
   storeId: string
   /** A transfer's or an exchange's destination wallet. */
   toStoreId: string
+  /** A transfer to a contact instead of a wallet (a loan out); blank for a wallet. */
+  toContactId: string
+  /** A transfer from a contact instead of a wallet (a loan in); blank for a wallet. */
+  fromContactId: string
   /** Plain decimal, `12345.67`; for an exchange, what is given. */
   amount: string
   /** An exchange's received amount, in the destination wallet's currency. */
@@ -34,6 +39,8 @@ export function emptyQuickForm(kind: QuickKind = 'payment', storeId = ''): Quick
     kind,
     storeId,
     toStoreId: '',
+    toContactId: '',
+    fromContactId: '',
     amount: '',
     toAmount: '',
     category: '',
@@ -43,17 +50,33 @@ export function emptyQuickForm(kind: QuickKind = 'payment', storeId = ''): Quick
   }
 }
 
+/** The two assets of an exchange, as far as they are known. */
+export interface QuickAssets {
+  asset: AssetRef | null
+  toAsset: AssetRef | null
+}
+
+/** The wallet that names the asset of the operation: a transfer from a contact is written in the destination's. */
+export function quickAssetStoreId(form: QuickFormState): string {
+  return form.kind === 'transfer' && form.fromContactId ? form.toStoreId : form.storeId
+}
+
 /** What a field lacks, by the rules of the kind (rule 13: said under the field on save). */
-export function quickErrors(form: QuickFormState): Record<QuickField, FieldError> {
+export function quickErrors(form: QuickFormState, assets: QuickAssets | null = null): Record<QuickField, FieldError> {
   const twoWallets = isTwoWalletKind(form.kind)
+  const transfer = form.kind === 'transfer'
   let toStoreId: FieldError = null
-  if (twoWallets) {
+  if (twoWallets && !(transfer && form.toContactId)) {
     toStoreId = required(form.toStoreId, 'pickStore')
     if (!toStoreId && form.toStoreId === form.storeId) toStoreId = required(null, 'pickOtherWallet')
+    // An exchange of a currency for itself is a transfer: the core refuses it.
+    if (!toStoreId && form.kind === 'convert' && assets?.asset && assets.toAsset) {
+      if (assetKey(assets.asset) === assetKey(assets.toAsset)) toStoreId = required(null, 'sameCurrency')
+    }
   }
   return {
     amount: positiveAmount(form.amount),
-    storeId: required(form.storeId, 'pickStore'),
+    storeId: transfer && form.fromContactId ? null : required(form.storeId, 'pickStore'),
     toStoreId,
     toAmount: form.kind === 'convert' ? positiveAmount(form.toAmount) : null,
     category: twoWallets ? null : required(form.category, 'pick'),
@@ -64,6 +87,11 @@ export function quickErrors(form: QuickFormState): Record<QuickField, FieldError
 /** A series keeps the kind, the wallets, the category, the counterparty and the date; the amount starts blank. */
 export function nextInSeries(form: QuickFormState): QuickFormState {
   return { ...form, amount: '', toAmount: '' }
+}
+
+/** A transfer's side: a contact when one is picked, else the wallet. */
+function transferSide(contactId: string, storeId: string): AccountRef {
+  return contactId ? { contact: { contact_id: contactId, account_id: null } } : { store: storeId }
 }
 
 /** The backend input of the form; `asset` is the wallet's own (see `use-quick-asset`), `toAsset` the destination wallet's (an exchange). */
@@ -118,8 +146,8 @@ export function quickFormToInput(
       type: 'transfer',
       common,
       fee: null,
-      from: { store: form.storeId },
-      to: { store: form.toStoreId },
+      from: transferSide(form.fromContactId, form.storeId),
+      to: transferSide(form.toContactId, form.toStoreId),
       asset: ident,
       amount,
       network: null,

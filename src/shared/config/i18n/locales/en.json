@@ -1721,6 +1721,8 @@
   "quickAdd.contact": "Counterparty",
   "quickAdd.noContact": "No counterparty",
   "quickAdd.pickContact": "Pick a counterparty",
+  "quickAdd.sideContact": "A contact instead (a loan)",
+  "quickAdd.sideWallet": "A wallet instead",
   "quickAdd.note": "Note",
   "quickAdd.addNote": "Add a note",
   "quickAdd.notePlaceholder": "What it was for",

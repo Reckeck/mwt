@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { emptyQuickForm, nextInSeries, quickErrors, quickFormToInput } from './quick-form'
+import { emptyQuickForm, nextInSeries, quickAssetStoreId, quickErrors, quickFormToInput } from './quick-form'
 
 const rub: AssetRef = { symbol: 'RUB', name: 'RUB', coingecko_id: null, chain: 'fiat', contract: null, quote: 'RUB' }
 
@@ -30,6 +30,23 @@ describe('quickErrors', () => {
     expect(Object.values(quickErrors({ ...form, toStoreId: 'b', toAmount: '92' })).some(Boolean)).toBe(false)
   })
 
+  it('refuses an exchange of a wallet for another of the same asset', () => {
+    const form = { ...emptyQuickForm('convert', 'a'), toStoreId: 'b', amount: '100', toAmount: '100' }
+    const usd = { ...rub, symbol: 'USD', quote: 'USD' }
+    expect(quickErrors(form, { asset: rub, toAsset: rub }).toStoreId).toBeTruthy()
+    expect(quickErrors(form, { asset: rub, toAsset: usd }).toStoreId).toBeNull()
+    expect(quickErrors(form, { asset: rub, toAsset: null }).toStoreId).toBeNull()
+    expect(quickErrors({ ...form, kind: 'transfer' }, { asset: rub, toAsset: rub }).toStoreId).toBeNull()
+  })
+
+  it('lets a transfer go to or come from a contact instead of a wallet', () => {
+    const out = { ...emptyQuickForm('transfer', 'a'), amount: '5', toContactId: 'c1' }
+    expect(quickErrors(out).toStoreId).toBeNull()
+    const back = { ...emptyQuickForm('transfer', ''), amount: '5', toStoreId: 'b', fromContactId: 'c1' }
+    expect(quickErrors(back).storeId).toBeNull()
+    expect(quickAssetStoreId(back)).toBe('b')
+  })
+
   it('refuses a zero amount and a date out of range', () => {
     const form = { ...emptyQuickForm('payment', 'a'), category: 'food', amount: '0', timestamp: '1800-01-01T10:00' }
     expect(quickErrors(form).amount).toBeTruthy()
@@ -53,6 +70,16 @@ describe('quickFormToInput', () => {
       from: { store: 's1' },
       to: { store: 's2' },
       common: { categories: [] },
+    })
+  })
+})
+
+describe('quickFormToInput contacts', () => {
+  it('writes a contact side of a transfer', () => {
+    const form = { ...emptyQuickForm('transfer', 's1'), amount: '10', toContactId: 'c1' }
+    expect(quickFormToInput(form, rub)).toMatchObject({
+      from: { store: 's1' },
+      to: { contact: { contact_id: 'c1', account_id: null } },
     })
   })
 })

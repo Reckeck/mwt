@@ -13,10 +13,13 @@ import { FormField } from '@/shared/ui/form-field'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/ui/toggle-group'
 
 import { QUICK_KINDS, isTwoWalletKind, type QuickField, type QuickFormState, type QuickKind } from '../../lib/quick-form'
+import { byUsage } from '../../lib/frequent-category'
+import { useFrequentCategory } from '../../model/use-frequent-category'
 import { useQuickAsset } from '../../model/use-quick-asset'
 import { AccountRefPicker } from '../account-ref-picker'
 import { QuickAmount } from '../quick-amount'
 import { QuickNote } from '../quick-note'
+import { TransferSideField } from '../transfer-side'
 
 /**
  * The body of the quick add: the kind switch, the hero amount (keypad on a phone), the wallet,
@@ -29,9 +32,11 @@ const { t } = useI18n()
 
 const categories = useCategories()
 const GROUPS = { payment: ['daily', 'fixed', 'savings'], topup: ['income', 'savings'] } as const
+const usage = useFrequentCategory(() => (form.value.kind === 'topup' ? 'topup' : 'payment')).usage
+/** The categories of the kind, the most used lately first (the chips show the first few). */
 const options = computed(() => {
   const kind = form.value.kind
-  return kind === 'payment' || kind === 'topup' ? categoryOptions(categories.data.value, t, GROUPS[kind]) : []
+  return kind === 'payment' || kind === 'topup' ? byUsage(categoryOptions(categories.data.value, t, GROUPS[kind]), usage.value) : []
 })
 const exchange = computed(() => form.value.kind === 'convert')
 const gaveAsset = useQuickAsset(() => form.value.storeId)
@@ -59,13 +64,31 @@ function pickKind(value: unknown) {
       <QuickAmount id="quick-amount" v-model="form.amount" :invalid="Boolean(props.errors.amount)" :aria-label="t('form.sum')" />
     </FormField>
 
-    <FormField for="quick-store" :label="isTwoWalletKind(form.kind) ? t('tx.quick.fromWallet') : t('quickAdd.store')" required :error="props.errors.storeId ?? undefined">
+    <FormField v-if="!isTwoWalletKind(form.kind)" for="quick-store" :label="t('quickAdd.store')" required :error="props.errors.storeId ?? undefined">
       <AccountRefPicker id="quick-store" v-model="form.storeId" :invalid="Boolean(props.errors.storeId)" />
     </FormField>
-
-    <FormField v-if="isTwoWalletKind(form.kind)" for="quick-to-store" :label="t('tx.quick.toWallet')" required :error="props.errors.toStoreId ?? undefined">
-      <AccountRefPicker id="quick-to-store" v-model="form.toStoreId" :invalid="Boolean(props.errors.toStoreId)" />
-    </FormField>
+    <template v-else>
+      <TransferSideField
+        id="quick-store"
+        v-model:wallet="form.storeId"
+        v-model:contact="form.fromContactId"
+        :label="t('tx.quick.fromWallet')"
+        :can-contact="form.kind === 'transfer' && !form.toContactId"
+        :error="props.errors.storeId ?? undefined"
+      >
+        <template #contact="{ id, invalid }"><ContactPicker :id="id" v-model="form.fromContactId" :invalid="invalid" /></template>
+      </TransferSideField>
+      <TransferSideField
+        id="quick-to-store"
+        v-model:wallet="form.toStoreId"
+        v-model:contact="form.toContactId"
+        :label="t('tx.quick.toWallet')"
+        :can-contact="form.kind === 'transfer' && !form.fromContactId"
+        :error="props.errors.toStoreId ?? undefined"
+      >
+        <template #contact="{ id, invalid }"><ContactPicker :id="id" v-model="form.toContactId" :invalid="invalid" /></template>
+      </TransferSideField>
+    </template>
     <ExchangeFields
       v-if="exchange"
       v-model="form.toAmount"

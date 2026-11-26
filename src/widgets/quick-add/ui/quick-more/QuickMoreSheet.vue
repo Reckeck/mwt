@@ -8,6 +8,7 @@ import { DebtSwitch } from '@/features/debt-manage'
 import type { QuickKind } from '@/features/transaction-create'
 import { useStoreTree } from '@/shared/api/queries'
 import { CHAIN_LABELS, CHAINS } from '@/shared/lib/chains'
+import { formatDateRange } from '@/shared/lib/date-range'
 import { flattenStoreTree } from '@/shared/lib/store-tree'
 import { AmountInput } from '@/shared/ui/amount-input'
 import { Badge } from '@/shared/ui/badge'
@@ -18,20 +19,26 @@ import { Select, SelectItem } from '@/shared/ui/select'
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/shared/ui/sheet'
 
 import { type QuickMore, filledMoreCount, moreFieldsOf } from '../../lib/quick-more'
+import { useOpenEvents } from '../../model/use-open-events'
 
 /**
  * «More»: the rare fields of the quick form in one bottom sheet, so the form itself stays the
  * amount, the wallet, the category and the date. Which fields show depends on the kind.
  */
-const props = defineProps<{ kind: QuickKind; feeError?: string }>()
+const props = defineProps<{ kind: QuickKind; feeError?: string; contactSide?: boolean }>()
 const more = defineModel<QuickMore>({ required: true })
 const open = ref(false)
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const tree = useStoreTree()
 
-const fields = computed(() => moreFieldsOf(props.kind))
-const filled = computed(() => filledMoreCount(more.value, props.kind))
+const fields = computed(() => moreFieldsOf(props.kind, props.contactSide))
+const filled = computed(() => filledMoreCount(more.value, props.kind, props.contactSide))
 const properties = computed(() => flattenStoreTree(tree.data.value ?? []).filter((node) => node.store.kind === 'property' && !node.store.archived))
+const events = useOpenEvents()
+const eventLabel = (row: SharedEventSummary) => {
+  const dates = formatDateRange({ start: row.starts_on, end: row.ends_on }, locale.value)
+  return dates ? `${row.title} · ${dates}` : row.title
+}
 const networks = CHAINS.filter((chain) => chain !== 'fiat')
 </script>
 
@@ -56,6 +63,12 @@ const networks = CHAINS.filter((chain) => chain !== 'fiat')
           <Select id="quick-property" v-model="more.propertyId" :placeholder="t('quickAdd.noProperty')">
             <SelectItem value="">{{ t('quickAdd.noProperty') }}</SelectItem>
             <SelectItem v-for="node in properties" :key="node.store.id" :value="node.store.id">{{ node.store.name }}</SelectItem>
+          </Select>
+        </FormField>
+        <FormField v-if="fields.includes('event') && events.length" for="quick-event" :label="t('tx.field.event')" :hint="t('tx.field.eventHint')">
+          <Select id="quick-event" v-model="more.eventId" :aria-label="t('tx.field.event')">
+            <SelectItem value="">{{ t('tx.field.noEvent') }}</SelectItem>
+            <SelectItem v-for="row in events" :key="row.id" :value="row.id">{{ eventLabel(row) }}</SelectItem>
           </Select>
         </FormField>
         <template v-if="fields.includes('network')">

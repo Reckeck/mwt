@@ -9,6 +9,7 @@ import {
   QuickForm,
   emptyQuickForm,
   nextInSeries,
+  quickAssetStoreId,
   quickErrors,
   quickFormToInput,
   quickWalletNodes,
@@ -28,6 +29,7 @@ import { txId } from '@/shared/lib/transactions'
 
 import { rememberStore, startForm } from '../../lib/quick-add-start'
 import { applyMore, emptyQuickMore, moreError } from '../../lib/quick-more'
+import { useLinkToEvent } from '../../model/use-link-event'
 import { useQuickAddSeries } from '../../model/use-quick-add-series'
 import { useQuickOverrun } from '../../model/use-quick-overrun'
 import { MissingSummary, OverrunAlert } from '../quick-alerts'
@@ -46,17 +48,23 @@ const walletIds = computed(() => quickWalletNodes(tree.data.value).map((node) =>
 
 const form = ref<QuickFormState>(emptyQuickForm())
 const more = ref(emptyQuickMore())
-const asset = useQuickAsset(() => form.value.storeId)
+const asset = useQuickAsset(() => quickAssetStoreId(form.value))
 const toAsset = useQuickAsset(() => form.value.toStoreId)
-const check = useFormValidation<QuickField | 'fee'>(() => ({ ...quickErrors(form.value), fee: moreError(more.value) }), {
+const check = useFormValidation<QuickField | 'fee'>(() => ({ ...quickErrors(form.value, { asset: asset.value, toAsset: toAsset.value }), fee: moreError(more.value) }), {
   resetOn: () => form.value.kind,
 })
 /** A save asked before the wallet's asset is known waits for it instead of failing. */
 const waitingForAsset = ref(false)
 const attach = useAttachPending()
-const overrun = useQuickOverrun(() => ({
+const linkToEvent = useLinkToEvent()
+/** A transfer with a contact on one side can be a loan. */
+const contactSide = computed(
+  () => form.value.kind === 'transfer' && Boolean(form.value.toContactId) !== Boolean(form.value.fromContactId),
+)
+const overruns = useQuickOverrun(() => ({
   kind: form.value.kind,
   category: form.value.category,
+  storeId: form.value.storeId,
   amount: form.value.amount,
   currency: asset.value?.symbol ?? '',
 }))
@@ -93,9 +101,11 @@ const series = useQuickAddSeries({
 })
 const save = useQuickSave((tx) => {
   rememberStore(form.value.storeId)
-  const files = more.value.files
+  const { files, eventId } = more.value
+  const title = form.value.note
   series.saved(tx)
   void attach(txId(tx), files)
+  if (form.value.kind === 'payment') void linkToEvent(txId(tx), eventId, title)
 })
 
 const title = computed(() =>
@@ -155,8 +165,8 @@ function submit(another: boolean, event?: Event) {
       <p v-if="tree.isSuccess.value && !walletIds.length" class="text-sm text-muted-foreground">{{ t('quickAdd.noStores') }}</p>
       <div v-else class="grid gap-4">
         <QuickForm v-model:form="form" :errors="shown" />
-        <QuickMoreSheet v-model="more" :kind="form.kind" :fee-error="check.error('fee')" />
-        <OverrunAlert v-if="overrun" :overrun="overrun" />
+        <QuickMoreSheet v-model="more" :kind="form.kind" :contact-side="contactSide" :fee-error="check.error('fee')" />
+        <OverrunAlert v-for="item in overruns" :key="item.id" :overrun="item" />
         <MissingSummary :labels="missing" />
       </div>
     </form>

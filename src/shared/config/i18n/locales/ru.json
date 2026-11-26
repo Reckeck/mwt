@@ -1721,6 +1721,8 @@
   "quickAdd.contact": "Контрагент",
   "quickAdd.noContact": "Без контрагента",
   "quickAdd.pickContact": "Выберите контрагента",
+  "quickAdd.sideContact": "Вместо этого контакт (в долг)",
+  "quickAdd.sideWallet": "Вместо этого кошелёк",
   "quickAdd.note": "Заметка",
   "quickAdd.addNote": "Добавить заметку",
   "quickAdd.notePlaceholder": "За что это",

@@ -1,5 +1,5 @@
 import type { PendingAttachment } from '@/features/attachment-edit'
-import { quickDebtEffect } from '@/features/debt-manage'
+import { hasContactSide, quickDebtEffect } from '@/features/debt-manage'
 import type { QuickKind } from '@/features/transaction-create'
 import { positiveAmount } from '@/shared/lib/form'
 
@@ -14,35 +14,43 @@ export interface QuickMore {
   /** A `Chain` name, or blank for none. */
   network: string
   txHash: string
-  /** A transfer that comes back later. */
+  /** A transfer to or from a contact that comes back later. */
   asDebt: boolean
+  /** A shared event the expense is linked to as a purchase, or blank for none. */
+  eventId: string
   files: PendingAttachment[]
 }
 
-export type QuickMoreField = 'fee' | 'payee' | 'property' | 'network' | 'debt' | 'files'
+export type QuickMoreField = 'fee' | 'payee' | 'property' | 'network' | 'debt' | 'event' | 'files'
 
 export function emptyQuickMore(): QuickMore {
-  return { fee: '', payee: '', propertyId: '', network: '', txHash: '', asDebt: false, files: [] }
+  return { fee: '', payee: '', propertyId: '', network: '', txHash: '', asDebt: false, eventId: '', files: [] }
 }
 
-/** Which rare fields a kind has: a payee only where money meets someone, a loan only on a transfer. */
-export function moreFieldsOf(kind: QuickKind): QuickMoreField[] {
+/**
+ * Which rare fields a kind has: a payee only where money meets someone, a loan only on a transfer
+ * with a contact on one side (`contactSide`), an event only on an expense.
+ */
+export function moreFieldsOf(kind: QuickKind, contactSide = false): QuickMoreField[] {
   if (kind === 'convert') return ['fee', 'property', 'files']
-  if (kind === 'transfer') return ['fee', 'network', 'debt', 'property', 'files']
+  if (kind === 'transfer')
+    return contactSide ? ['fee', 'network', 'debt', 'property', 'files'] : ['fee', 'network', 'property', 'files']
+  if (kind === 'payment') return ['fee', 'payee', 'network', 'property', 'event', 'files']
   return ['fee', 'payee', 'network', 'property', 'files']
 }
 
 /** How many rare fields hold a value: the badge of the «More» button. */
-export function filledMoreCount(more: QuickMore, kind: QuickKind): number {
+export function filledMoreCount(more: QuickMore, kind: QuickKind, contactSide = false): number {
   const filled: Record<QuickMoreField, boolean> = {
     fee: more.fee.trim() !== '',
     payee: more.payee.trim() !== '',
     property: more.propertyId !== '',
     network: more.network !== '' || more.txHash.trim() !== '',
     debt: more.asDebt,
+    event: more.eventId !== '',
     files: more.files.length > 0,
   }
-  return moreFieldsOf(kind).filter((field) => filled[field]).length
+  return moreFieldsOf(kind, contactSide).filter((field) => filled[field]).length
 }
 
 /** What is wrong in the rare fields (said on save, rule 13); `null` when all is well. */
@@ -57,7 +65,7 @@ export function applyMore(
   asset: AssetRef,
   kind: QuickKind,
 ): TransactionInput {
-  const fields = moreFieldsOf(kind)
+  const fields = moreFieldsOf(kind, input.type === 'transfer' && hasContactSide(input.from, input.to))
   const has = (field: QuickMoreField) => fields.includes(field)
   const ident: AssetIdent = {
     symbol: asset.symbol,
@@ -85,7 +93,7 @@ export function applyMore(
         fee,
         network,
         tx_hash: txHash,
-        debt: quickDebtEffect(kind, has('debt') && more.asDebt),
+        debt: quickDebtEffect(input.from, input.to, has('debt') && more.asDebt),
       }
     case 'convert':
       return { ...input, common, fee }
